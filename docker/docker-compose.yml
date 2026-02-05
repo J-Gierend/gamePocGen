@@ -7,15 +7,18 @@ services:
       - "3010:3000"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - workspaces:/data/workspaces
-      - deployed:/data/deployed
+      - ./workspaces:/data/workspaces
+      - ./deployed:/data/deployed
     environment:
       - DATABASE_URL=postgresql://gamepocgen:${POSTGRES_PASSWORD}@postgres:5432/gamepocgen
       - ZAI_API_KEY=${ZAI_API_KEY}
       - ZAI_BASE_URL=${ZAI_BASE_URL:-https://api.z.ai/api/anthropic}
       - MAX_CONCURRENT=5
-      - WORKSPACE_ROOT=/data/workspaces
-      - DEPLOYED_ROOT=/data/deployed
+      - WORKSPACE_PATH=/data/workspaces
+      - DEPLOY_DIR=/data/deployed
+      - TRAEFIK_DYNAMIC_DIR=/data/deployed/traefik
+      - GALLERY_DATA_PATH=/data/deployed/gallery/games.json
+      - DOMAIN=namjo-games.com
       - WORKER_IMAGE=gamepocgen-worker
     depends_on:
       postgres:
@@ -54,5 +57,3 @@ networks:
 
 volumes:
   pgdata:
-  workspaces:
-  deployed:
