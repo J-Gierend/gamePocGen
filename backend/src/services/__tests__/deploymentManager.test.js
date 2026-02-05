@@ -57,22 +57,22 @@ export function runTests() {
     'constructor uses default options': () => {
       const dm = new DeploymentManager();
       assertEqual(dm.deployDir, '/root/apps', 'default deployDir');
-      assertEqual(dm.traefikDynamicDir, '/root/apps/traefik/dynamic', 'default traefikDynamicDir');
       assertEqual(dm.galleryDataPath, '/root/apps/gallery/games.json', 'default galleryDataPath');
       assertEqual(dm.domain, 'namjo-games.com', 'default domain');
       assertEqual(dm.basePort, 8080, 'default basePort');
+      assertEqual(dm.docker, null, 'default docker is null');
     },
 
     'constructor accepts custom options': () => {
       const dm = new DeploymentManager({
         deployDir: '/custom/deploy',
-        traefikDynamicDir: '/custom/traefik',
+        hostDeployDir: '/host/deploy',
         galleryDataPath: '/custom/gallery.json',
         domain: 'custom.example.com',
         basePort: 9000,
       });
       assertEqual(dm.deployDir, '/custom/deploy', 'custom deployDir');
-      assertEqual(dm.traefikDynamicDir, '/custom/traefik', 'custom traefikDynamicDir');
+      assertEqual(dm.hostDeployDir, '/host/deploy', 'custom hostDeployDir');
       assertEqual(dm.galleryDataPath, '/custom/gallery.json', 'custom galleryDataPath');
       assertEqual(dm.domain, 'custom.example.com', 'custom domain');
       assertEqual(dm.basePort, 9000, 'custom basePort');
@@ -83,6 +83,11 @@ export function runTests() {
       const dm = new DeploymentManager({ fs: mockFs });
       // _getFs should return the injected mock
       assert(dm.fs === mockFs, 'Should store injected fs');
+    },
+
+    'constructor defaults hostDeployDir to deployDir': () => {
+      const dm = new DeploymentManager({ deployDir: '/test/deploy' });
+      assertEqual(dm.hostDeployDir, '/test/deploy', 'hostDeployDir should default to deployDir');
     },
 
     // === getGamePort tests ===
@@ -201,20 +206,6 @@ export function runTests() {
       assertIncludes(composeWrite.content, 'nginx:alpine', 'docker-compose should include nginx:alpine');
     },
 
-    'deployGame() writes Traefik config': async () => {
-      const writeFileCalls = [];
-      const mockFs = createMockFs({
-        writeFile: async (path, content) => { writeFileCalls.push({ path, content }); },
-      });
-      const dm = new DeploymentManager({ fs: mockFs });
-      await dm.deployGame(1, 'TestGame', '/tmp/source');
-
-      const traefikWrite = writeFileCalls.find(c => c.path.includes('gamedemo1.yml'));
-      assert(traefikWrite, 'Should write Traefik config gamedemo1.yml');
-      assertIncludes(traefikWrite.path, 'traefik/dynamic', 'Should write to traefik dynamic dir');
-      assertIncludes(traefikWrite.content, 'Host(`gamedemo1.namjo-games.com`)', 'Should include host rule');
-    },
-
     'deployGame() returns deployment info': async () => {
       const mockFs = createMockFs();
       const dm = new DeploymentManager({ fs: mockFs });
@@ -224,6 +215,14 @@ export function runTests() {
       assertEqual(result.url, 'https://gamedemo1.namjo-games.com', 'Should return URL');
       assertIncludes(result.deployPath, 'gamedemo1', 'Should return deploy path');
       assertEqual(result.port, 8081, 'Should return port');
+    },
+
+    'deployGame() skips Docker container when docker is null': async () => {
+      const mockFs = createMockFs();
+      const dm = new DeploymentManager({ fs: mockFs });
+      // Should not throw even without docker
+      const result = await dm.deployGame(1, 'TestGame', '/tmp/source');
+      assertEqual(result.gameId, 1, 'Should complete without docker');
     },
 
     // === removeGame tests ===
@@ -240,18 +239,6 @@ export function runTests() {
       assert(deployRm, 'Should remove gamedemo1 directory');
       assert(deployRm.opts && deployRm.opts.recursive, 'Should remove recursively');
       assert(deployRm.opts && deployRm.opts.force, 'Should force remove');
-    },
-
-    'removeGame() removes Traefik config': async () => {
-      const rmCalls = [];
-      const mockFs = createMockFs({
-        rm: async (path, opts) => { rmCalls.push({ path, opts }); },
-      });
-      const dm = new DeploymentManager({ fs: mockFs });
-      await dm.removeGame(2);
-
-      const traefikRm = rmCalls.find(c => c.path.includes('gamedemo2.yml'));
-      assert(traefikRm, 'Should remove Traefik config gamedemo2.yml');
     },
 
     'removeGame() returns removal confirmation': async () => {

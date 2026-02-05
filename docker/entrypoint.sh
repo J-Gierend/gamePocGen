@@ -121,7 +121,7 @@ Generate the game idea and write the output to ${WORKSPACE_DIR}/idea.json"
         mkdir -p "${WORKSPACE_DIR}/gdd"
 
         for AGENT in $PHASE2_AGENTS; do
-            PROMPT_FILE="${PROMPTS_DIR}/phase2-${AGENT}.md"
+            PROMPT_FILE="${PROMPTS_DIR}/phase2-gdd/${AGENT}.md"
             if [ ! -f "$PROMPT_FILE" ]; then
                 echo "[phase2] Warning: Missing prompt ${PROMPT_FILE}, skipping ${AGENT}"
                 continue

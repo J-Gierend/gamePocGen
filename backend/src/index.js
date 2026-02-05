@@ -39,9 +39,10 @@ async function main() {
 
   const deploymentManager = new DeploymentManager({
     deployDir: process.env.DEPLOY_DIR || '/root/apps',
-    traefikDynamicDir: process.env.TRAEFIK_DYNAMIC_DIR || '/root/apps/traefik/dynamic',
+    hostDeployDir: process.env.HOST_DEPLOY_DIR || process.env.DEPLOY_DIR || '/root/apps',
     galleryDataPath: process.env.GALLERY_DATA_PATH || '/root/apps/gallery/games.json',
     domain: process.env.DOMAIN || 'namjo-games.com',
+    docker,
   });
 
   // --- Express ---
@@ -115,7 +116,7 @@ async function main() {
 
     // Deploy
     try {
-      const sourceDir = `${containerManager.workspacePath}/job-${job.id}/output`;
+      const sourceDir = `${containerManager.workspacePath}/job-${job.id}/dist`;
       const result = await deploymentManager.deployGame(job.id, job.game_name || `Game ${job.id}`, sourceDir);
       await queueManager.updatePhaseOutput(job.id, 'deployment', result);
       await queueManager.addLog(job.id, 'info', `Deployed to ${result.url}`);

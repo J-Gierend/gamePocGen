@@ -17,7 +17,7 @@ services:
       - WORKSPACE_PATH=/data/workspaces
       - HOST_WORKSPACE_PATH=/root/apps/gamepocgen/docker/workspaces
       - DEPLOY_DIR=/data/deployed
-      - TRAEFIK_DYNAMIC_DIR=/data/deployed/traefik
+      - HOST_DEPLOY_DIR=/root/apps/gamepocgen/docker/deployed
       - GALLERY_DATA_PATH=/data/deployed/gallery/games.json
       - DOMAIN=namjo-games.com
       - WORKER_IMAGE=gamepocgen-worker
