@@ -58,9 +58,10 @@ export class QueueManager {
   async addJob({ count = 1, options = {} } = {}) {
     const ids = [];
     for (let i = 0; i < count; i++) {
+      const gameName = options.name || `Game-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
       const result = await this.pool.query(
-        `INSERT INTO jobs (status, config) VALUES ('queued', $1) RETURNING id`,
-        [JSON.stringify(options)]
+        `INSERT INTO jobs (status, game_name, config) VALUES ('queued', $1, $2) RETURNING id`,
+        [gameName, JSON.stringify(options)]
       );
       ids.push(result.rows[0].id);
     }

@@ -34,6 +34,7 @@ async function main() {
   const docker = new Dockerode();
   const containerManager = new ContainerManager(docker, {
     workspacePath: process.env.WORKSPACE_PATH || '/app/workspaces',
+    hostWorkspacePath: process.env.HOST_WORKSPACE_PATH || process.env.WORKSPACE_PATH || '/app/workspaces',
   });
 
   const deploymentManager = new DeploymentManager({

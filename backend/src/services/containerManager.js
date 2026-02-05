@@ -33,6 +33,8 @@ export class ContainerManager {
     this.cpuLimit = options.cpuLimit || DEFAULT_CPU_LIMIT;
     this.timeouts = { ...DEFAULT_TIMEOUTS, ...options.timeouts };
     this.workspacePath = options.workspacePath || '/tmp/gamepocgen/workspaces';
+    // Host path is needed for Docker bind mounts (when backend runs in a container itself)
+    this.hostWorkspacePath = options.hostWorkspacePath || this.workspacePath;
   }
 
   /**
@@ -65,7 +67,7 @@ export class ContainerManager {
     const containerName = `gamepocgen-worker-${job.id}-${phase}`;
     const timeout = this.timeouts[phase] || 3600;
     const workspaceDir = '/workspace';
-    const hostWorkspace = `${this.workspacePath}/job-${job.id}`;
+    const hostWorkspace = `${this.hostWorkspacePath}/job-${job.id}`;
 
     const env = [
       `PHASE=${phase}`,
@@ -149,7 +151,8 @@ export class ContainerManager {
         stderr: true,
         follow: false,
       });
-      return logs.toString();
+      // Strip Docker multiplexing headers (8 bytes per frame) and null bytes
+      return logs.toString().replace(/[\x00-\x08]/g, '');
     } catch (err) {
       if (err.statusCode === 404) {
         return '';
