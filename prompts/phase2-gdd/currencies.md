@@ -19,6 +19,8 @@ Read these files from the workspace before starting:
 
 Design the complete currency system for this game. Every number, formula, and rate must be specified precisely enough that a developer can implement it without guessing.
 
+**Output is DIAGRAM-FIRST.** All systems, flows, and relationships must be expressed as Mermaid diagrams. Use text only for formulas, exact values, and brief clarifications that can't be encoded in a diagram.
+
 ## Design Principles
 
 1. **Early generosity, late scarcity**: Players should feel rich in the first 2 minutes, then start feeling the pinch. The first upgrade should be affordable within 10 seconds.
@@ -33,107 +35,154 @@ Design the complete currency system for this game. Every number, formula, and ra
 
 ## Output Format
 
-Write the file `gdd/currencies.md` with EXACTLY this structure:
+Write the file `gdd/currencies.md`. The document must be **diagram-first** — use Mermaid diagrams to express all systems and relationships. Text is only for exact formulas, values, and brief notes that don't fit in a diagram.
 
-```markdown
-# Currency System
+### Required Diagrams
 
-## Overview
-[1-2 paragraphs summarizing the economy. How many currencies? What's the flow? What's the core tension?]
+#### 1. Economy Flow Diagram (MOST IMPORTANT)
 
-## Currency Definitions
+The complete currency web showing sources, sinks, conversions, and bottlenecks.
 
-### [Currency 1 Name]
-- **Type**: Primary / Secondary / Tertiary / Prestige / Meta
-- **Display**: [How it appears in UI - icon suggestion, abbreviation, color]
-- **Starting amount**: [exact number]
-- **Decimal places shown**: [0, 1, 2, or use suffixes like K/M/B]
-- **Cap**: [maximum value, or "uncapped"]
+```mermaid
+flowchart LR
+    subgraph "Sources"
+        Click["Manual Click\n+1/click"]
+        Gen1["Generator: Miner\nbaseRate * level/sec"]
+        Gen2["Generator: Refinery\nbaseRate * level/sec"]
+    end
+    subgraph "Currencies"
+        Gold((Gold\nPrimary\nstart: 0\nuncapped))
+        Gems((Gems\nSecondary\nstart: 0\nuncapped))
+        Essence((Essence\nPrestige\nstart: 0\npersists))
+    end
+    subgraph "Sinks"
+        Upgrades["Upgrades\ncost: base * 1.15^level"]
+        Generators["Buy Generators\ncost: base * 1.5^level"]
+        Convert["Convert to Gems\n100 Gold → 1 Gem"]
+        SkillNodes["Skill Tree Nodes\n1-5 Gems each"]
+        PrestigeUp["Prestige Upgrades\n1-10 Essence each"]
+    end
 
-#### Earning Methods
-| Source | Base Rate | Formula | Unlocked At |
-|--------|-----------|---------|-------------|
-| [source 1] | [base/sec or per action] | [exact formula] | [start / milestone] |
-| [source 2] | [base/sec or per action] | [exact formula] | [milestone] |
-
-#### Spending Methods
-| Sink | Base Cost | Scaling Formula | Effect |
-|------|-----------|-----------------|--------|
-| [sink 1] | [base cost] | [cost = base * multiplier^level] | [what it does] |
-| [sink 2] | [base cost] | [scaling formula] | [what it does] |
-
-#### Inflation Control
-[How does this currency avoid becoming meaningless? Exponential costs? Hard caps? Conversion drains?]
-
-### [Repeat for each currency]
-
-## Conversion Rates
-
-### [Conversion 1 Name]
-- **Input**: [X amount of Currency A] + [Y amount of Currency B] (if applicable)
-- **Output**: [Z amount of Currency C]
-- **Rate formula**: [exact formula, including any scaling]
-- **Cooldown/limit**: [if any]
-- **Unlocked at**: [when this becomes available]
-
-### [Repeat for each conversion]
-
-## Economy Flow Diagram
-[Describe the flow as ASCII art or structured text showing:
-- Which currencies feed into which
-- Where the sinks are
-- Where the conversion points are
-- What the bottlenecks are at different game stages]
-
-## Upgrade Costs Table
-
-### [Upgrade Category 1]
-| Upgrade | Currency | Base Cost | Scaling | Max Level | Effect per Level |
-|---------|----------|-----------|---------|-----------|------------------|
-| [name] | [currency] | [cost] | [formula] | [max or unlimited] | [+X per level or formula] |
-
-### [Repeat for each upgrade category]
-
-## Balance Targets
-
-### Pacing Benchmarks
-| Time | Expected Currency 1 | Expected Currency 2 | Expected Currency 3 | Key Unlock |
-|------|---------------------|---------------------|---------------------|------------|
-| 0:30 | [amount] | [amount] | [amount] | [what's new] |
-| 1:00 | [amount] | [amount] | [amount] | [what's new] |
-| 2:00 | [amount] | [amount] | [amount] | [what's new] |
-| 5:00 | [amount] | [amount] | [amount] | [what's new] |
-| 10:00 | [amount] | [amount] | [amount] | [what's new] |
-| 15:00 | [amount] | [amount] | [amount] | [what's new] |
-| 20:00 | [amount] | [amount] | [amount] | [what's new] |
-| 30:00 | [amount] | [amount] | [amount] | [prestige ready] |
-
-### Critical Ratios
-- **Earn-to-spend ratio**: [How fast should income grow vs. costs? e.g., "income doubles every 3 minutes, costs double every 2 upgrades"]
-- **Conversion efficiency**: [What % of value is preserved in conversions? e.g., "converting A to B preserves ~80% of farming-time value"]
-- **Prestige breakpoint**: [At what currency amounts does prestige become attractive?]
-
-## Edge Cases and Safeguards
-- **What if player hoards?**: [How the game handles someone who saves and doesn't spend]
-- **What if player overspends on wrong thing?**: [Is recovery possible? How long does it take?]
-- **Overflow protection**: [At what values do you switch to scientific notation or BigNum?]
-- **Negative balance prevention**: [How to prevent exploits or bugs from creating negative currencies]
+    Click --> Gold
+    Gen1 --> Gold
+    Gen2 --> Gems
+    Gold --> Upgrades
+    Gold --> Generators
+    Gold --> Convert
+    Convert --> Gems
+    Gems --> SkillNodes
+    Essence --> PrestigeUp
 ```
+
+**Rules:**
+- Show EVERY currency as a node with: name, type (Primary/Secondary/Prestige), starting amount, cap
+- Show EVERY source with its rate formula
+- Show EVERY sink with its cost formula
+- Show ALL conversion paths with exact ratios
+- Label every arrow
+
+#### 2. Currency Definitions Diagram
+
+Each currency's properties and earning/spending methods.
+
+```mermaid
+graph TD
+    subgraph "Gold [Primary Currency]"
+        G_display["Display: 🪙 Gold\n0 decimals\nSuffixes: K/M/B"]
+        G_earn["Earning:\nManual click: +1/click\nMiner: baseRate * level * multipliers/sec\nRefinery byproduct: 0.1 * gems_produced"]
+        G_spend["Spending:\nGenerator purchases\nUpgrade purchases\nConvert to Gems (100:1)"]
+        G_inflation["Inflation Control:\nExponential costs (1.15^level)\nGem conversion drain\nPrestige reset"]
+    end
+```
+
+One of these per currency.
+
+#### 3. Conversion Rate Diagram
+
+```mermaid
+flowchart LR
+    Gold["Gold\n(100)"] -->|"100:1 ratio\nUnlocked at: 500 Gold\nNo cooldown"| Gems["Gems\n(1)"]
+    Gold["Gold\n(1000)"] & Gems["Gems\n(10)"] -->|"Combined conversion\nUnlocked at: minute 10"| Essence["Essence\n(1)"]
+```
+
+#### 4. Pacing Timeline
+
+Show expected currency amounts over time.
+
+```mermaid
+gantt
+    title Currency Pacing (First 30 Minutes)
+    dateFormat mm:ss
+    axisFormat %M:%S
+
+    section Gold Milestones
+    First upgrade affordable (10 Gold)     :milestone, 00:10, 0
+    Generator 1 purchased (50 Gold)        :milestone, 01:00, 0
+    Second currency visible (500 Gold)     :milestone, 03:00, 0
+    Mid-game plateau (10K Gold)            :milestone, 10:00, 0
+    Pre-prestige (1M Gold)                 :milestone, 25:00, 0
+
+    section Gems Milestones
+    First Gem earned                       :milestone, 03:00, 0
+    First skill node affordable            :milestone, 05:00, 0
+    Full skill path (15 Gems)              :milestone, 15:00, 0
+
+    section Key Moments
+    Prestige teased                        :milestone, 15:00, 0
+    Prestige recommended                   :milestone, 25:00, 0
+```
+
+#### 5. Upgrade Cost Curves
+
+```mermaid
+graph LR
+    subgraph "Generator: Miner"
+        M1["Level 1\nCost: 10 Gold\nRate: +1/sec"]
+        M2["Level 5\nCost: 20 Gold\nRate: +5/sec"]
+        M3["Level 10\nCost: 40 Gold\nRate: +10/sec"]
+        M4["Level 25\nCost: 330 Gold\nRate: +25/sec"]
+        M1 --> M2 --> M3 --> M4
+    end
+```
+
+Show each upgrade/generator with key level breakpoints, costs, and effects.
+
+### Text Sections (keep brief)
+
+After the diagrams, include these SHORT text sections:
+
+**Exact Formulas** (one-liners, implementable):
+```
+Generator cost: baseCost * costMultiplier^level
+Generator rate: baseRate * level * globalMultiplier
+Conversion: floor(inputAmount / ratio)
+```
+
+**Balance Targets** (table format):
+| Time | Gold | Gems | Key Event |
+|------|------|------|-----------|
+| 0:30 | ~50 | 0 | First generator |
+| ... | ... | ... | ... |
+
+**Edge Cases** (brief bullet list):
+- Overflow protection: switch to BigNum at 1e6
+- Negative balance: canAfford() check before all purchases
+- Hoarding: soft-gate unlocks create spending pressure
 
 ## Quality Criteria
 
 Before writing your output, verify:
 
-- [ ] Every currency has at least 2 earning methods and 2 spending methods
-- [ ] Every formula is specific enough to copy-paste into code (no "scales appropriately")
+- [ ] The economy flow diagram shows EVERY currency, source, sink, and conversion
+- [ ] Every formula is exact and copy-pasteable into code
 - [ ] Conversion rates create meaningful decisions (not just "always convert")
-- [ ] The pacing benchmarks produce the 15-30 minute target timeline
+- [ ] The pacing timeline produces the 15-30 minute target
 - [ ] At least one currency is scarce enough to force hard choices
-- [ ] The first 30 seconds feel generous (player can afford something immediately)
-- [ ] No currency becomes irrelevant after a certain point
-- [ ] BigNum/overflow is addressed for late-game values
-- [ ] The economy forms a web (not a simple chain) matching idea.md's currency flow
-- [ ] All formulas use consistent variable naming that a developer can implement directly
+- [ ] The first 30 seconds feel generous
+- [ ] No currency becomes irrelevant
+- [ ] All formulas use consistent variable naming
+- [ ] The economy forms a web (not a chain)
+- [ ] A developer can implement the entire economy from diagrams alone
 
 ## Execution
 

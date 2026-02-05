@@ -20,173 +20,193 @@ Read these files from the workspace before starting:
 
 Design the complete progression system. Every unlock, gate, milestone, and pacing beat must be specified precisely enough that a developer knows exactly when each element appears and what triggers it.
 
+**Output is DIAGRAM-FIRST.** Use Mermaid diagrams for all unlock sequences, gates, timelines, and progression flows. Text only for exact values and brief notes.
+
 ## Design Principles
 
-1. **Layered revelation**: Start with 1 mechanic. Add a second after 1 minute. A third after 3 minutes. Never dump everything at once. The player should feel like they're peeling back layers, not drowning in systems.
+1. **Layered revelation**: Start with 1 mechanic. Add a second after 1 minute. A third after 3 minutes. Never dump everything at once.
 
-2. **The 30-second hook**: Within 30 seconds, the player must understand the core action and see a reward for it. This is non-negotiable.
+2. **The 30-second hook**: Within 30 seconds, the player must understand the core action and see a reward for it. Non-negotiable.
 
-3. **Alternating tension and release**: After every hard gate (a moment where progress slows), there should be a burst of new content or a satisfying unlock cascade.
+3. **Alternating tension and release**: After every hard gate, a burst of new content or a satisfying unlock cascade.
 
-4. **Visible horizon**: The player should always see the NEXT thing they're working toward, and ideally the thing after that (but dimmed/locked). Progress bars, locked icons, and "costs X to unlock" text are your tools.
+4. **Visible horizon**: The player should always see the NEXT thing they're working toward.
 
-5. **No dead zones**: At no point in the 15-30 minute session should the player have nothing to do or nothing to look forward to. If you identify a dead zone in your pacing, add a mechanic reveal or a milestone reward.
+5. **No dead zones**: At no point should the player have nothing to do or look forward to.
 
 ## Output Format
 
-Write the file `gdd/progression.md` with EXACTLY this structure:
+Write the file `gdd/progression.md`. **DIAGRAM-FIRST** — all progression systems expressed as Mermaid diagrams.
 
-```markdown
-# Progression System
+### Required Diagrams
 
-## Overview
-[2-3 paragraphs. What is the progression philosophy for this game? How does complexity unfold? What is the emotional arc from start to prestige?]
+#### 1. Unlock Flow (MOST IMPORTANT)
 
-## Unlock Sequence
+The complete unlock sequence as a flowchart. Shows EVERYTHING that unlocks, when, and what triggers it.
 
-### Phase 1: Onboarding (0:00 - 1:00)
-**Goal**: Player understands core action and sees first reward.
-
-| Time | Trigger | What Unlocks | Why It Matters |
-|------|---------|--------------|----------------|
-| 0:00 | Game start | [initial mechanics available] | [establishes the core loop] |
-| 0:10 | [trigger] | [unlock] | [reason] |
-| 0:30 | [trigger] | [unlock] | [reason] |
-
-**Emotional beat**: [What should the player feel at the end of this phase?]
-
-### Phase 2: Expansion (1:00 - 5:00)
-**Goal**: Second system introduced. Player starts making choices.
-
-| Time | Trigger | What Unlocks | Why It Matters |
-|------|---------|--------------|----------------|
-| 1:00 | [trigger] | [unlock] | [reason] |
-| [continue...] |
-
-**Emotional beat**: [What should the player feel?]
-
-### Phase 3: Complexity (5:00 - 15:00)
-**Goal**: All core systems online. Optimization and strategy emerge.
-
-| Time | Trigger | What Unlocks | Why It Matters |
-|------|---------|--------------|----------------|
-| [continue...] |
-
-**Emotional beat**: [What should the player feel?]
-
-### Phase 4: Mastery & Prestige Push (15:00 - 30:00)
-**Goal**: Player sees the ceiling, understands prestige, and pushes for it.
-
-| Time | Trigger | What Unlocks | Why It Matters |
-|------|---------|--------------|----------------|
-| [continue...] |
-
-**Emotional beat**: [What should the player feel?]
-
-## Gates and Checkpoints
-
-### Hard Gates
-[Moments where progression is intentionally slowed. The player must achieve something specific before proceeding.]
-
-| Gate | Requirement | What's Blocked | Estimated Wait Time | Purpose |
-|------|-------------|----------------|---------------------|---------|
-| [gate name] | [what the player must do] | [what they can't access yet] | [how long] | [why this gate exists] |
-
-### Soft Gates
-[Moments where things slow down naturally but the player can still do other things.]
-
-| Gate | What Slows Down | Alternative Activities | Purpose |
-|------|-----------------|----------------------|---------|
-| [gate name] | [what becomes slow] | [what they do instead] | [why this helps] |
-
-## Milestones
-
-### Achievement-Style Milestones
-[One-time accomplishments that give rewards and dopamine hits]
-
-| # | Milestone Name | Condition | Reward | Notification Text |
-|---|---------------|-----------|--------|-------------------|
-| 1 | [name] | [specific condition] | [what they get] | [toast message shown] |
-| 2 | [name] | [specific condition] | [what they get] | [toast message shown] |
-| [continue for all milestones...] |
-
-### Progression Milestones
-[Milestones tied to currency/level thresholds that show overall progress]
-
-| Currency/Metric | Threshold | Reward/Effect |
-|----------------|-----------|---------------|
-| [currency name] | [amount] | [what happens] |
-| [continue...] |
-
-## Pacing Curve
-
-### Minute-by-Minute Breakdown
-| Minute | New Content | Player Action Focus | Tension Level (1-5) | Notes |
-|--------|-------------|--------------------|-----------------------|-------|
-| 0-1 | [what's new] | [what they're doing] | [1-5] | [any notes] |
-| 1-2 | [what's new] | [what they're doing] | [1-5] | |
-| 2-3 | [what's new] | [what they're doing] | [1-5] | |
-| [continue through minute 30...] |
-
-### Tension Graph
-[Describe the intended tension/engagement curve. Where are the peaks? Where are the valleys? Use a simple ASCII representation:]
-
-```
-Tension
-5 |          *              *         *
-4 |     *   * *        *  * *   *   * *
-3 |   *  * *   *    * * *    * * * *
-2 |  *  *       *  *          *
-1 | *            **
-  +---------------------------------->
-   0  2  4  6  8  10 12 14 16 18 20 min
+```mermaid
+flowchart TD
+    Start["Game Start\n0:00"] --> Click["Manual Click Available\nCore action: click to earn Gold"]
+    Click -->|"10 Gold"| Gen1["🔓 Unlock: First Generator\nMiner - produces Gold/sec"]
+    Gen1 -->|"50 Gold"| Gen2["🔓 Unlock: Second Generator\nRefinery - produces Gems/sec"]
+    Gen1 -->|"25 Gold"| Upgrades["🔓 Unlock: Upgrades Tab\nSpend Gold for multipliers"]
+    Gen2 -->|"500 Gold"| Currency2["🔓 Unlock: Gems Display\nSecondary currency visible"]
+    Upgrades -->|"5 upgrades bought"| Tab2["🔓 Unlock: Strategy Tab\nChoose specialization"]
+    Currency2 -->|"10 Gems"| SkillTree["🔓 Unlock: Skill Tree\nSpend Gems on talents"]
+    SkillTree -->|"100K Gold earned total"| PrestigeTeaser["🔓 Prestige Button Visible\nShows potential reward"]
+    PrestigeTeaser -->|"1M Gold earned total"| PrestigeReady["✨ Prestige Available!\nRecommended first prestige"]
 ```
 
-## What Keeps Players Pushing Forward
+**Rules:**
+- EVERY unlock is a node with: icon, name, what it gives
+- Arrows labeled with exact trigger condition (currency amount, action count, time)
+- Show parallel unlock paths (things that can unlock simultaneously)
+- Color-code: green = mechanic unlock, blue = UI reveal, gold = prestige-related
 
-### Short-Term Motivators (next 30 seconds)
-- [motivator 1]
-- [motivator 2]
+#### 2. Gate Dependency Graph
 
-### Medium-Term Motivators (next 5 minutes)
-- [motivator 1]
-- [motivator 2]
+Shows hard gates and what they block.
 
-### Long-Term Motivators (session goals)
-- [motivator 1]
-- [motivator 2]
+```mermaid
+graph TD
+    subgraph "Hard Gates (progress pauses)"
+        HG1["⛔ Gate: First Generator\nRequirement: 10 Gold\nWait: ~10 sec\nBlocks: automation, passive income"]
+        HG2["⛔ Gate: Prestige Threshold\nRequirement: 1M lifetime Gold\nWait: ~2 min\nBlocks: prestige action"]
+    end
 
-### The Prestige Tease
-[When does the player first LEARN about prestige? When do they first feel the pull toward it? How is prestige teased throughout the session?]
+    subgraph "Soft Gates (progress slows)"
+        SG1["🟡 Gate: Mid-game plateau\nMinute 8-10\nGold income flattens\nPlayer redirected to: Gem conversion, Skill tree"]
+        SG2["🟡 Gate: Pre-prestige grind\nMinute 20-25\nAll upgrades expensive\nPlayer redirected to: Prestige decision"]
+    end
 
-## Anti-Frustration Features
-- **Stuck detection**: [If progress stalls for X seconds, show a hint or highlight an affordable upgrade]
-- **Catchup mechanics**: [If the player makes a bad choice, how do they recover?]
-- **Visual progress**: [How does the player see they're making progress even during slow moments?]
-
-## Tutorial / First-Time Experience
-[Step-by-step what happens the very first time the player loads the game. What is highlighted? What is hidden? What tooltips appear? Be specific.]
-
-1. [First thing player sees]
-2. [First action prompted]
-3. [First reward shown]
-4. [continue...]
+    HG1 -->|"resolved by"| Gen1Click["clicking ~10 times"]
+    HG2 -->|"resolved by"| Optimization["optimize generators + upgrades"]
+    SG1 -->|"resolved by"| NewSystem["Skill tree provides new multipliers"]
+    SG2 -->|"resolved by"| Prestige["Prestige for fresh run with bonuses"]
 ```
+
+#### 3. Progression Timeline
+
+```mermaid
+gantt
+    title Progression Pacing (30 Minutes)
+    dateFormat mm:ss
+    axisFormat %M:%S
+
+    section Onboarding (0-1 min)
+    Manual clicking introduced          :active, 00:00, 10s
+    First generator unlocked            :00:10, 20s
+    Upgrades tab appears                :00:30, 30s
+
+    section Expansion (1-5 min)
+    Second generator unlocked           :01:00, 60s
+    Secondary currency revealed         :02:00, 60s
+    Skill tree unlocked                 :03:00, 120s
+
+    section Complexity (5-15 min)
+    All generators available            :05:00, 300s
+    Conversion mechanics active         :07:00, 180s
+    Strategy choices emerge             :10:00, 300s
+
+    section Mastery & Prestige (15-30 min)
+    Prestige teased                     :15:00, 300s
+    All systems online                  :20:00, 300s
+    Prestige recommended                :25:00, 300s
+```
+
+#### 4. Tension Curve
+
+```mermaid
+graph LR
+    subgraph "Emotional Arc"
+        T1["0-1 min\n🟢 Excitement\nTension: 3/5\nNew player energy"]
+        T2["1-3 min\n🟢 Discovery\nTension: 4/5\nSystems revealing"]
+        T3["3-5 min\n🟡 First Plateau\nTension: 2/5\nWaiting for unlock"]
+        T4["5-8 min\n🟢 Expansion\nTension: 4/5\nNew systems open"]
+        T5["8-12 min\n🟡 Optimization\nTension: 3/5\nFine-tuning strategy"]
+        T6["12-15 min\n🟢 Peak\nTension: 5/5\nPrestige teased"]
+        T7["15-20 min\n🟡 Push\nTension: 3/5\nGrinding toward prestige"]
+        T8["20-30 min\n🟢 Climax\nTension: 5/5\nPrestige decision!"]
+    end
+    T1 --> T2 --> T3 --> T4 --> T5 --> T6 --> T7 --> T8
+```
+
+#### 5. Milestone Rewards
+
+```mermaid
+graph LR
+    subgraph "Achievement Milestones"
+        M1["🏆 First Click\nReward: +5 Gold\nToast: Welcome!"]
+        M2["🏆 10 Clicks\nReward: Unlock hint\nToast: Getting the hang of it!"]
+        M3["🏆 First Generator\nReward: +2x production 30s\nToast: Automation begins!"]
+        M4["🏆 100 Gold/sec\nReward: +1 Skill Point\nToast: Gold Rush!"]
+        M5["🏆 First Prestige\nReward: +3 Prestige Points\nToast: Transcendence!"]
+    end
+
+    subgraph "Currency Milestones"
+        CM1["💰 100 Gold\nUnlock: Upgrade tier 2"]
+        CM2["💰 1K Gold\nUnlock: Generator tier 2"]
+        CM3["💰 10K Gold\nUnlock: Conversion"]
+        CM4["💰 100K Gold\nUnlock: Prestige preview"]
+        CM5["💰 1M Gold\nUnlock: Prestige action"]
+    end
+```
+
+#### 6. Tutorial / First-Time Flow
+
+```mermaid
+sequenceDiagram
+    actor Player
+    participant UI as Game UI
+    participant Game as Game State
+
+    Note over Player,Game: First 60 Seconds
+
+    Player->>UI: loads game
+    UI->>Player: highlight click area + tooltip "Click to earn Gold!"
+    Player->>Game: clicks (earns Gold)
+    Game->>UI: show Gold counter animating up
+    UI->>Player: after 5 clicks: tooltip "Keep going! 10 Gold unlocks automation"
+
+    Player->>Game: reaches 10 Gold
+    Game->>UI: 🔓 Generator button appears with glow
+    UI->>Player: tooltip "Buy a Miner to earn Gold automatically!"
+    Player->>Game: buys Miner
+    Game->>UI: Gold/sec counter appears, number ticking up
+    UI->>Player: toast "Automation begins! 🏆"
+
+    Player->>Game: reaches 25 Gold
+    Game->>UI: 🔓 Upgrades tab pulses
+    UI->>Player: notification dot on tab
+```
+
+### Text Sections (keep brief)
+
+**Anti-Frustration Features:**
+- Stuck detection: if no purchase in 90 seconds, highlight cheapest affordable upgrade
+- Catchup: bad purchases recover in ~2 minutes via passive income
+- Visual progress: progress bars on locked milestones always visible
+
+**Motivator Summary:**
+| Timeframe | What Drives the Player |
+|-----------|----------------------|
+| Next 30 sec | Almost can afford [next upgrade] |
+| Next 5 min | New system about to unlock |
+| Session | Prestige for permanent power |
 
 ## Quality Criteria
 
 Before writing your output, verify:
 
+- [ ] The unlock flow diagram shows EVERY unlock with exact trigger conditions
 - [ ] The first 30 seconds have a clear action and visible reward
-- [ ] No phase lasts more than 5 minutes without introducing something new
-- [ ] Every hard gate has an estimated wait time and it's under 2 minutes
-- [ ] The minute-by-minute breakdown covers 0-30 minutes completely
-- [ ] The tension curve has clear peaks and valleys (not flat)
-- [ ] Prestige is teased before it's available (player knows it's coming)
+- [ ] No phase lasts more than 5 minutes without something new
+- [ ] Every hard gate has an estimated wait time under 2 minutes
+- [ ] The timeline covers 0-30 minutes completely
+- [ ] The tension curve has clear peaks and valleys
+- [ ] Prestige is teased before it's available
 - [ ] There are at least 8 milestones spread across the session
-- [ ] Anti-frustration features are specified (not just "show a hint")
-- [ ] The unlock sequence matches the currencies and mechanics from idea.md
-- [ ] A developer can read this and know exactly when to show/hide every UI element
+- [ ] A developer can read the diagrams and know exactly when to show/hide every UI element
 
 ## Execution
 

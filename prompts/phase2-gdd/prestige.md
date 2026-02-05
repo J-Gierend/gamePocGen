@@ -21,170 +21,212 @@ Read these files from the workspace before starting:
 
 Design the complete prestige system. Every formula, threshold, reward, and reset behavior must be specified precisely enough for direct implementation.
 
+**Output is DIAGRAM-FIRST.** The prestige cycle, reset spec, and upgrade tree must be Mermaid diagrams. Text only for exact formulas and brief notes.
+
 ## Design Principles
 
-1. **The prestige moment should feel powerful**: The player clicks prestige and sees IMMEDIATE impact. Not "slightly faster" -- dramatically faster. The first prestige should make Run 2 feel like a power fantasy compared to Run 1.
+1. **The prestige moment should feel powerful**: Dramatically faster, not "slightly faster." Run 2 should be a power fantasy.
 
-2. **Visible prestige incentive**: The player should be able to see "if I prestige now, I get X" at all times once prestige is unlocked. They should be able to weigh "push further for more prestige currency" vs. "prestige now and start fast."
+2. **Visible prestige incentive**: "If I prestige now, I get X" visible at all times once unlocked.
 
-3. **Diminishing returns on waiting**: Pushing further before prestige should give more reward, but with diminishing returns. This creates a natural decision point rather than "always wait as long as possible."
+3. **Diminishing returns on waiting**: Pushing further gives more, but with diminishing returns. Creates a natural decision point.
 
-4. **New content per prestige**: Each prestige should introduce at least one new element the player didn't have access to before. This prevents "same game but faster" fatigue.
+4. **New content per prestige**: Each prestige introduces at least one new element.
 
-5. **Quick second run**: Run 2 should reach Run 1's prestige point in roughly 1/3 to 1/2 the time. The acceleration should be dramatic and satisfying.
+5. **Quick second run**: Run 2 reaches Run 1's prestige point in 1/3 to 1/2 the time.
 
 ## Output Format
 
-Write the file `gdd/prestige.md` with EXACTLY this structure:
+Write the file `gdd/prestige.md`. **DIAGRAM-FIRST** — prestige cycle, reset spec, and upgrades as Mermaid diagrams.
 
-```markdown
-# Prestige System
+### Required Diagrams
 
-## Overview
-[2-3 paragraphs. What is the prestige system thematically? What does "resetting" mean in the game's fiction? Why would the player WANT to do this?]
+#### 1. Prestige Cycle (MOST IMPORTANT)
 
-## Prestige Currency
+The complete prestige loop as a state diagram.
 
-### [Prestige Currency Name]
-- **Earned by**: Prestiging (resetting the game)
-- **Formula**: `prestige_earned = [exact formula based on game state at prestige time]`
-- **Example values**:
-  | Game State at Prestige | Prestige Currency Earned |
-  |------------------------|--------------------------|
-  | [minimum viable state] | [amount] |
-  | [recommended first prestige] | [amount] |
-  | [pushed further] | [amount] |
-  | [much further] | [amount] |
-- **Diminishing returns**: [Explain the formula's curve -- why waiting 2x longer doesn't give 2x reward]
-- **Spent on**: [What this currency buys -- see Prestige Upgrades below]
+```mermaid
+stateDiagram-v2
+    [*] --> Run1: Game Start
 
-## Prestige Trigger
+    state "Run 1 (No Bonuses)" as Run1 {
+        [*] --> EarlyGame1: 0-5 min
+        EarlyGame1 --> MidGame1: generators online
+        MidGame1 --> LateGame1: all systems unlocked
+        LateGame1 --> PrestigeReady1: 1M lifetime Gold
+    }
 
-### Requirements
-- **Minimum requirement**: [What must be true before prestige is even possible?]
-- **Recommended first prestige**: [What state makes the first prestige worthwhile?]
-- **UI indicator**: [How does the player know prestige is available? How do they see the reward preview?]
+    state "Prestige Decision" as Decision {
+        [*] --> Preview
+        Preview: Show reward preview\nEssence earned: floor(sqrt(lifetimeGold / 1e6))\nCurrent run: 5 Essence\nPush further: +1 Essence per 500K more
+        Preview --> Confirm: Player clicks Prestige
+        Preview --> Wait: Player keeps playing
+        Wait --> Preview: checks again later
+    }
 
-### The Prestige Action
-1. Player clicks [prestige button name]
-2. Confirmation dialog shows: [exact text showing what they'll gain and lose]
-3. On confirm:
-   - [Prestige currency is calculated and awarded]
-   - [Things that reset are listed]
-   - [Things that persist are listed]
-   - [A brief animation or transition plays]
-4. Player returns to [initial game state + persistent bonuses]
+    state "Run 2+ (With Bonuses)" as Run2 {
+        [*] --> EarlyGame2: 0-2 min (3x faster!)
+        EarlyGame2 --> MidGame2: prestige multipliers active
+        MidGame2 --> LateGame2: new prestige-only content
+        LateGame2 --> PrestigeReady2: higher threshold possible
+    }
 
-## Reset Specification
-
-### What Resets (back to initial values)
-| Element | Resets To | Notes |
-|---------|-----------|-------|
-| [currency 1] | [starting value] | |
-| [upgrades category] | [level 0] | |
-| [progression state] | [initial] | |
-| [continue for all resetting elements...] | | |
-
-### What Persists (kept forever)
-| Element | Notes |
-|---------|-------|
-| [prestige currency] | Accumulates across runs |
-| [prestige upgrades] | Purchased once, kept forever |
-| [milestones/achievements] | Display purposes + any permanent effects |
-| [continue for all persistent elements...] | |
-
-### What Partially Resets
-[If any elements have partial reset behavior, specify here]
-| Element | Behavior | Formula |
-|---------|----------|---------|
-| [element] | [how it partially resets] | [formula if applicable] |
-
-## Prestige Upgrades
-
-### Upgrade Tree / List
-| # | Upgrade Name | Cost | Effect | Formula | Max Level | Prerequisite |
-|---|-------------|------|--------|---------|-----------|--------------|
-| 1 | [name] | [prestige currency cost] | [what it does] | [exact formula] | [max] | [none / other upgrade] |
-| 2 | [name] | [cost] | [effect] | [formula] | [max] | [prerequisite] |
-| [continue...] | | | | | | |
-
-### Upgrade Categories
-[Group upgrades by type and explain the strategic tradeoffs]
-
-#### [Category 1: e.g., "Production Multipliers"]
-- [Which upgrades fall here]
-- [Why a player would prioritize these]
-
-#### [Category 2: e.g., "Automation Unlocks"]
-- [Which upgrades fall here]
-- [Why a player would prioritize these]
-
-#### [Category 3: e.g., "New Mechanics"]
-- [Which upgrades fall here]
-- [Why a player would prioritize these]
-
-### Recommended First-Prestige Purchases
-[What should a player buy with their first batch of prestige currency? In what order?]
-1. [First purchase] -- because [reason]
-2. [Second purchase] -- because [reason]
-3. [Third purchase] -- because [reason]
-
-## Run Pacing Comparison
-
-### Run 1 (No Prestige Bonuses)
-| Milestone | Time to Reach |
-|-----------|---------------|
-| [milestone 1] | [time] |
-| [milestone 2] | [time] |
-| [prestige-ready] | [15-30 min] |
-
-### Run 2 (After First Prestige, Recommended Purchases)
-| Milestone | Time to Reach | Speedup vs Run 1 |
-|-----------|---------------|-------------------|
-| [milestone 1] | [time] | [X times faster] |
-| [milestone 2] | [time] | [X times faster] |
-| [prestige-ready] | [time] | [X times faster] |
-
-### Run 3+ (Accumulated Prestige)
-[Brief description of how subsequent runs continue to accelerate. At what point does prestige give marginal returns?]
-
-## Prestige Preview UI
-
-### Before Prestige is Available
-[What does the player see? A locked icon? A progress bar toward the requirement?]
-
-### When Prestige is Available
-[What changes in the UI? How prominent is the prestige button? What information is shown?]
-
-### The Preview Panel
-[Exact information shown when the player hovers/clicks the prestige option]
-- Current prestige currency earned if they prestige now: [formula result]
-- Comparison: "You will earn X [prestige currency]. Current total: Y. New total: Z"
-- Top affordable prestige upgrades they could buy
-- Estimated Run 2 speedup
-
-## Edge Cases
-- **Prestige at minimum**: [What happens if player prestiges at the bare minimum? Is it even worth it?]
-- **Prestige hoarding**: [What if player pushes way past recommended prestige? Does the formula handle this gracefully?]
-- **Multiple prestiges with no spending**: [What if player prestiges but doesn't buy upgrades? Is Run 2 identical to Run 1?]
-- **Prestige currency overflow**: [At what values does this need BigNum? How many prestiges before this matters?]
+    Run1 --> Decision: prestige threshold met
+    Decision --> Run2: prestige confirmed
+    Run2 --> Decision: new prestige threshold met
 ```
+
+#### 2. Reset Specification
+
+```mermaid
+graph TD
+    subgraph "🔴 RESETS (back to zero)"
+        R1["Gold → 0"]
+        R2["Gems → 0"]
+        R3["All generators → Level 0"]
+        R4["All upgrades → Level 0"]
+        R5["Skill points → 0\nSkill tree → unallocated"]
+        R6["Progression unlocks → relocked"]
+    end
+
+    subgraph "🟢 PERSISTS (kept forever)"
+        P1["Essence (prestige currency)\nAccumulates across runs"]
+        P2["Prestige upgrades purchased\nPermanent bonuses"]
+        P3["Achievements/milestones earned\n+ any permanent rewards"]
+        P4["Lifetime statistics\nTotal Gold earned, runs completed"]
+        P5["Tutorial flags\nDon't re-show tutorials"]
+    end
+
+    subgraph "🟡 PARTIAL RESET"
+        PR1["Unlock thresholds\nRelock but unlock 2x faster\nwith prestige multiplier"]
+    end
+```
+
+#### 3. Prestige Upgrade Tree
+
+```mermaid
+graph TD
+    subgraph "Tier 1 (1-3 Essence each)"
+        PU1["💎 Golden Start\nCost: 1 Essence\nStart each run with 100 Gold"]
+        PU2["💎 Quick Learner\nCost: 2 Essence\n+50% Gold production"]
+        PU3["💎 Headstart\nCost: 2 Essence\nStart with Generator Lv1"]
+    end
+
+    subgraph "Tier 2 (3-5 Essence each)"
+        PU4["💎 Deep Pockets\nCost: 3 Essence\n-20% all upgrade costs"]
+        PU5["💎 Gem Forge\nCost: 4 Essence\n+100% Gem production"]
+        PU6["💎 NEW: Auto-Converter\nCost: 5 Essence\nUnlock auto-conversion"]
+    end
+
+    subgraph "Tier 3 (5-10 Essence each)"
+        PU7["💎 Essence Magnet\nCost: 7 Essence\n+25% Essence from prestige"]
+        PU8["💎 NEW: Challenge Mode\nCost: 8 Essence\nUnlock challenge runs for bonus"]
+        PU9["💎 Transcendence\nCost: 10 Essence\nUnlock second prestige layer"]
+    end
+
+    PU1 --> PU4
+    PU2 --> PU4
+    PU2 --> PU5
+    PU3 --> PU6
+    PU4 --> PU7
+    PU5 --> PU8
+    PU6 --> PU8
+    PU7 --> PU9
+    PU8 --> PU9
+```
+
+Mark upgrades that unlock NEW mechanics (not just multipliers) with "NEW:" prefix.
+
+#### 4. Run Comparison
+
+```mermaid
+sequenceDiagram
+    participant R1 as Run 1 (no bonuses)
+    participant R2 as Run 2 (5 Essence spent)
+    participant R3 as Run 3 (15 Essence total)
+
+    Note over R1: 0:00 - Start with 0 Gold
+    Note over R2: 0:00 - Start with 100 Gold + 50% boost
+    Note over R3: 0:00 - Start with 100 Gold + 50% + auto-convert
+
+    Note over R1: 0:30 - First generator (10 Gold)
+    Note over R2: 0:05 - First generator (already have Gold!)
+    Note over R3: 0:02 - First generator (start with Lv1!)
+
+    Note over R1: 5:00 - Second currency
+    Note over R2: 1:30 - Second currency (3.3x faster)
+    Note over R3: 0:45 - Second currency (6.7x faster)
+
+    Note over R1: 25:00 - Prestige ready
+    Note over R2: 10:00 - Prestige ready (2.5x faster)
+    Note over R3: 5:00 - Prestige ready (5x faster)
+```
+
+#### 5. Prestige UI Flow
+
+```mermaid
+sequenceDiagram
+    actor Player
+    participant UI as Game UI
+    participant Game as Game State
+
+    Note over Player,Game: Prestige Available
+
+    Game->>UI: prestige threshold met
+    UI->>Player: Prestige button glows + shows "5 Essence available"
+
+    Player->>UI: clicks Prestige button
+    UI->>Player: Confirmation panel slides in
+
+    Note over UI: Panel shows:\n- Essence earned: 5\n- Current Essence: 0 → New total: 5\n- What resets (list)\n- What persists (list)\n- Affordable upgrades preview
+
+    alt Player confirms
+        Player->>UI: clicks "Prestige!"
+        UI->>UI: screen flash transition
+        Game->>Game: apply reset + award Essence
+        UI->>Player: show Prestige Shop
+        Player->>Game: buy upgrades
+        Game->>Game: start new run with bonuses
+        UI->>Player: fresh game with bonuses active
+    else Player cancels
+        Player->>UI: clicks "Keep Playing"
+        UI->>Player: panel closes, continue current run
+    end
+```
+
+### Text Sections (keep brief)
+
+**Prestige Formula:**
+```
+essence_earned = floor(sqrt(lifetime_gold / 1_000_000))
+
+Examples:
+  1M lifetime Gold → 1 Essence
+  4M lifetime Gold → 2 Essence
+  25M lifetime Gold → 5 Essence (recommended first prestige)
+  100M lifetime Gold → 10 Essence
+
+Diminishing returns: 4x more Gold = 2x more Essence
+```
+
+**Edge Cases:**
+- Minimum prestige (1M Gold): gives 1 Essence — barely worth it, player learns to push further
+- No-spend prestige: Run 2 identical to Run 1 (prestige currency does nothing until spent)
+- Overflow: BigNum handles Essence at 1e6+, formula produces reasonable values
 
 ## Quality Criteria
 
 Before writing your output, verify:
 
-- [ ] The prestige formula is exact and copy-pasteable into code
-- [ ] Example values show clear diminishing returns (not linear)
+- [ ] The prestige cycle diagram shows the complete loop
+- [ ] Reset specification is unambiguous — no "maybe resets"
+- [ ] The prestige formula is exact with example values showing diminishing returns
 - [ ] Run 2 reaches Run 1's prestige point in 1/3 to 1/2 the time
-- [ ] The reset specification is complete -- no ambiguity about what resets vs. persists
-- [ ] There are at least 6 prestige upgrades with meaningful variety
-- [ ] Prestige upgrades include at least one that unlocks a NEW mechanic (not just multipliers)
-- [ ] The preview UI gives the player enough information to make a strategic prestige decision
-- [ ] Edge cases are addressed (minimum prestige, hoarding, no-spend runs)
-- [ ] All formulas use consistent variable names matching currencies.md
-- [ ] The prestige system matches the thematic concept from idea.md
+- [ ] At least 6 prestige upgrades with meaningful variety
+- [ ] At least 1 upgrade unlocks a NEW mechanic (not just a multiplier)
+- [ ] The UI flow shows exactly what the player sees during prestige
+- [ ] A developer can implement the entire prestige system from diagrams alone
 
 ## Execution
 
-Read `idea.md`, `gdd/currencies.md`, and `gdd/progression.md` (if available), then write `gdd/prestige.md` to the workspace. Do not modify any input files. Do not write any other files.
+Read all available input files, then write `gdd/prestige.md` to the workspace. Do not modify any input files. Do not write any other files.
