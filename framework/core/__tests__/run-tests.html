@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GamePocGen Core Module Tests</title>
+  <style>
+    body {
+      font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+      background: #1a1a2e;
+      color: #eee;
+      padding: 20px;
+      margin: 0;
+    }
+    h1 {
+      color: #4ade80;
+    }
+    pre {
+      background: #0f0f1a;
+      padding: 20px;
+      border-radius: 8px;
+      overflow-x: auto;
+      white-space: pre-wrap;
+    }
+    .pass { color: #4ade80; }
+    .fail { color: #f87171; }
+    #output {
+      font-size: 14px;
+      line-height: 1.6;
+    }
+  </style>
+</head>
+<body>
+  <h1>GamePocGen Core Module Tests</h1>
+  <pre id="output">Loading tests...</pre>
+
+  <script type="module">
+    // Custom console to capture output
+    const output = document.getElementById('output');
+    const logs = [];
+
+    const originalConsole = { ...console };
+    console.log = (...args) => {
+      const text = args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ');
+      logs.push(text);
+      output.textContent = logs.join('\n');
+      originalConsole.log(...args);
+    };
+
+    // Import and run all test suites
+    async function runAllTests() {
+      const testModules = [
+        './EventBus.test.js',
+        './BigNum.test.js',
+        './SaveManager.test.js',
+        './GameLoop.test.js'
+      ];
+
+      let totalPassed = 0;
+      let totalFailed = 0;
+
+      for (const modulePath of testModules) {
+        try {
+          const { runner } = await import(modulePath);
+          await runner.run();
+          totalPassed += runner.results.passed;
+          totalFailed += runner.results.failed;
+        } catch (error) {
+          console.log(`\n❌ Failed to load ${modulePath}: ${error.message}`);
+          totalFailed++;
+        }
+      }
+
+      console.log('\n============================');
+      console.log('TOTAL RESULTS');
+      console.log(`Passed: ${totalPassed}`);
+      console.log(`Failed: ${totalFailed}`);
+      console.log('============================');
+
+      // Color output based on results
+      if (totalFailed === 0) {
+        output.classList.add('pass');
+      } else {
+        output.classList.add('fail');
+      }
+    }
+
+    runAllTests();
+  </script>
+</body>
+</html>

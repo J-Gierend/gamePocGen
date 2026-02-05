@@ -1,0 +1,636 @@
+/* ========================================================================
+   GamePocGen - Base Game Styles
+   Dark theme for incremental/idle games
+   ======================================================================== */
+
+:root {
+    --game-bg: #0a0a0f;
+    --game-surface: #12121a;
+    --game-surface-hover: #1a1a25;
+    --game-border: #2d2d3a;
+    --game-text: #e2e8f0;
+    --game-text-dim: #94a3b8;
+    --game-accent: #6366f1;
+    --game-accent-glow: rgba(99, 102, 241, 0.3);
+    --game-success: #22c55e;
+    --game-warning: #f59e0b;
+    --game-danger: #ef4444;
+    --game-gold: #fbbf24;
+    --game-purple: #8b5cf6;
+    --game-cyan: #22d3ee;
+}
+
+/* Reset & Base */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--game-bg);
+    color: var(--game-text);
+    line-height: 1.5;
+    overflow-x: hidden;
+    min-height: 100vh;
+}
+
+/* ========================================================================
+   Layout
+   ======================================================================== */
+
+.game-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 1rem;
+    display: grid;
+    grid-template-rows: auto 1fr;
+    min-height: 100vh;
+}
+
+.game-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem;
+    background: var(--game-surface);
+    border: 1px solid var(--game-border);
+    border-radius: 12px;
+    margin-bottom: 1rem;
+}
+
+.game-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, #fff, var(--game-accent));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.game-main {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    gap: 1rem;
+}
+
+.game-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.game-content {
+    background: var(--game-surface);
+    border: 1px solid var(--game-border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    min-height: 400px;
+}
+
+/* ========================================================================
+   Resource Bar
+   ======================================================================== */
+
+.resource-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    background: var(--game-surface);
+    border: 1px solid var(--game-border);
+    border-radius: 10px;
+    transition: border-color 0.2s;
+}
+
+.resource-bar:hover {
+    border-color: var(--game-accent);
+}
+
+.resource-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    background: linear-gradient(135deg, var(--game-gold), #f59e0b);
+    flex-shrink: 0;
+}
+
+.resource-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.resource-name {
+    font-size: 0.75rem;
+    color: var(--game-text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.resource-value {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--game-gold);
+    line-height: 1.2;
+}
+
+.resource-rate {
+    font-size: 0.75rem;
+    color: var(--game-success);
+}
+
+.resource-rate.negative {
+    color: var(--game-danger);
+}
+
+/* ========================================================================
+   Upgrade Button
+   ======================================================================== */
+
+.upgrade-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    background: var(--game-surface);
+    border: 1px solid var(--game-border);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+    width: 100%;
+    text-align: left;
+    color: var(--game-text);
+    font-family: inherit;
+    font-size: inherit;
+}
+
+.upgrade-btn:hover {
+    background: var(--game-surface-hover);
+    border-color: var(--game-accent);
+    transform: translateY(-1px);
+}
+
+.upgrade-btn:active {
+    transform: translateY(0);
+}
+
+.upgrade-btn.affordable {
+    border-color: var(--game-success);
+    box-shadow: 0 0 12px rgba(34, 197, 94, 0.15);
+}
+
+.upgrade-btn.affordable:hover {
+    box-shadow: 0 0 20px rgba(34, 197, 94, 0.25);
+}
+
+.upgrade-btn.locked {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.upgrade-btn.maxed {
+    border-color: var(--game-purple);
+    opacity: 0.7;
+}
+
+.upgrade-icon {
+    width: 44px;
+    height: 44px;
+    background: var(--game-bg);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.4rem;
+    flex-shrink: 0;
+}
+
+.upgrade-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.upgrade-name {
+    font-weight: 600;
+    font-size: 0.95rem;
+    line-height: 1.2;
+}
+
+.upgrade-desc {
+    font-size: 0.8rem;
+    color: var(--game-text-dim);
+}
+
+.upgrade-cost {
+    text-align: right;
+    flex-shrink: 0;
+}
+
+.upgrade-cost-value {
+    font-weight: 700;
+    color: var(--game-gold);
+    font-size: 0.95rem;
+}
+
+.upgrade-level {
+    font-size: 0.75rem;
+    color: var(--game-text-dim);
+}
+
+/* Tooltip */
+.upgrade-tooltip {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--game-bg);
+    border: 1px solid var(--game-border);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    font-size: 0.85rem;
+    color: var(--game-text-dim);
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s;
+    z-index: 100;
+}
+
+.upgrade-btn:hover .upgrade-tooltip {
+    opacity: 1;
+}
+
+/* ========================================================================
+   Progress Bar
+   ======================================================================== */
+
+.progress-container {
+    margin-bottom: 0.75rem;
+}
+
+.progress-label {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.4rem;
+    font-size: 0.85rem;
+    color: var(--game-text-dim);
+}
+
+.progress-bar {
+    height: 8px;
+    background: var(--game-bg);
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--game-accent), var(--game-purple));
+    border-radius: 4px;
+    transition: width 0.3s ease;
+    position: relative;
+}
+
+.progress-fill.animated::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.15), transparent);
+    animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
+
+.progress-fill.complete {
+    background: linear-gradient(90deg, var(--game-success), #10b981);
+}
+
+/* ========================================================================
+   Tab System
+   ======================================================================== */
+
+.tabs {
+    width: 100%;
+}
+
+.tab-header {
+    display: flex;
+    background: var(--game-bg);
+    border-radius: 10px 10px 0 0;
+    border: 1px solid var(--game-border);
+    border-bottom: none;
+    overflow-x: auto;
+}
+
+.tab-btn {
+    padding: 0.75rem 1.25rem;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--game-text-dim);
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+    font-size: 0.9rem;
+    white-space: nowrap;
+}
+
+.tab-btn:hover {
+    color: var(--game-text);
+    background: var(--game-surface);
+}
+
+.tab-btn.active {
+    color: var(--game-accent);
+    border-bottom-color: var(--game-accent);
+    background: var(--game-surface);
+}
+
+.tab-content {
+    background: var(--game-surface);
+    border: 1px solid var(--game-border);
+    border-radius: 0 0 10px 10px;
+    padding: 1.5rem;
+    min-height: 200px;
+}
+
+.tab-panel {
+    display: none;
+}
+
+.tab-panel.active {
+    display: block;
+}
+
+/* ========================================================================
+   Skill Tree
+   ======================================================================== */
+
+.skill-tree {
+    position: relative;
+    padding: 2rem;
+    background: var(--game-bg);
+    border-radius: 12px;
+    overflow: auto;
+    min-height: 300px;
+}
+
+.skill-node {
+    position: absolute;
+    width: 64px;
+    height: 64px;
+    background: var(--game-surface);
+    border: 2px solid var(--game-border);
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.6rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    z-index: 2;
+}
+
+.skill-node:hover {
+    border-color: var(--game-accent);
+    transform: scale(1.08);
+    z-index: 3;
+}
+
+.skill-node.unlocked {
+    border-color: var(--game-success);
+    background: rgba(34, 197, 94, 0.1);
+}
+
+.skill-node.available {
+    border-color: var(--game-accent);
+    box-shadow: 0 0 20px var(--game-accent-glow);
+    animation: node-pulse 2s infinite;
+}
+
+@keyframes node-pulse {
+    0%, 100% { box-shadow: 0 0 20px var(--game-accent-glow); }
+    50% { box-shadow: 0 0 30px var(--game-accent-glow), 0 0 40px rgba(99, 102, 241, 0.15); }
+}
+
+.skill-node.locked {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.skill-node-label {
+    position: absolute;
+    bottom: -20px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.7rem;
+    color: var(--game-text-dim);
+    white-space: nowrap;
+}
+
+.skill-connector {
+    position: absolute;
+    background: var(--game-border);
+    z-index: 1;
+}
+
+.skill-connector.active {
+    background: var(--game-success);
+}
+
+.skill-connector.horizontal {
+    height: 2px;
+}
+
+.skill-connector.vertical {
+    width: 2px;
+}
+
+/* ========================================================================
+   Notifications & Floating Text
+   ======================================================================== */
+
+.notification-container {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.notification {
+    background: var(--game-surface);
+    border: 1px solid var(--game-border);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    font-size: 0.9rem;
+    animation: slide-in 0.3s ease, fade-out 0.5s ease 2.5s forwards;
+    max-width: 300px;
+}
+
+.notification.success { border-left: 3px solid var(--game-success); }
+.notification.warning { border-left: 3px solid var(--game-warning); }
+.notification.error { border-left: 3px solid var(--game-danger); }
+.notification.unlock { border-left: 3px solid var(--game-purple); }
+
+@keyframes slide-in {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes fade-out {
+    to { opacity: 0; transform: translateY(-10px); }
+}
+
+/* Floating damage/income numbers */
+.float-text {
+    position: absolute;
+    font-weight: 700;
+    pointer-events: none;
+    animation: float-up 1s ease forwards;
+    z-index: 50;
+}
+
+.float-text.positive { color: var(--game-success); }
+.float-text.negative { color: var(--game-danger); }
+.float-text.special { color: var(--game-gold); font-size: 1.2em; }
+
+@keyframes float-up {
+    0% { opacity: 1; transform: translateY(0); }
+    100% { opacity: 0; transform: translateY(-40px); }
+}
+
+/* ========================================================================
+   Buttons & Controls
+   ======================================================================== */
+
+.btn {
+    padding: 0.6rem 1.2rem;
+    background: var(--game-accent);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px var(--game-accent-glow);
+}
+
+.btn:active {
+    transform: translateY(0);
+}
+
+.btn-secondary {
+    background: var(--game-surface);
+    border: 1px solid var(--game-border);
+    color: var(--game-text);
+}
+
+.btn-danger {
+    background: var(--game-danger);
+}
+
+.btn-success {
+    background: var(--game-success);
+}
+
+.btn-sm {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.8rem;
+}
+
+/* ========================================================================
+   Sprite Canvas
+   ======================================================================== */
+
+.sprite-canvas {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+}
+
+/* ========================================================================
+   Utilities
+   ======================================================================== */
+
+.text-gold { color: var(--game-gold); }
+.text-success { color: var(--game-success); }
+.text-danger { color: var(--game-danger); }
+.text-accent { color: var(--game-accent); }
+.text-dim { color: var(--game-text-dim); }
+.text-bold { font-weight: 700; }
+.text-sm { font-size: 0.85rem; }
+.text-xs { font-size: 0.75rem; }
+.text-center { text-align: center; }
+
+.flex { display: flex; }
+.flex-col { flex-direction: column; }
+.items-center { align-items: center; }
+.justify-between { justify-content: space-between; }
+.gap-sm { gap: 0.5rem; }
+.gap-md { gap: 1rem; }
+.gap-lg { gap: 1.5rem; }
+
+.mt-sm { margin-top: 0.5rem; }
+.mt-md { margin-top: 1rem; }
+.mb-sm { margin-bottom: 0.5rem; }
+.mb-md { margin-bottom: 1rem; }
+
+.hidden { display: none !important; }
+
+/* ========================================================================
+   Responsive
+   ======================================================================== */
+
+@media (max-width: 768px) {
+    .game-main {
+        grid-template-columns: 1fr;
+    }
+
+    .game-sidebar {
+        flex-direction: row;
+        flex-wrap: wrap;
+    }
+
+    .resource-bar {
+        flex: 1;
+        min-width: 140px;
+    }
+
+    .tab-header {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+}
+
+@media (max-width: 480px) {
+    .game-container {
+        padding: 0.5rem;
+    }
+
+    .game-header {
+        flex-direction: column;
+        gap: 0.5rem;
+        text-align: center;
+    }
+}

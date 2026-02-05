@@ -1,0 +1,1125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GamePocGen - AI-Powered Incremental Game Generator</title>
+    <style>
+        /* Password overlay */
+        .password-overlay {
+            position: fixed;
+            inset: 0;
+            background: #0a0a0f;
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .password-overlay.hidden { display: none; }
+
+        .password-box {
+            background: #12121a;
+            border: 1px solid #2d2d3a;
+            border-radius: 16px;
+            padding: 3rem;
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+        }
+
+        .password-box h2 {
+            color: #e2e8f0;
+            margin-bottom: 0.5rem;
+            font-size: 1.8rem;
+        }
+
+        .password-box h2::before { display: none; }
+
+        .password-box p {
+            color: #94a3b8;
+            margin-bottom: 1.5rem;
+        }
+
+        .password-box input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            background: #0a0a0f;
+            border: 1px solid #2d2d3a;
+            border-radius: 8px;
+            color: #e2e8f0;
+            font-size: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .password-box input:focus {
+            outline: none;
+            border-color: #6366f1;
+        }
+
+        .password-box button {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .password-box button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(99, 102, 241, 0.4);
+        }
+
+        .password-error {
+            color: #ef4444;
+            font-size: 0.9rem;
+            margin-top: 1rem;
+            display: none;
+        }
+
+        .password-error.show { display: block; }
+
+        :root {
+            --bg-dark: #0a0a0f;
+            --bg-card: #12121a;
+            --bg-card-hover: #1a1a25;
+            --accent: #6366f1;
+            --accent-glow: rgba(99, 102, 241, 0.3);
+            --text: #e2e8f0;
+            --text-dim: #94a3b8;
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --border: #2d2d3a;
+            --gold: #fbbf24;
+            --purple: #8b5cf6;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text);
+            line-height: 1.7;
+        }
+
+        /* Hero */
+        .hero {
+            background: linear-gradient(135deg, #1a1a2e 0%, #0a0a0f 100%);
+            padding: 5rem 2rem;
+            text-align: center;
+            border-bottom: 1px solid var(--border);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background:
+                radial-gradient(circle at 20% 50%, var(--accent-glow) 0%, transparent 50%),
+                radial-gradient(circle at 80% 50%, rgba(139, 92, 246, 0.2) 0%, transparent 50%);
+        }
+
+        .hero-content {
+            position: relative;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .hero h1 {
+            font-size: 4rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #fff 0%, var(--accent) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 1rem;
+        }
+
+        .hero .tagline {
+            font-size: 1.6rem;
+            color: var(--text-dim);
+            margin-bottom: 1.5rem;
+        }
+
+        .hero .summary {
+            font-size: 1.15rem;
+            color: var(--text);
+            max-width: 750px;
+            margin: 0 auto 2.5rem;
+        }
+
+        .stats {
+            display: flex;
+            justify-content: center;
+            gap: 3rem;
+            flex-wrap: wrap;
+        }
+
+        .stat { text-align: center; }
+        .stat-value { font-size: 3rem; font-weight: 700; color: var(--accent); }
+        .stat-label { color: var(--text-dim); font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.1em; }
+
+        /* Nav */
+        nav {
+            background: var(--bg-card);
+            padding: 1rem 2rem;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            border-bottom: 1px solid var(--border);
+        }
+
+        nav ul {
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            list-style: none;
+            max-width: 1200px;
+            margin: 0 auto;
+            flex-wrap: wrap;
+        }
+
+        nav a {
+            color: var(--text-dim);
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+
+        nav a:hover { color: var(--text); background: var(--bg-card-hover); }
+
+        /* Main */
+        main {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 3rem 2rem;
+        }
+
+        section { margin-bottom: 5rem; }
+
+        h2 {
+            font-size: 2.2rem;
+            margin-bottom: 1.5rem;
+            color: var(--text);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        h2::before {
+            content: '';
+            width: 5px;
+            height: 1.8rem;
+            background: var(--accent);
+            border-radius: 3px;
+        }
+
+        h3 { font-size: 1.5rem; margin: 2rem 0 1rem; color: var(--text); }
+        h4 { font-size: 1.2rem; margin: 1.5rem 0 0.75rem; color: var(--accent); }
+        p { color: var(--text-dim); margin-bottom: 1rem; }
+        ul, ol { color: var(--text-dim); margin-left: 1.5rem; margin-bottom: 1rem; }
+        li { margin-bottom: 0.5rem; }
+        strong { color: var(--text); }
+
+        /* Cards */
+        .card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin: 1.5rem 0;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 2rem;
+            transition: all 0.3s;
+        }
+
+        .card:hover {
+            background: var(--bg-card-hover);
+            border-color: var(--accent);
+            transform: translateY(-3px);
+        }
+
+        .card-icon { font-size: 3rem; margin-bottom: 1rem; }
+        .card h4 { margin-top: 0; font-size: 1.3rem; }
+        .card p { font-size: 0.95rem; margin-bottom: 0; }
+
+        /* Feature boxes */
+        .feature-box {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 2rem;
+            margin: 1.5rem 0;
+        }
+
+        .feature-box h4 {
+            margin-top: 0;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .feature-box .icon { font-size: 1.5rem; }
+
+        /* Psychology grid */
+        .psych-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1rem;
+            margin: 1.5rem 0;
+        }
+
+        .psych-item {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.25rem;
+            border-left: 4px solid var(--accent);
+        }
+
+        .psych-item h5 {
+            font-size: 1rem;
+            color: var(--text);
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .psych-item p {
+            font-size: 0.9rem;
+            margin: 0;
+        }
+
+        /* Agent cards */
+        .agent-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 1.5rem;
+            margin: 1.5rem 0;
+        }
+
+        .agent-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 1.5rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .agent-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, var(--accent), var(--purple));
+        }
+
+        .agent-card.review::before {
+            background: linear-gradient(90deg, var(--warning), #ef4444);
+        }
+
+        .agent-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .agent-icon {
+            width: 50px;
+            height: 50px;
+            background: var(--bg-dark);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+        }
+
+        .agent-name { font-size: 1.2rem; font-weight: 600; }
+        .agent-focus { font-size: 0.85rem; color: var(--text-dim); }
+
+        .agent-outputs {
+            background: var(--bg-dark);
+            border-radius: 8px;
+            padding: 0.75rem 1rem;
+            margin-top: 1rem;
+        }
+
+        .agent-outputs strong {
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-dim);
+        }
+
+        .agent-outputs ul {
+            margin: 0.5rem 0 0 1rem;
+            font-size: 0.9rem;
+        }
+
+        /* Gameplay patterns */
+        .pattern-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin: 1.5rem 0;
+        }
+
+        .pattern-card {
+            background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-card-hover) 100%);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 1.5rem;
+            text-align: center;
+        }
+
+        .pattern-icon { font-size: 3rem; margin-bottom: 1rem; }
+        .pattern-name { font-size: 1.2rem; font-weight: 600; margin-bottom: 0.5rem; }
+        .pattern-desc { font-size: 0.9rem; color: var(--text-dim); }
+
+        /* Timeline */
+        .timeline {
+            position: relative;
+            padding-left: 3rem;
+            margin: 2rem 0;
+        }
+
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 3px;
+            background: linear-gradient(180deg, var(--accent), var(--purple), var(--success));
+            border-radius: 2px;
+        }
+
+        .timeline-item {
+            position: relative;
+            padding-bottom: 2.5rem;
+        }
+
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: -3rem;
+            top: 0.25rem;
+            width: 16px;
+            height: 16px;
+            background: var(--accent);
+            border-radius: 50%;
+            transform: translateX(-6.5px);
+            box-shadow: 0 0 20px var(--accent-glow);
+        }
+
+        .timeline-item h4 {
+            margin-top: 0;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .timeline-time {
+            background: var(--accent);
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+
+        /* Demo components */
+        .demo-container {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 2rem;
+            margin: 1.5rem 0;
+        }
+
+        .demo-title {
+            font-size: 0.9rem;
+            color: var(--text-dim);
+            margin-bottom: 1.5rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        .resource-bar {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem 1.5rem;
+            background: var(--bg-dark);
+            border-radius: 12px;
+            margin-bottom: 1rem;
+        }
+
+        .resource-icon {
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, var(--gold) 0%, #f59e0b 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+        }
+
+        .resource-info { flex: 1; }
+        .resource-name { font-size: 0.9rem; color: var(--text-dim); }
+        .resource-value { font-size: 2rem; font-weight: 700; color: var(--gold); }
+        .resource-rate { font-size: 0.85rem; color: var(--success); }
+
+        .upgrade-btn {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem 1.5rem;
+            background: linear-gradient(135deg, var(--bg-card-hover) 0%, var(--bg-card) 100%);
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-bottom: 0.75rem;
+        }
+
+        .upgrade-btn:hover { border-color: var(--accent); }
+        .upgrade-btn.affordable { border-color: var(--success); box-shadow: 0 0 15px rgba(34, 197, 94, 0.2); }
+
+        .upgrade-icon {
+            width: 56px;
+            height: 56px;
+            background: var(--bg-dark);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.8rem;
+        }
+
+        .upgrade-info { flex: 1; text-align: left; }
+        .upgrade-name { font-weight: 600; font-size: 1.1rem; }
+        .upgrade-desc { font-size: 0.9rem; color: var(--text-dim); }
+        .upgrade-cost { text-align: right; }
+        .upgrade-cost-value { font-weight: 700; font-size: 1.1rem; color: var(--gold); }
+        .upgrade-level { font-size: 0.85rem; color: var(--text-dim); }
+
+        .skill-tree-demo {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 2rem;
+            background: var(--bg-dark);
+            border-radius: 12px;
+        }
+
+        .skill-row { display: flex; gap: 1.5rem; }
+
+        .skill-node {
+            width: 70px;
+            height: 70px;
+            background: var(--bg-card);
+            border: 3px solid var(--border);
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .skill-node:hover { border-color: var(--accent); transform: scale(1.05); }
+        .skill-node.unlocked { border-color: var(--success); background: rgba(34, 197, 94, 0.1); }
+        .skill-node.available { border-color: var(--accent); box-shadow: 0 0 20px var(--accent-glow); animation: pulse 2s infinite; }
+
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 0 20px var(--accent-glow); }
+            50% { box-shadow: 0 0 30px var(--accent-glow), 0 0 40px var(--accent-glow); }
+        }
+
+        .skill-connector { width: 3px; height: 25px; background: var(--border); margin: 0 auto; }
+        .skill-connector.active { background: var(--success); }
+
+        /* Quote box */
+        .quote-box {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
+            border: 1px solid var(--accent);
+            border-radius: 16px;
+            padding: 2rem;
+            margin: 2rem 0;
+            text-align: center;
+        }
+
+        .quote-box p {
+            font-size: 1.3rem;
+            color: var(--text);
+            font-style: italic;
+            margin: 0;
+        }
+
+        /* Footer */
+        footer {
+            text-align: center;
+            padding: 3rem 2rem;
+            border-top: 1px solid var(--border);
+            color: var(--text-dim);
+        }
+
+        footer p { margin: 0.5rem 0; }
+
+        @media (max-width: 768px) {
+            .hero h1 { font-size: 2.5rem; }
+            .hero .tagline { font-size: 1.2rem; }
+            .stat-value { font-size: 2rem; }
+            nav ul { gap: 0.75rem; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Password Protection -->
+    <div class="password-overlay" id="passwordOverlay">
+        <div class="password-box">
+            <h2>🎮 GamePocGen</h2>
+            <p>Enter password to view documentation</p>
+            <input type="password" id="passwordInput" placeholder="Password" onkeypress="if(event.key==='Enter')checkPassword()">
+            <button onclick="checkPassword()">Enter</button>
+            <p class="password-error" id="passwordError">Incorrect password</p>
+        </div>
+    </div>
+
+    <section class="hero">
+        <div class="hero-content">
+            <h1>GamePocGen</h1>
+            <p class="tagline">AI-Powered Incremental Game Generator</p>
+            <p class="summary">
+                Generate complete, playable 2D incremental games overnight using specialized AI agents.
+                Each game features 15-30 minutes of engaging gameplay with interlocking currencies,
+                prestige systems, and skill trees - the proven patterns that keep players hooked.
+            </p>
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-value">5-10</div>
+                    <div class="stat-label">Games per Night</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">6</div>
+                    <div class="stat-label">Design Agents</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">15-30</div>
+                    <div class="stat-label">Minutes Gameplay</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">100%</div>
+                    <div class="stat-label">Browser Playable</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <nav>
+        <ul>
+            <li><a href="#concept">Concept</a></li>
+            <li><a href="#patterns">Game Patterns</a></li>
+            <li><a href="#agents">AI Agents</a></li>
+            <li><a href="#psychology">Psychology</a></li>
+            <li><a href="#process">Process</a></li>
+            <li><a href="#components">Components</a></li>
+        </ul>
+    </nav>
+
+    <main>
+        <section id="concept">
+            <h2>The Concept</h2>
+
+            <div class="quote-box">
+                <p>"What if we could generate unique, engaging idle games while we sleep?"</p>
+            </div>
+
+            <p>
+                Incremental games (also called idle games or clicker games) are one of gaming's most addictive genres.
+                From Cookie Clicker to Adventure Capitalist, these games tap into fundamental psychological rewards
+                that keep players coming back for "just one more upgrade."
+            </p>
+
+            <p>
+                <strong>GamePocGen</strong> uses a team of specialized AI agents to generate complete incremental games
+                from scratch. Each game is unique, playable in the browser, and designed using proven engagement patterns.
+            </p>
+
+            <div class="card-grid">
+                <div class="card">
+                    <div class="card-icon">🎮</div>
+                    <h4>Instant Playability</h4>
+                    <p>Every generated game runs directly in the browser. No downloads, no installs. Share a link and play immediately.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon">🔄</div>
+                    <h4>Unique Every Time</h4>
+                    <p>Creative AI generates fresh themes, mechanics, and progression systems. No two games are alike.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon">🧠</div>
+                    <h4>Psychology-Driven</h4>
+                    <p>Every game is reviewed by a specialized psychology agent to ensure satisfying reward loops and pacing.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon">⏰</div>
+                    <h4>Overnight Generation</h4>
+                    <p>Start the generator before bed, wake up to 5-10 playable game prototypes ready for testing.</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="patterns">
+            <h2>Proven Game Patterns</h2>
+
+            <p>
+                The AI draws from battle-tested incremental game patterns that have captivated millions of players.
+                Each pattern provides a foundation that the AI expands with unique twists and themes.
+            </p>
+
+            <div class="pattern-grid">
+                <div class="pattern-card">
+                    <div class="pattern-icon">⛏️</div>
+                    <div class="pattern-name">Mining & Digging</div>
+                    <div class="pattern-desc">Dig deeper, find rarer resources, unlock new tools and equipment</div>
+                </div>
+                <div class="pattern-card">
+                    <div class="pattern-icon">🏰</div>
+                    <div class="pattern-name">Tower Building</div>
+                    <div class="pattern-desc">Stack floors, attract visitors, automate services for passive income</div>
+                </div>
+                <div class="pattern-card">
+                    <div class="pattern-icon">🔗</div>
+                    <div class="pattern-name">Resource Chains</div>
+                    <div class="pattern-desc">Convert basic resources into advanced materials through production chains</div>
+                </div>
+                <div class="pattern-card">
+                    <div class="pattern-icon">⚔️</div>
+                    <div class="pattern-name">Combat Idle</div>
+                    <div class="pattern-desc">Auto-battling heroes, loot collection, gear upgrades, boss fights</div>
+                </div>
+                <div class="pattern-card">
+                    <div class="pattern-icon">🌱</div>
+                    <div class="pattern-name">Growth & Farming</div>
+                    <div class="pattern-desc">Plant, harvest, expand. Seasonal cycles with compound rewards</div>
+                </div>
+                <div class="pattern-card">
+                    <div class="pattern-icon">🏭</div>
+                    <div class="pattern-name">Factory Automation</div>
+                    <div class="pattern-desc">Build machines, optimize throughput, scale production exponentially</div>
+                </div>
+            </div>
+
+            <div class="feature-box">
+                <h4><span class="icon">💡</span> The Magic Formula</h4>
+                <p>
+                    Every generated game must have <strong>3+ interlocking currencies</strong> that feed into each other,
+                    creating meaningful choices about resource allocation. Gold buys workers, workers produce gems,
+                    gems unlock upgrades that boost gold production. This interconnection is what makes incremental games
+                    feel deep despite simple mechanics.
+                </p>
+            </div>
+        </section>
+
+        <section id="agents">
+            <h2>Specialized AI Agents</h2>
+
+            <p>
+                Six specialized AI agents collaborate to design each game. Each agent focuses on a specific
+                aspect of game design, ensuring no detail is overlooked. They work in parallel, then a
+                final review agent ensures everything fits together.
+            </p>
+
+            <div class="agent-grid">
+                <div class="agent-card">
+                    <div class="agent-header">
+                        <div class="agent-icon">💰</div>
+                        <div>
+                            <div class="agent-name">Currency Designer</div>
+                            <div class="agent-focus">Economy & Resource Flow</div>
+                        </div>
+                    </div>
+                    <p>
+                        Designs the interlocking currency system. Determines how resources flow from
+                        A → B → C, conversion rates, and economic balance.
+                    </p>
+                    <div class="agent-outputs">
+                        <strong>Designs:</strong>
+                        <ul>
+                            <li>Primary, secondary, premium currencies</li>
+                            <li>Conversion mechanics and rates</li>
+                            <li>Inflation control and sinks</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="agent-card">
+                    <div class="agent-header">
+                        <div class="agent-icon">📈</div>
+                        <div>
+                            <div class="agent-name">Progression Designer</div>
+                            <div class="agent-focus">Unlocks & Pacing</div>
+                        </div>
+                    </div>
+                    <p>
+                        Maps the player journey from first click to endgame. Places gates, milestones,
+                        and reveals to maintain engagement over the full play session.
+                    </p>
+                    <div class="agent-outputs">
+                        <strong>Designs:</strong>
+                        <ul>
+                            <li>Unlock sequences and requirements</li>
+                            <li>Milestone rewards and celebrations</li>
+                            <li>Content pacing over 15-30 minutes</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="agent-card">
+                    <div class="agent-header">
+                        <div class="agent-icon">🔄</div>
+                        <div>
+                            <div class="agent-name">Prestige Designer</div>
+                            <div class="agent-focus">Reset & Meta Progression</div>
+                        </div>
+                    </div>
+                    <p>
+                        Creates the "prestige" or "rebirth" system that encourages players to reset
+                        for permanent bonuses, extending playtime exponentially.
+                    </p>
+                    <div class="agent-outputs">
+                        <strong>Designs:</strong>
+                        <ul>
+                            <li>Reset triggers and requirements</li>
+                            <li>Permanent bonus calculations</li>
+                            <li>What resets vs. what persists</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="agent-card">
+                    <div class="agent-header">
+                        <div class="agent-icon">🌳</div>
+                        <div>
+                            <div class="agent-name">Skill Tree Designer</div>
+                            <div class="agent-focus">Builds & Synergies</div>
+                        </div>
+                    </div>
+                    <p>
+                        Designs branching upgrade paths that let players specialize. Creates
+                        meaningful choices between different playstyles and build strategies.
+                    </p>
+                    <div class="agent-outputs">
+                        <strong>Designs:</strong>
+                        <ul>
+                            <li>Node layouts and connections</li>
+                            <li>Upgrade effects and costs</li>
+                            <li>Build archetypes and synergies</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="agent-card">
+                    <div class="agent-header">
+                        <div class="agent-icon">🎨</div>
+                        <div>
+                            <div class="agent-name">UI/UX Designer</div>
+                            <div class="agent-focus">Layout & Feedback</div>
+                        </div>
+                    </div>
+                    <p>
+                        Plans the visual layout, information hierarchy, and feedback systems.
+                        Ensures players always know what to do next and feel rewarded for actions.
+                    </p>
+                    <div class="agent-outputs">
+                        <strong>Designs:</strong>
+                        <ul>
+                            <li>Screen layouts and navigation</li>
+                            <li>Visual feedback (particles, numbers)</li>
+                            <li>Notification and alert systems</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="agent-card review">
+                    <div class="agent-header">
+                        <div class="agent-icon">🧠</div>
+                        <div>
+                            <div class="agent-name">Psychology Reviewer</div>
+                            <div class="agent-focus">Engagement & Balance</div>
+                        </div>
+                    </div>
+                    <p>
+                        <strong>MANDATORY</strong> review of all designs. Checks for psychological
+                        engagement patterns and identifies potential frustration points or pacing issues.
+                    </p>
+                    <div class="agent-outputs">
+                        <strong>Reviews:</strong>
+                        <ul>
+                            <li>Reward loop satisfaction</li>
+                            <li>Pacing and reveal timing</li>
+                            <li>Player agency and control</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="psychology">
+            <h2>Psychology-Driven Design</h2>
+
+            <p>
+                The Psychology Reviewer agent evaluates every game design against seven key engagement
+                principles. These are the secret sauce that separates forgettable games from
+                "just one more minute" addictive experiences.
+            </p>
+
+            <div class="psych-grid">
+                <div class="psych-item">
+                    <h5>🎯 Agency vs Randomness</h5>
+                    <p>Players must feel their decisions matter. Too much RNG feels unfair; too little feels deterministic.</p>
+                </div>
+                <div class="psych-item">
+                    <h5>⏱️ Reveal Speed</h5>
+                    <p>New content appears at the perfect pace - not so fast it overwhelms, not so slow it bores.</p>
+                </div>
+                <div class="psych-item">
+                    <h5>👁️ Reward Visibility</h5>
+                    <p>Progress must be obvious. Numbers going up, bars filling, unlocks appearing - constant visual feedback.</p>
+                </div>
+                <div class="psych-item">
+                    <h5>😬 Near-Miss Frequency</h5>
+                    <p>Almost reaching a goal creates tension and motivation. "Just 50 more gold!" keeps players engaged.</p>
+                </div>
+                <div class="psych-item">
+                    <h5>🎰 Variable Rewards</h5>
+                    <p>Unpredictable bonuses trigger dopamine. Critical hits, lucky drops, bonus multipliers.</p>
+                </div>
+                <div class="psych-item">
+                    <h5>💔 Loss Aversion Balance</h5>
+                    <p>Stakes make choices meaningful, but punishment shouldn't feel unfair. Risk without frustration.</p>
+                </div>
+                <div class="psych-item">
+                    <h5>💪 Competence Building</h5>
+                    <p>Players should feel they're getting better, mastering systems, making smarter decisions over time.</p>
+                </div>
+            </div>
+
+            <div class="quote-box">
+                <p>"The best incremental games don't just reward time - they reward understanding."</p>
+            </div>
+        </section>
+
+        <section id="process">
+            <h2>The Generation Process</h2>
+
+            <p>
+                From idea to playable game in 5 phases. Each phase builds on the previous,
+                with verification steps ensuring quality at every stage.
+            </p>
+
+            <div class="timeline">
+                <div class="timeline-item">
+                    <h4>Idea Generation <span class="timeline-time">~10 min</span></h4>
+                    <p>
+                        A creative AI generates a unique game concept by combining patterns
+                        (mining + tower building?), themes (underwater? steampunk? cosmic?),
+                        and hooks (what makes THIS game special?).
+                    </p>
+                </div>
+
+                <div class="timeline-item">
+                    <h4>Game Design Document <span class="timeline-time">~60 min</span></h4>
+                    <p>
+                        Six specialized agents work in parallel to flesh out every aspect of the
+                        design: currencies, progression, prestige, skill trees, UI/UX. The
+                        Psychology Reviewer then audits everything for engagement.
+                    </p>
+                </div>
+
+                <div class="timeline-item">
+                    <h4>Implementation Planning <span class="timeline-time">~15 min</span></h4>
+                    <p>
+                        The design is converted into a phased build plan with clear milestones
+                        and verification criteria. Each feature is broken into testable chunks.
+                    </p>
+                </div>
+
+                <div class="timeline-item">
+                    <h4>Game Building <span class="timeline-time">~120 min</span></h4>
+                    <p>
+                        An orchestrator AI builds the game using pre-made components: currency
+                        systems, upgrade buttons, progress bars, skill trees. Each feature is
+                        tested before moving to the next.
+                    </p>
+                </div>
+
+                <div class="timeline-item">
+                    <h4>Deployment <span class="timeline-time">~5 min</span></h4>
+                    <p>
+                        The finished game is automatically deployed to its own subdomain
+                        with SSL. Instantly shareable and playable in any browser.
+                    </p>
+                </div>
+            </div>
+
+            <div class="feature-box">
+                <h4><span class="icon">🌙</span> Overnight Batches</h4>
+                <p>
+                    Trigger 5-10 game generations before bed. The system runs through the night,
+                    and by morning you have a gallery of unique, playable prototypes to evaluate.
+                    Each game deploys to its own <code>gamedemo1.namjo-games.com</code>,
+                    <code>gamedemo2.namjo-games.com</code>, etc.
+                </p>
+            </div>
+        </section>
+
+        <section id="components">
+            <h2>UI Components Preview</h2>
+
+            <p>
+                Every generated game uses battle-tested UI components designed specifically for
+                incremental games. Here's what players will interact with:
+            </p>
+
+            <div class="demo-container">
+                <div class="demo-title">Resource Displays</div>
+                <p style="margin-bottom: 1rem;">Real-time updating resource bars show current amounts and production rates.</p>
+                <div class="resource-bar">
+                    <div class="resource-icon">💰</div>
+                    <div class="resource-info">
+                        <div class="resource-name">Gold</div>
+                        <div class="resource-value" id="gold-value">1.25M</div>
+                        <div class="resource-rate">+125.50K/sec</div>
+                    </div>
+                </div>
+                <div class="resource-bar">
+                    <div class="resource-icon" style="background: linear-gradient(135deg, var(--purple) 0%, #6366f1 100%);">💎</div>
+                    <div class="resource-info">
+                        <div class="resource-name">Gems</div>
+                        <div class="resource-value" style="color: var(--purple);">847</div>
+                        <div class="resource-rate">+2.5/sec</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="demo-container">
+                <div class="demo-title">Upgrade Buttons</div>
+                <p style="margin-bottom: 1rem;">Clear affordability states and effect descriptions. Click to toggle!</p>
+                <div class="upgrade-btn affordable" onclick="this.classList.toggle('affordable')">
+                    <div class="upgrade-icon">⛏️</div>
+                    <div class="upgrade-info">
+                        <div class="upgrade-name">Better Pickaxe</div>
+                        <div class="upgrade-desc">+50% mining speed</div>
+                    </div>
+                    <div class="upgrade-cost">
+                        <div class="upgrade-cost-value">500 Gold</div>
+                        <div class="upgrade-level">Level 3</div>
+                    </div>
+                </div>
+                <div class="upgrade-btn">
+                    <div class="upgrade-icon">🔥</div>
+                    <div class="upgrade-info">
+                        <div class="upgrade-name">Fire Enchantment</div>
+                        <div class="upgrade-desc">Burn enemies on hit</div>
+                    </div>
+                    <div class="upgrade-cost">
+                        <div class="upgrade-cost-value">2.50K Gold</div>
+                        <div class="upgrade-level">Locked</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="demo-container">
+                <div class="demo-title">Skill Trees</div>
+                <p style="margin-bottom: 1rem;">Branching paths let players specialize their build. Glow indicates available nodes.</p>
+                <div class="skill-tree-demo">
+                    <div class="skill-row">
+                        <div class="skill-node unlocked" title="Mining I">⛏️</div>
+                    </div>
+                    <div class="skill-connector active"></div>
+                    <div class="skill-row">
+                        <div class="skill-node unlocked" title="Speed I">⚡</div>
+                        <div class="skill-node available" title="Power I">💪</div>
+                    </div>
+                    <div class="skill-connector"></div>
+                    <div class="skill-row">
+                        <div class="skill-node" title="Speed II">⚡</div>
+                        <div class="skill-node" title="Critical">🎯</div>
+                        <div class="skill-node" title="Power II">💪</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <p><strong>GamePocGen</strong> - AI-Powered Incremental Game Generator</p>
+        <p>Turning game design patterns into playable prototypes, overnight.</p>
+        <p style="margin-top: 1rem; color: var(--text-dim); font-size: 0.85rem;">
+            Built with Claude AI | Deployed on namjo-games.com
+        </p>
+    </footer>
+
+    <script>
+        // Password protection
+        const CORRECT_PASSWORD = 'gamepoc2024';
+
+        function checkPassword() {
+            const input = document.getElementById('passwordInput');
+            const error = document.getElementById('passwordError');
+            const overlay = document.getElementById('passwordOverlay');
+
+            if (input.value === CORRECT_PASSWORD) {
+                overlay.classList.add('hidden');
+                sessionStorage.setItem('gamepocgen_auth', 'true');
+            } else {
+                error.classList.add('show');
+                input.value = '';
+                input.focus();
+            }
+        }
+
+        // Check if already authenticated
+        if (sessionStorage.getItem('gamepocgen_auth') === 'true') {
+            document.getElementById('passwordOverlay').classList.add('hidden');
+        } else {
+            document.getElementById('passwordInput').focus();
+        }
+
+        // Animate gold counter
+        let goldValue = 1250000;
+        setInterval(() => {
+            goldValue += Math.floor(Math.random() * 5000) + 1000;
+            const formatted = goldValue >= 1000000
+                ? (goldValue / 1000000).toFixed(2) + 'M'
+                : (goldValue / 1000).toFixed(2) + 'K';
+            document.getElementById('gold-value').textContent = formatted;
+        }, 100);
+    </script>
+</body>
+</html>

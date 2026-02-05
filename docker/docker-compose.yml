@@ -1,0 +1,57 @@
+services:
+  backend:
+    build:
+      context: ../
+      dockerfile: Dockerfile.backend
+    ports:
+      - "3010:3000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - workspaces:/data/workspaces
+      - deployed:/data/deployed
+    environment:
+      - DATABASE_URL=postgresql://gamepocgen:${POSTGRES_PASSWORD}@postgres:5432/gamepocgen
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - MAX_CONCURRENT=5
+      - WORKSPACE_ROOT=/data/workspaces
+      - DEPLOYED_ROOT=/data/deployed
+      - WORKER_IMAGE=gamepocgen-worker
+    depends_on:
+      postgres:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.gamepocgen.rule=Host(`gamepocgen.namjo-games.com`) && PathPrefix(`/api`, `/health`)"
+      - "traefik.http.routers.gamepocgen.tls.certresolver=letsencrypt"
+      - "traefik.http.services.gamepocgen.loadbalancer.server.port=3000"
+    networks:
+      - traefik
+      - internal
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:15-alpine
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=gamepocgen
+      - POSTGRES_USER=gamepocgen
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gamepocgen"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - internal
+    restart: unless-stopped
+
+networks:
+  traefik:
+    external: true
+  internal:
+
+volumes:
+  pgdata:
+  workspaces:
+  deployed:

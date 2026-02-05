@@ -1,0 +1,19 @@
+services:
+  web:
+    image: nginx:alpine
+    volumes:
+      - ./index.html:/usr/share/nginx/html/index.html:ro
+      - ../gallery/index.html:/usr/share/nginx/html/gallery/index.html:ro
+      - ../gallery/gallery.js:/usr/share/nginx/html/gallery/gallery.js:ro
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.gamepocgen-docs.rule=Host(`gamepocgen.namjo-games.com`)"
+      - "traefik.http.routers.gamepocgen-docs.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.gamepocgen-docs.priority=1"
+    networks:
+      - traefik
+    restart: unless-stopped
+
+networks:
+  traefik:
+    external: true

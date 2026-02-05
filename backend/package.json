@@ -1,0 +1,17 @@
+{
+  "name": "gamepocgen-backend",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node src/services/__tests__/run-tests.js",
+    "test:routes": "node src/routes/__tests__/run-tests.js",
+    "test:all": "node src/services/__tests__/run-tests.js && node src/routes/__tests__/run-tests.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "pg": "^8.11.3",
+    "dockerode": "^4.0.0",
+    "cors": "^2.8.5"
+  }
+}
