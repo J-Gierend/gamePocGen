@@ -11,7 +11,8 @@ services:
       - deployed:/data/deployed
     environment:
       - DATABASE_URL=postgresql://gamepocgen:${POSTGRES_PASSWORD}@postgres:5432/gamepocgen
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - ZAI_API_KEY=${ZAI_API_KEY}
+      - ZAI_BASE_URL=${ZAI_BASE_URL:-https://api.z.ai/api/anthropic}
       - MAX_CONCURRENT=5
       - WORKSPACE_ROOT=/data/workspaces
       - DEPLOYED_ROOT=/data/deployed

@@ -222,7 +222,7 @@ export function runTests() {
       assert(env.some(e => e.startsWith('WORKSPACE_DIR=')), 'Should include WORKSPACE_DIR');
     },
 
-    'spawnContainer() passes ANTHROPIC_API_KEY from environment': async () => {
+    'spawnContainer() passes ZAI_API_KEY from environment': async () => {
       let createOpts = null;
       const docker = createMockDocker({
         createContainer: async (opts) => {
@@ -234,20 +234,20 @@ export function runTests() {
       const job = { id: 1, game_name: 'Test', config: {} };
 
       // Temporarily set env var
-      const original = process.env.ANTHROPIC_API_KEY;
-      process.env.ANTHROPIC_API_KEY = 'test-key-abc';
+      const original = process.env.ZAI_API_KEY;
+      process.env.ZAI_API_KEY = 'test-key-abc';
       try {
         await cm.spawnContainer(job, 'phase1');
         const env = createOpts.Env;
         assert(
-          env.some(e => e === 'ANTHROPIC_API_KEY=test-key-abc'),
-          'Should pass ANTHROPIC_API_KEY from process.env'
+          env.some(e => e === 'ZAI_API_KEY=test-key-abc'),
+          'Should pass ZAI_API_KEY from process.env'
         );
       } finally {
         if (original !== undefined) {
-          process.env.ANTHROPIC_API_KEY = original;
+          process.env.ZAI_API_KEY = original;
         } else {
-          delete process.env.ANTHROPIC_API_KEY;
+          delete process.env.ZAI_API_KEY;
         }
       }
     },

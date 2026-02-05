@@ -5,7 +5,7 @@ set -e
 : "${PHASE:?PHASE is required (phase1|phase2|phase3|phase4)}"
 : "${JOB_ID:?JOB_ID is required}"
 : "${GAME_NAME:?GAME_NAME is required}"
-: "${ANTHROPIC_API_KEY:?ANTHROPIC_API_KEY is required}"
+: "${ZAI_API_KEY:?ZAI_API_KEY is required}"
 
 WORKSPACE_DIR="${WORKSPACE_DIR:-/workspace}"
 TIMEOUT_SECONDS="${TIMEOUT_SECONDS:-3600}"
@@ -37,11 +37,16 @@ STATUSEOF
 
 write_status "running" "Starting ${PHASE}"
 
+# Z.AI Configuration
+export ANTHROPIC_AUTH_TOKEN="$ZAI_API_KEY"
+export ANTHROPIC_BASE_URL="${ZAI_BASE_URL:-https://api.z.ai/api/anthropic}"
+
 # Configure Claude Code settings - sandbox IS the security boundary
 cat > /home/claude/.claude/settings.json <<EOF
 {
   "env": {
-    "ANTHROPIC_API_KEY": "${ANTHROPIC_API_KEY}",
+    "ANTHROPIC_AUTH_TOKEN": "${ZAI_API_KEY}",
+    "ANTHROPIC_BASE_URL": "${ZAI_BASE_URL:-https://api.z.ai/api/anthropic}",
     "API_TIMEOUT_MS": "3600000"
   },
   "permissions": {

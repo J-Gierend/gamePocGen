@@ -71,7 +71,8 @@ export class ContainerManager {
       `PHASE=${phase}`,
       `JOB_ID=${job.id}`,
       `GAME_NAME=${job.game_name}`,
-      `ANTHROPIC_API_KEY=${process.env.ANTHROPIC_API_KEY || ''}`,
+      `ZAI_API_KEY=${process.env.ZAI_API_KEY || ''}`,
+      `ZAI_BASE_URL=${process.env.ZAI_BASE_URL || 'https://api.z.ai/api/anthropic'}`,
       `TIMEOUT_SECONDS=${timeout}`,
       `WORKSPACE_DIR=${workspaceDir}`,
     ];
