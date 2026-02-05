@@ -5,6 +5,8 @@
  * Each job phase runs in an isolated container with resource limits.
  */
 
+import { mkdirSync, chmodSync } from 'node:fs';
+
 const DEFAULT_TIMEOUTS = {
   phase1: 600,    // 10 minutes
   phase2: 3600,   // 60 minutes
@@ -68,6 +70,15 @@ export class ContainerManager {
     const timeout = this.timeouts[phase] || 3600;
     const workspaceDir = '/workspace';
     const hostWorkspace = `${this.hostWorkspacePath}/job-${job.id}`;
+
+    // Pre-create workspace dir with write permissions for container user
+    const localWorkspace = `${this.workspacePath}/job-${job.id}`;
+    try {
+      mkdirSync(localWorkspace, { recursive: true });
+      chmodSync(localWorkspace, 0o777);
+    } catch {
+      // May already exist or be handled by Docker
+    }
 
     const env = [
       `PHASE=${phase}`,
