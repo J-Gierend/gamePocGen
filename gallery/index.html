@@ -158,6 +158,26 @@
             background-clip: text;
         }
 
+        .header-nav {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+        }
+
+        .nav-link {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.875rem;
+            padding: 0.5rem 1rem;
+            border-radius: calc(var(--radius) - 4px);
+            transition: color 0.2s, background 0.2s;
+        }
+
+        .nav-link:hover {
+            color: var(--text-primary);
+            background: rgba(99, 102, 241, 0.1);
+        }
+
         .game-count {
             color: var(--text-secondary);
             font-size: 0.875rem;
@@ -224,6 +244,14 @@
         .game-thumbnail-icon {
             font-size: 3rem;
             opacity: 0.3;
+        }
+
+        .game-thumbnail canvas {
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
         }
 
         .game-thumbnail img {
@@ -387,8 +415,11 @@
     <div id="galleryContainer" class="gallery-container">
         <header>
             <div class="header-content">
-                <span class="logo">GamePocGen Gallery</span>
-                <span id="gameCount" class="game-count"></span>
+                <span class="logo">GamePocGen</span>
+                <nav class="header-nav">
+                    <span id="gameCount" class="game-count"></span>
+                    <a href="/docs/" class="nav-link">About this platform</a>
+                </nav>
             </div>
         </header>
 
