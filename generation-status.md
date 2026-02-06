@@ -1,26 +1,35 @@
-# Game Generation Status - COMPLETE
+# Game Generation Status - Batch 2 (Gameplay-First)
 
 ## Summary
-- 10 games generated, deployed, and verified playable
-- Gallery at https://gamepocgen.namjo-games.com/gallery/ shows all 10
-- Completed: 2026-02-06 ~07:00 UTC
+- Batch 1 (10 games) scrapped — all were spreadsheet simulators with no real gameplay
+- Batch 2: 3 games generated with rewritten gameplay-first prompts
+- Started: 2026-02-06 ~11:02 UTC
+- Completed: 2026-02-06 ~12:00 UTC
+- Status: ALL 3 COMPLETE - 0 failures!
 
-## All 10 Games
-| # | Game | URL | Title | Verified |
-|---|------|-----|-------|----------|
-| 1 | gamedemo1 | https://gamedemo1.namjo-games.com | Echo Loom: The Memory Weavers | PASS |
-| 2 | gamedemo3 | https://gamedemo3.namjo-games.com | Signal Lost | PASS |
-| 3 | gamedemo4 | https://gamedemo4.namjo-games.com | Echo Chamber: Museum of Lost Sounds | PASS |
-| 4 | gamedemo5 | https://gamedemo5.namjo-games.com | Echo Garden | PASS |
-| 5 | gamedemo7 | https://gamedemo7.namjo-games.com | Gravwell Orchard | PASS |
-| 6 | gamedemo9 | https://gamedemo9.namjo-games.com | The Crossing | PASS |
-| 7 | gamedemo10 | https://gamedemo10.namjo-games.com | Echo Garden - Temporal Botany | PASS |
-| 8 | gamedemo11 | https://gamedemo11.namjo-games.com | Fragments of Alexandria | PASS |
-| 9 | gamedemo13 | https://gamedemo13.namjo-games.com | Echo Chamber - Reality Architect | PASS |
-| 10 | gamedemo14 | https://gamedemo14.namjo-games.com | Echo Chamber | PASS |
+## Prompt Changes (Batch 2)
+- Phase 1: Complete rewrite with concrete examples of good incremental games, anti-patterns, mandatory gameplay tests
+- Phase 2: Strengthened gameplay-first messaging, added "Is This Actually A Game?" principle (Principle 9)
+- Phase 3/4: Canvas interaction required from Phase 1, game fun test in final verification
 
-## Failed Jobs (replaced)
-- Job 2: phase4 timeout (exit code 124) - replaced by job 7
-- Job 6: phase2 ui-ux agent timeout - replaced by job 7
-- Job 8: OOM killed (exit code 137) - replaced by job 13
-- Job 12: deployed but broken (CONFIG undefined) - replaced by job 14
+## All 3 Games
+| # | Job ID | URL | Title | JS Errors | Verified |
+|---|--------|-----|-------|-----------|----------|
+| 1 | 1 | https://gamedemo1.namjo-games.com | Crystal Mine Defense | None | Loads, grid-based mine area visible |
+| 2 | 2 | https://gamedemo2.namjo-games.com | Crystal Cavern Defense | None | Loads, placeable structures (Drill/Turret/Barricade), wave system |
+| 3 | 3 | https://gamedemo3.namjo-games.com | Goblin Mine Defense | None | Loads, resource nodes on Canvas, 4 tabs (Build/Upgrades/Skills/Prestige), tower placement |
+
+## Observations
+- All 3 games have concrete gameplay-themed titles (no more "Echo Chamber" or "Signal Lost")
+- All 3 have placeable structures on Canvas (actual tower defense gameplay!)
+- Game 3 has the most complete feature set: 4 tabs, skill tree, prestige, wave system
+- 0% failure rate (vs ~30% in Batch 1) — prompt quality improvements may have helped
+- Games lean heavily toward mine/defense theme — may want more genre variety in next batch
+
+## Gallery
+https://gamepocgen.namjo-games.com/gallery/ (password: gamepoc2024)
+
+## Batch 1 (Scrapped)
+All 10 games deleted. They were:
+- Echo Loom, Signal Lost, Echo Chamber x3, Echo Garden x2, Gravwell Orchard, The Crossing, Fragments of Alexandria
+- Problem: All were "number incrementors with sprites" — no real gameplay, no player interaction with Canvas
