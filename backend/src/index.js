@@ -21,6 +21,26 @@ const PORT = parseInt(process.env.PORT || '3000', 10);
 const MAX_CONCURRENT = parseInt(process.env.MAX_CONCURRENT || '5', 10);
 const POLL_INTERVAL = parseInt(process.env.POLL_INTERVAL || '5000', 10);
 
+// Genre seeds for Phase 1 diversity. Each job in a batch gets a different genre.
+const GENRE_SEEDS = [
+  'dungeon-crawler',
+  'space-combat',
+  'fishing-and-gathering',
+  'factory-automation',
+  'monster-tamer',
+  'lane-battle',
+  'tower-defense',
+  'wave-survival',
+  'exploration-and-mapping',
+  'racing-and-dodging',
+  'farming-and-ecosystem',
+  'puzzle-combat',
+  'pirate-ship-battles',
+  'spell-crafting-arena',
+  'train-network',
+  'underwater-exploration',
+];
+
 async function main() {
   // --- Database ---
   const pool = new Pool({
@@ -90,15 +110,39 @@ async function main() {
         await queueManager.updateStatus(job.id, `phase_${phase.replace('phase', '')}`);
         await queueManager.addLog(job.id, 'info', `Starting ${phase}`);
 
-        // Pass existing game names to phase1 so it generates unique titles
+        // Pass diversity env vars to phase1
         if (phase === 'phase1') {
           try {
+            const extraEnv = [];
+
+            // Existing game names for title/genre diversity
             const existingGames = await deploymentManager.listDeployedGames();
             const names = existingGames.map(g => g.title).filter(Boolean).join(', ');
             if (names) {
-              job.extraEnv = [`EXISTING_GAME_NAMES=${names}`];
+              extraEnv.push(`EXISTING_GAME_NAMES=${names}`);
             }
-          } catch { /* ignore - not critical */ }
+
+            // Pick a genre seed not recently used by other jobs
+            const recentJobs = await queueManager.getJobs({ limit: 20 });
+            const usedGenres = new Set(
+              recentJobs
+                .map(j => j.phase_outputs?.genreSeed)
+                .filter(Boolean)
+            );
+            const available = GENRE_SEEDS.filter(g => !usedGenres.has(g));
+            const genrePool = available.length > 0 ? available : GENRE_SEEDS;
+            const genreSeed = genrePool[Math.floor(Math.random() * genrePool.length)];
+            extraEnv.push(`GENRE_SEED=${genreSeed}`);
+
+            // Store genre seed in phase_outputs for dedup tracking
+            await queueManager.updatePhaseOutput(job.id, 'genreSeed', genreSeed);
+
+            job.extraEnv = extraEnv;
+            await queueManager.addLog(job.id, 'info', `Genre seed: ${genreSeed}`);
+          } catch (err) {
+            // Log but don't fail — genre seed is nice-to-have
+            console.error(`Genre seed selection failed: ${err.message}`);
+          }
         } else {
           delete job.extraEnv;
         }
