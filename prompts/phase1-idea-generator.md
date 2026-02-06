@@ -50,6 +50,14 @@ Generate ONE creative incremental game concept. Write it to `idea.md` in the wor
 - "You are a CEO/tycoon" without mechanical innovation
 - Anything that reads like a reskin of an existing popular incremental game
 
+**NAMING RULES (CRITICAL):**
+- The game title MUST be unique and creative. Do NOT use generic, vague, or overly common words as the primary title.
+- BANNED title words/patterns (do NOT use these as main title words): "Echo", "Chamber", "Garden", "Loom", "Signal", "Fragments", "Crossing", "Gravwell"
+- Do NOT name your game "[Word] [Word]" where both words are abstract/poetic nouns. Be specific and evocative.
+- Good titles are specific to the game's mechanics or theme (e.g., "Mycelium Magnate", "Orbital Junkyard", "Chrono-Bistro")
+- Bad titles are vague and interchangeable (e.g., "Echo Garden", "Echo Chamber", "Signal Lost")
+- If an environment variable `EXISTING_GAME_NAMES` is set, your title MUST NOT duplicate or closely resemble any name in that list.
+
 **PUSH toward:**
 - Unusual thematic combinations (e.g., "deep sea brewery" or "time-traveling postal service")
 - Mechanics that emerge from the theme (not theme pasted onto generic mechanics)

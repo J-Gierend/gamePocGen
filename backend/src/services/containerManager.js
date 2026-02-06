@@ -88,6 +88,7 @@ export class ContainerManager {
       `ZAI_BASE_URL=${process.env.ZAI_BASE_URL || 'https://api.z.ai/api/anthropic'}`,
       `TIMEOUT_SECONDS=${timeout}`,
       `WORKSPACE_DIR=${workspaceDir}`,
+      ...(job.extraEnv || []),
     ];
 
     const container = await this.docker.createContainer({

@@ -90,6 +90,19 @@ async function main() {
         await queueManager.updateStatus(job.id, `phase_${phase.replace('phase', '')}`);
         await queueManager.addLog(job.id, 'info', `Starting ${phase}`);
 
+        // Pass existing game names to phase1 so it generates unique titles
+        if (phase === 'phase1') {
+          try {
+            const existingGames = await deploymentManager.listDeployedGames();
+            const names = existingGames.map(g => g.title).filter(Boolean).join(', ');
+            if (names) {
+              job.extraEnv = [`EXISTING_GAME_NAMES=${names}`];
+            }
+          } catch { /* ignore - not critical */ }
+        } else {
+          delete job.extraEnv;
+        }
+
         const { containerId } = await containerManager.spawnContainer(job, phase);
 
         // Poll container until done

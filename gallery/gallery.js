@@ -161,6 +161,7 @@
             </div>
             <div class="game-info">
                 <h3 class="game-title">${escapeHtml(game.title || 'Untitled Game')}</h3>
+                ${game.description ? `<p class="game-description">${escapeHtml(game.description)}</p>` : ''}
                 <p class="game-meta">${escapeHtml(dateStr)}</p>
                 <a href="${escapeHtml(gameUrl)}" class="play-button" target="_blank" rel="noopener">
                     <svg viewBox="0 0 24 24" fill="currentColor">
