@@ -143,24 +143,32 @@
     };
 
     // Map game title keywords to icon combos + background colors
+    // More specific compound matches come first, then single-keyword fallbacks
     const ICON_THEMES = [
-        { keywords: ['goblin', 'orc'],      icons: ['goblin', 'pickaxe'], bg: '#1a2e1a', accent: '#4a8c3f' },
-        { keywords: ['crystal', 'gem'],      icons: ['crystal', 'tower'],  bg: '#0f1a2e', accent: '#3b82f6' },
-        { keywords: ['mine', 'dig', 'drill'],icons: ['pickaxe', 'crystal'],bg: '#2e1a0f', accent: '#d97706' },
-        { keywords: ['tower', 'turret'],     icons: ['tower', 'shield'],   bg: '#1a1a2e', accent: '#6366f1' },
-        { keywords: ['defense', 'defend'],   icons: ['shield', 'sword'],   bg: '#2e0f1a', accent: '#e11d48' },
-        { keywords: ['cavern', 'cave', 'dungeon'], icons: ['crystal', 'sword'], bg: '#1a0f2e', accent: '#8b5cf6' },
-        { keywords: ['battle', 'fight', 'war'],    icons: ['sword', 'shield'],  bg: '#2e1a1a', accent: '#dc2626' },
+        { keywords: [['goblin', 'mine']],          icons: ['goblin', 'pickaxe'], bg: '#1a2e1a', accent: '#4a8c3f' },
+        { keywords: [['crystal', 'mine']],          icons: ['pickaxe', 'crystal'],bg: '#2e1a0f', accent: '#d97706' },
+        { keywords: [['crystal', 'cavern']],        icons: ['crystal', 'sword'],  bg: '#1a0f2e', accent: '#8b5cf6' },
+        { keywords: [['crystal', 'defense']],       icons: ['crystal', 'shield'], bg: '#0f1a2e', accent: '#3b82f6' },
+        { keywords: [['goblin']],                   icons: ['goblin', 'sword'],   bg: '#1a2e1a', accent: '#4a8c3f' },
+        { keywords: [['crystal'], ['gem']],         icons: ['crystal', 'tower'],  bg: '#0f1a2e', accent: '#3b82f6' },
+        { keywords: [['mine'], ['dig'], ['drill']], icons: ['pickaxe', 'crystal'],bg: '#2e1a0f', accent: '#d97706' },
+        { keywords: [['tower'], ['turret']],        icons: ['tower', 'shield'],   bg: '#1a1a2e', accent: '#6366f1' },
+        { keywords: [['defense'], ['defend']],      icons: ['shield', 'sword'],   bg: '#2e0f1a', accent: '#e11d48' },
+        { keywords: [['cavern'], ['cave'], ['dungeon']], icons: ['crystal', 'sword'], bg: '#1a0f2e', accent: '#8b5cf6' },
+        { keywords: [['battle'], ['fight'], ['war']],    icons: ['sword', 'shield'],  bg: '#2e1a1a', accent: '#dc2626' },
     ];
 
     /**
-     * Pick icon theme based on game title
+     * Pick icon theme based on game title. Compound keyword matches checked first.
      */
     function getIconTheme(title) {
         const lower = (title || '').toLowerCase();
         for (const theme of ICON_THEMES) {
-            if (theme.keywords.some(kw => lower.includes(kw))) {
-                return theme;
+            // Each entry in keywords is an array of words that ALL must match
+            for (const kwGroup of theme.keywords) {
+                if (kwGroup.every(kw => lower.includes(kw))) {
+                    return theme;
+                }
             }
         }
         // Default fallback
