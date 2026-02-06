@@ -8,10 +8,10 @@
 import { mkdirSync, chmodSync } from 'node:fs';
 
 const DEFAULT_TIMEOUTS = {
-  phase1: 600,    // 10 minutes
-  phase2: 3600,   // 60 minutes
-  phase3: 900,    // 15 minutes
-  phase4: 7200,   // 120 minutes
+  phase1: 43200,  // 12 hours
+  phase2: 43200,  // 12 hours
+  phase3: 43200,  // 12 hours
+  phase4: 43200,  // 12 hours
 };
 
 const DEFAULT_MEMORY_LIMIT = 256 * 1024 * 1024; // 256MB

@@ -7,12 +7,12 @@ You are an implementation planner for GamePocGen. Your job is to read a complete
 Read ALL of the following files from the workspace:
 
 ```
-idea.md                    # Game concept, theme, hook
+idea.md                    # Game concept, theme, hook, visual game world, entity types
 gdd/currencies.md          # Currency system design
 gdd/progression.md         # Unlock sequence and pacing
-gdd/prestige.md            # Reset/rebirth mechanics
-gdd/skill-tree.md          # Branching upgrade paths
-gdd/ui-ux.md               # Layout, feedback, navigation
+gdd/prestige.md            # Reset/rebirth mechanics + visual transformation
+gdd/skill-tree.md          # Branching upgrade paths with visible effects
+gdd/ui-ux.md               # Canvas layout, HUD, bottom panel, entity visual specs
 gdd/psychology-review.md   # Engagement audit and recommendations
 ```
 
@@ -22,7 +22,7 @@ If any file is missing, note it and work with what you have. The minimum viable 
 
 Write a single file: `implementation-guide.md`
 
-This file must contain 6-10 ordered implementation phases that transform the GDD into a working browser game.
+This file must contain 6-10 ordered implementation phases that transform the GDD into a working browser game WITH A CANVAS-BASED VISUAL GAME WORLD as the primary experience.
 
 ## Framework Reference
 
@@ -36,6 +36,45 @@ The game builds on top of the GamePocGen bootstrap framework. These modules are 
 | `BigNum.js` | `BigNum` | Large number math. Static: `BigNum.from(value)`. Instance: `add()`, `sub()`, `mul()`, `div()`, `lt()`, `gt()`, `eq()`, `gte()`, `lte()`, `format()`, `toNumber()` |
 | `SaveManager.js` | `SaveManager` | localStorage persistence. Constructor: `{ gameId, autoSaveInterval, version }`. Methods: `save(slot, state)`, `load(slot)`, `startAutoSave(fn)`, `stopAutoSave()`, `exportSave()`, `importSave()` |
 | `EventBus.js` | `EventBus` | Pub/sub events. Methods: `on(event, cb)`, `off(event, cb)`, `emit(event, data)`, `once(event, cb)` |
+
+### Sprite Modules (framework/sprites/) — REQUIRED FOR VISUAL GAMEPLAY
+
+| Module | Export | Purpose |
+|--------|--------|---------|
+| `SpriteRenderer.js` | `SpriteRenderer` | Canvas-based 16x16 pixel art renderer. Constructor: `(canvasElement)`. Methods: `registerSprite(name, frames, palette)`, `prerenderAll()`, `draw(name, x, y, frame, { scale, flipX, opacity, glow })`, `clear()`, `resize(w, h)` |
+| `SpriteData.js` | `SPRITE_DATA`, `PALETTES` | Pre-made sprites: `knight`, `wizard`, `ghost`, `slime`, `fireball`, `spark` (4 frames each). Palettes: color indices 1-6 mapped to hex colors |
+| `ProceduralSprite.js` | `ProceduralSprite` | `generateColorVariant(frames, oldPalette, newPalette)` — create recolored sprites. `generateSimpleSprite(width, height, pattern)` — create geometric shapes ('circle', 'diamond', 'square', 'cross'). `mirrorHorizontal(frameData)` |
+
+**SpriteRenderer Usage Pattern:**
+```javascript
+// Setup
+const canvas = document.getElementById('game-canvas');
+const renderer = new SpriteRenderer(canvas);
+
+// Register sprites from SpriteData
+renderer.registerSprite('knight', SPRITE_DATA.knight, PALETTES.knight);
+renderer.registerSprite('slime', SPRITE_DATA.slime, PALETTES.slime);
+renderer.registerSprite('fireball', SPRITE_DATA.fireball, PALETTES.fireball);
+renderer.registerSprite('spark', SPRITE_DATA.spark, PALETTES.spark);
+
+// Create color variants for enemies
+const redSlime = ProceduralSprite.generateColorVariant(
+  SPRITE_DATA.slime, PALETTES.slime,
+  { 2: '#e53e3e', 3: '#c53030', 4: '#feb2b2' }  // red palette
+);
+renderer.registerSprite('redSlime', redSlime.frames, redSlime.palette);
+
+renderer.prerenderAll();
+
+// In render loop
+renderer.clear();
+renderer.draw('knight', entity.x, entity.y, entity.frame, {
+  scale: 3,       // 48px on screen
+  flipX: entity.facingLeft,
+  opacity: entity.hp > 0 ? 1 : 0.5,
+  glow: entity.isElite
+});
+```
 
 ### Mechanics Modules (framework/mechanics/)
 
@@ -51,13 +90,11 @@ These modules may or may not exist yet. If they do not exist, the implementation
 
 ### UI Modules (framework/ui/)
 
-These modules may or may not exist yet. If they do not exist, the implementation phase that needs them must create them first.
-
 | Module | Class | Purpose |
 |--------|-------|---------|
 | `ResourceBar.js` | `ResourceBar` | Displays a currency with icon, amount, and rate. Auto-updates |
 | `UpgradeButton.js` | `UpgradeButton` | Clickable upgrade with name, description, cost, level. Affordability state |
-| `ProgressBar.js` | `ProgressBar` | Fills based on current/max values. Used for milestones, timers |
+| `ProgressBar.js` | `ProgressBar` | Fills based on current/max values |
 | `TabSystem.js` | `TabSystem` | Tab-based navigation between game panels |
 | `SkillTree.js` | `SkillTree` | Renders node graph with connections. Click to unlock. Visual states |
 
@@ -65,9 +102,7 @@ These modules may or may not exist yet. If they do not exist, the implementation
 
 | Path | Purpose |
 |------|---------|
-| `framework/sprites/SpriteRenderer.js` | Renders pixel-art sprites from data arrays |
-| `framework/sprites/SpriteData.js` | Stores sprite definitions as 2D color arrays |
-| `framework/css/game.css` | Base stylesheet for game UI (dark theme, responsive) |
+| `framework/css/game.css` | Base stylesheet for game UI (dark theme, responsive, `.sprite-canvas { image-rendering: pixelated }`) |
 | `framework/core/__tests__/TestRunner.js` | Test runner with `describe()`, `it()`, `assert.*` helpers |
 
 ### How Modules Are Loaded
@@ -75,22 +110,18 @@ These modules may or may not exist yet. If they do not exist, the implementation
 All modules use ES module exports AND expose themselves on `window.*` for non-module scripts:
 
 ```html
-<!-- Load framework modules -->
 <script type="module">
   import { GameLoop, BigNum, SaveManager, EventBus } from './framework/core/index.js';
   import { CurrencyManager } from './framework/mechanics/Currency.js';
-  // ... etc
-
-  // Make available globally
-  window.game = new Game({ GameLoop, BigNum, SaveManager, EventBus, CurrencyManager });
+  // Sprite imports
+  // NOTE: Sprite modules use var/function style, not ES modules.
+  // Load them via script tags or use a wrapper.
 </script>
-```
 
-Or via script tags (framework files self-register on window):
-```html
-<script src="framework/core/EventBus.js" type="module"></script>
-<script src="framework/core/BigNum.js" type="module"></script>
-<!-- etc -->
+<!-- Sprite modules (not ES modules - use script tags) -->
+<script src="framework/sprites/SpriteData.js"></script>
+<script src="framework/sprites/SpriteRenderer.js"></script>
+<script src="framework/sprites/ProceduralSprite.js"></script>
 ```
 
 ## Phase Structure
@@ -108,9 +139,9 @@ Each phase in the implementation guide MUST follow this exact template:
 [1-2 sentence description of what this phase achieves]
 
 ### Test Criteria (write these FIRST)
-1. [Specific testable assertion - e.g., "CurrencyManager has 'gold' registered with initial amount 0"]
-2. [Another assertion - e.g., "Clicking the manual gather button adds 1 gold"]
-3. [Another assertion - e.g., "Gold display updates after gather click"]
+1. [Specific testable assertion]
+2. [Another assertion]
+3. [Another assertion]
 ...
 
 ### Implementation Steps
@@ -122,47 +153,95 @@ Each phase in the implementation guide MUST follow this exact template:
 ### Verification
 - [ ] All Phase N tests pass
 - [ ] All previous phase tests still pass
-- [ ] [Any manual check, e.g., "Game renders in browser without console errors"]
+- [ ] [Any manual check, e.g., "Canvas renders entities without errors"]
 ```
+
+## Mandatory Phase Ordering
+
+**The visual game world comes FIRST, not last.** This is the most critical change from previous implementation guides.
+
+### Phase 1: Canvas + Game World Setup
+Phase 1 must produce a visible Canvas with something happening on it:
+- Initialize Canvas element, SpriteRenderer
+- Register sprites from SpriteData (at minimum: one player entity, one enemy entity)
+- Set up the render loop with GameLoop
+- Draw a background color, draw at least one entity sprite
+- The player should SEE something on screen within the first phase
+- Also: initialize EventBus, CurrencyManager with primary currency
+
+### Phase 2: Core Entities + Gameplay
+- Create Entity class/objects with position, HP, speed, team, spriteId
+- Spawn player entities and enemy entities on the Canvas
+- Basic movement AI (enemies move toward player side, player units engage enemies)
+- Basic collision detection (AABB or distance-based)
+- Entities fight: attack, take damage, die with animation
+- This IS the core game loop — entities moving and fighting on the Canvas
+
+### Phase 3: Currency from Gameplay + HUD
+- Defeating enemies earns primary currency (floating "+5 Gold" on Canvas)
+- Currency display in HUD bar (always visible above Canvas)
+- Wave system: enemies spawn in waves, wave counter in HUD
+- Wave completion bonus
+
+### Phase 4: Upgrades + Bottom Panel
+- Bottom panel with tab system
+- Upgrade cards for unit damage, speed, HP, etc.
+- Purchasing upgrades visibly affects entities on Canvas (faster attacks, more damage numbers)
+- Cost scaling formulas from GDD
+
+### Phase 5: Secondary Currencies + Conversions + New Unit Types
+- Secondary currency from boss enemies or milestones
+- New unit types unlock (new sprites on Canvas)
+- Conversion mechanics between currencies
+
+### Phase 6: Wave Progression + Enemy Variety
+- Enemy difficulty scales per wave
+- New enemy types appear at higher waves (color variants via ProceduralSprite)
+- Boss waves with stronger enemies
+
+### Phase 7: Skill Tree
+- Skill tree tab in bottom panel
+- Skill points earned from gameplay milestones
+- Skills with visible Canvas effects (glow, new projectiles, faster animations)
+
+### Phase 8: Prestige System
+- Prestige threshold, formula, reset logic
+- Visual transformation after prestige (enemy palette swap, background change)
+- Prestige upgrade shop
+
+### Phase 9: Save/Load + Polish
+- Save/load persistence
+- Floating damage numbers, death particles, screen shake
+- Notification toasts, milestone popups
+- Canvas quality settings
+
+### Phase 10: Integration Testing
+- End-to-end verification
+- All systems working together
+- Performance check (30fps target on Canvas)
+
+**Adjust this based on the GDD. Not every game needs all 10 phases. Minimum is 6. But the Canvas/entity phases ALWAYS come first.**
 
 ## Mandatory Rules for Phase Planning
 
-### Phase 1 is ALWAYS: Core Game Loop + Main Currency
+### Phase 1 is ALWAYS: Canvas + Entities + Core Visual
 
-Phase 1 must produce a minimal playable loop:
-- Initialize GameLoop, EventBus, and CurrencyManager
-- Register the primary currency from the GDD
-- Create a clickable element that adds to the primary currency
-- Display the currency value on screen
-- Tests prove: currency starts at 0, clicking adds, display updates
+Phase 1 must produce a visible game world:
+- Initialize Canvas, SpriteRenderer, GameLoop, EventBus, CurrencyManager
+- Register at least 2 sprite types
+- Draw entities on the Canvas in the render loop
+- Tests prove: Canvas renders without errors, sprites are drawn, primary currency starts at 0
 
-This is the foundation everything else builds on.
+This is the foundation everything else builds on. **The player sees a game, not a blank screen with a button.**
 
 ### Phase Ordering Rules
 
 1. Each phase depends on at most 2 previous phases
 2. Phases must be strictly ordered -- no circular dependencies
-3. Group related mechanics (e.g., generators + multipliers can be one phase)
-4. UI for a mechanic goes in the same phase as the mechanic, not a separate phase
+3. Canvas/entity/combat setup ALWAYS comes before UI panels and upgrades
+4. UI for a mechanic goes in the same phase as the mechanic
 5. Prestige and skill tree are always in the later half (Phase 5+)
 6. The final phase is always integration testing + polish
-
-### What Goes in Each Phase (typical)
-
-| Phase | Typical Content |
-|-------|----------------|
-| 1 | Core loop + primary currency + manual clicking + basic display |
-| 2 | Generators/automation (things that produce currency per tick) |
-| 3 | Upgrades and cost scaling |
-| 4 | Secondary/tertiary currencies + conversions |
-| 5 | Unlock system + progression milestones |
-| 6 | Prestige/reset mechanics |
-| 7 | Skill tree |
-| 8 | Save/load + offline progress |
-| 9 | Polish: particles, animations, notifications, sound cues |
-| 10 | Integration testing + final balance tuning |
-
-Adjust this based on the GDD. Not every game needs all 10 phases. Minimum is 6.
 
 ### Test Requirements
 
@@ -172,73 +251,87 @@ Adjust this based on the GDD. Not every game needs all 10 phases. Minimum is 6.
 - Tests must be independent -- each test sets up its own state
 - Test file names: `tests/phase-1.test.js`, `tests/phase-2.test.js`, etc.
 
-Example test structure:
-```javascript
-import { TestRunner, assert } from '../framework/core/__tests__/TestRunner.js';
-import { BigNum } from '../framework/core/BigNum.js';
-
-const runner = new TestRunner();
-
-runner.describe('Phase 1 - Core Game Loop', () => {
-  runner.it('should initialize with 0 gold', () => {
-    const game = createTestGame();
-    assert.true(game.currencies.get('gold').amount.eq(0));
-  });
-
-  runner.it('should add 1 gold on manual click', () => {
-    const game = createTestGame();
-    game.manualGather();
-    assert.true(game.currencies.get('gold').amount.eq(1));
-  });
-});
-
-export { runner };
-```
-
 ### Config-Driven Design
 
 All game-specific values MUST go in `config.js`, not hardcoded in game logic:
 
 ```javascript
-// config.js - All values from the GDD go here
 export const CONFIG = {
+  gameId: 'GAME_ID',
+  version: '1.0.0',
+  primaryCurrency: 'CURRENCY_ID',
+
+  // Canvas
+  canvas: {
+    width: 800,
+    height: 450,
+    backgroundColor: '#1a1a2e',
+  },
+
+  // Entity types
+  entities: {
+    // player units
+    knight: { sprite: 'knight', hp: 100, damage: 10, speed: 30, attackSpeed: 1.0, scale: 3 },
+    wizard: { sprite: 'wizard', hp: 60, damage: 15, speed: 20, attackSpeed: 0.8, scale: 3, unlockCost: 50 },
+    // enemy types
+    slime: { sprite: 'slime', hp: 50, damage: 5, speed: 20, reward: 5, scale: 3 },
+    ghost: { sprite: 'ghost', hp: 80, damage: 10, speed: 15, reward: 10, scale: 3 },
+  },
+
+  // Waves
+  waves: {
+    baseEnemyCount: 3,
+    enemyCountGrowth: 1.2,
+    baseHP: 50,
+    hpGrowth: 1.15,
+    bossWaveInterval: 5,
+  },
+
   currencies: {
-    gold: { name: 'Gold', icon: 'coin', initial: 0 },
-    gems: { name: 'Gems', icon: 'gem', initial: 0 },
+    // Populated from GDD currencies.md
   },
+
   generators: {
-    miner: { baseCost: 10, costMultiplier: 1.15, baseRate: 1 },
-    // ...
+    // Populated from GDD
   },
+
   upgrades: {
-    // ...
+    // Populated from GDD
   },
+
   prestige: {
-    // ...
+    // Populated from GDD prestige.md
+    // visualTiers: [{ palette: {...}, background: '#...' }, ...]
   },
+
   skillTree: {
-    // ...
+    // Populated from GDD skill-tree.md
   },
+
+  unlocks: {
+    // Populated from GDD progression.md
+  },
+
   ui: {
     tickRate: 20,
     autoSaveInterval: 30000,
+    theme: 'dark',
   }
 };
 ```
 
 ### File Structure the Guide Must Produce
 
-The implementation guide should result in this file structure when fully executed:
-
 ```
 workspace/
-  index.html              # Entry point - loads all scripts, defines layout
+  index.html              # Entry point - Canvas + HUD + bottom panel layout
   game.js                 # Main game class - wires everything together
   config.js               # All GDD values as a config object
+  entities.js             # Entity class and entity management
   tests/
     run-tests.html        # Browser test runner page
-    phase-1.test.js       # Phase 1 tests
-    phase-2.test.js       # Phase 2 tests
+    phase-1.test.js
+    phase-2.test.js
     ...
   framework/              # Copied/linked from bootstrap - NOT modified
     core/
@@ -251,34 +344,38 @@ workspace/
         TestRunner.js
     mechanics/
       Currency.js
-      Generator.js         # Created if needed
-      Multiplier.js        # Created if needed
-      Prestige.js          # Created if needed
-      Unlockable.js        # Created if needed
+      Generator.js
+      Multiplier.js
+      Prestige.js
+      Unlockable.js
     ui/
-      ResourceBar.js       # Created if needed
-      UpgradeButton.js     # Created if needed
-      ProgressBar.js       # Created if needed
-      TabSystem.js         # Created if needed
-      SkillTree.js         # Created if needed
+      ResourceBar.js
+      UpgradeButton.js
+      ProgressBar.js
+      TabSystem.js
+      SkillTree.js
     sprites/
-      SpriteRenderer.js    # Created if needed
-      SpriteData.js        # Created if needed
+      SpriteRenderer.js
+      SpriteData.js
+      ProceduralSprite.js
     css/
-      game.css             # Created if needed
+      game.css
 ```
 
 ## Quality Checklist
 
 Before writing the implementation guide, verify:
 
+- [ ] Phase 1 produces a VISIBLE Canvas with entities drawn on it (not just a blank page with a button)
+- [ ] The Canvas/entity/combat phases come BEFORE upgrade panels and tabs
+- [ ] SpriteRenderer, SpriteData, and ProceduralSprite are referenced in the early phases
 - [ ] Every currency from the GDD is accounted for in a phase
 - [ ] Every progression milestone has a phase where it gets implemented
-- [ ] The prestige system (if in the GDD) has its own phase
-- [ ] The skill tree (if in the GDD) has its own phase
-- [ ] UI layout from gdd/ui-ux.md is reflected in the phases
-- [ ] Psychology review recommendations are addressed (e.g., "add near-miss indicators" goes in polish phase)
-- [ ] Phase 1 is independently playable (click + see number go up)
+- [ ] The prestige system includes visual transformation (palette swaps, background changes)
+- [ ] The skill tree includes visible Canvas effects
+- [ ] UI layout from gdd/ui-ux.md is reflected (HUD bar + Canvas + bottom panel)
+- [ ] Psychology review recommendations are addressed
+- [ ] Phase 1 is independently testable (Canvas renders, entities draw)
 - [ ] Each phase produces a testable increment
 - [ ] No phase has more than 2 dependencies
 - [ ] Total phases are between 6 and 10
@@ -286,9 +383,9 @@ Before writing the implementation guide, verify:
 ## Execution
 
 1. Read all GDD files listed above
-2. Identify all currencies, generators, upgrades, unlocks, prestige mechanics, skill tree nodes, and UI requirements
-3. Group them into phases following the ordering rules
-4. Write the config.js schema (what keys exist, what values come from the GDD)
+2. Identify all entity types, currencies, generators, upgrades, unlocks, prestige mechanics, skill tree nodes, and Canvas/visual requirements
+3. Group them into phases following the ordering rules (Canvas first!)
+4. Write the config.js schema (including entity definitions and Canvas settings)
 5. Write each phase using the template above
 6. Write a summary table at the top showing all phases, their dependencies, and what they deliver
 7. Save as `implementation-guide.md`
