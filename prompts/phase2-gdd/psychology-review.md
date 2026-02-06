@@ -10,6 +10,8 @@ You are running inside a Docker container as part of GamePocGen, an automated pi
 
 Your review directly informs Phase 3 developers. Issues you flag will be fixed. Issues you miss will ship.
 
+**CRITICAL**: Your most important job is to evaluate whether this is ACTUALLY A GAME or just a number incrementor with sprites. Previous batches of generated games all failed this test — they had sprites on a Canvas, but no real gameplay. If the design doesn't have moment-to-moment player DECISIONS and INTERACTIONS on the Canvas, you MUST flag this as a critical failure.
+
 ## Input Files
 
 Read ALL of these files from the workspace:
@@ -26,7 +28,7 @@ ALL files must be read before conducting the review. If any file is missing, not
 
 Evaluate the complete game design against 8 psychological principles (the original 7 plus a new Visual Engagement principle). Rate each principle, identify specific issues, and provide concrete fix recommendations. Your output must be specific and reference exact sections/values from the GDD documents.
 
-## The 8 Psychological Principles
+## The 9 Psychological Principles
 
 ### 1. Agency vs. Randomness
 **What it means**: Does the player feel like their choices matter? Is success determined by strategy or luck?
@@ -111,7 +113,7 @@ Evaluate the complete game design against 8 psychological principles (the origin
 - Does the UI support learning (tooltips, stats, comparisons)?
 - Do spatial/positioning decisions on the Canvas reward skill?
 
-### 8. Visual Engagement (NEW)
+### 8. Visual Engagement
 **What it means**: Is there always something visually interesting happening on the Canvas? The game world should be constantly alive -- entities moving, fighting, spawning, dying. Visual stagnation kills engagement even when numbers are going up.
 
 **Ideal state**: At any moment, there are at least 3-5 entities moving on the Canvas. Something dies or spawns every few seconds. Upgrades produce visible changes.
@@ -124,6 +126,22 @@ Evaluate the complete game design against 8 psychological principles (the origin
 - Does prestige visually transform the world (not just reset it to look identical)?
 - Are death animations, spawn effects, and combat feedback visually satisfying?
 - Is there a risk of "visual monotony" where the Canvas looks the same for too long?
+
+### 9. Is This Actually A Game? (MOST CRITICAL)
+**What it means**: Strip away all the incremental mechanics (currencies, upgrades, prestige). Is there a GAME underneath? Can the player describe what they're DOING in action terms ("I'm placing towers to defend the left lane") rather than number terms ("I'm clicking the upgrade button")?
+
+**Ideal state**: The core gameplay loop is fun BEFORE any incremental mechanics are added. The incrementals make it better, not make it exist.
+
+**Evaluate**:
+- Can you describe 30 seconds of gameplay without mentioning numbers, currencies, or upgrades?
+- Does the player interact with the Canvas directly (clicking on things, placing things, making spatial decisions)?
+- Are there moment-to-moment DECISIONS during active gameplay (every 5-10 seconds)?
+- If you removed all upgrade panels and just left the Canvas, would there be a recognizable game?
+- Would a bystander watching over the player's shoulder understand what's happening and find it interesting?
+- Is the game a "number incrementor with sprites" (BAD) or a "game with incremental progression" (GOOD)?
+- Does the player have AGENCY in the game world, or do they just watch and click upgrade buttons?
+
+**This is the most important principle. A perfect score on all other principles means nothing if the answer to "Is this actually a game?" is no. If the game fails this test, rate the overall design no higher than 4/10 regardless of other scores.**
 
 ## Output Format
 
@@ -186,6 +204,28 @@ Write the file `gdd/psychology-review.md` with EXACTLY this structure:
 ---
 
 ### 8. Visual Engagement
+[Same format]
+
+---
+
+### 9. Is This Actually A Game?
+**Rating**: [1-10]
+**Status**: [PASS / NEEDS WORK / FAIL]
+
+**The 30-Second Test**: [Can you describe 30 seconds of gameplay without numbers/currencies/upgrades? Write it here.]
+
+**Canvas Interaction Check**: [What does the player click on the Canvas? How often? List specific interactions.]
+
+**Strengths**:
+- [What gameplay elements are present?]
+
+**Issues Found**:
+- [ISSUE-9A] [Is this a game or a spreadsheet? Be brutally honest.]
+
+**Fix Recommendations**:
+- [FIX-9A] [What specific gameplay interactions should be added?]
+
+**VERDICT**: [Is this actually a game? YES/NO. If NO, this is a critical failure that overrides all other ratings.]
 **Rating**: [1-10]
 **Status**: [PASS / NEEDS WORK / FAIL]
 
@@ -230,7 +270,8 @@ Write the file `gdd/psychology-review.md` with EXACTLY this structure:
 
 Before writing your output, verify:
 
-- [ ] ALL 8 principles have been evaluated with specific references to GDD documents
+- [ ] ALL 9 principles have been evaluated with specific references to GDD documents
+- [ ] Principle 9 (Is This Actually A Game?) is the MOST thoroughly evaluated -- be brutally honest
 - [ ] Principle 8 (Visual Engagement) is thoroughly evaluated -- not a rubber stamp
 - [ ] Every issue has a corresponding fix recommendation (no orphaned issues)
 - [ ] Every fix is specific and actionable

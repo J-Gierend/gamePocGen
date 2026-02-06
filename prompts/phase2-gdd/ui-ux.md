@@ -30,7 +30,7 @@ Design the complete UI/UX layout. The Canvas game world is the primary element. 
 
 ## Design Principles
 
-1. **Canvas first**: The game Canvas occupies 60-70% of the screen. It is always visible. The player's eyes should spend most of their time watching the game world, not reading panels.
+1. **Canvas first**: The game Canvas occupies 60-70% of the screen. It is always visible. The player's HANDS should spend most of their time interacting with the Canvas (clicking, placing, targeting), not clicking buttons in the upgrade panel. The Canvas is where the GAME happens. The bottom panel is where strategic decisions happen BETWEEN gameplay moments.
 
 2. **Always-visible essentials**: Currency counts, current production rates, and wave/round info overlay the top of the screen (HUD style). They are NEVER hidden behind a tab.
 
@@ -119,7 +119,7 @@ Write the file `gdd/ui-ux.md` with EXACTLY this structure:
   3. Effect layer (damage numbers, death particles, ability effects)
   4. HUD overlay layer (health bars above entities, selection indicators, range circles)
 - **Camera**: [Fixed? Scrolling? How does the view work?]
-- **Click/touch interaction**: [What happens when the player clicks on the Canvas? Place a unit? Select a target? Nothing?]
+- **Click/touch interaction (CRITICAL)**: [What happens when the player clicks on the Canvas? This MUST describe real gameplay interactions -- placing units/towers, mining blocks, selecting targets, activating abilities. The player MUST interact with the Canvas as their primary game action. If the answer is "nothing" or "just watches," the design has failed. Describe at least 3 different click/interaction behaviors on the Canvas.]
 
 ### Entity Visual Specs
 [For each entity type from idea.md, specify visual treatment on Canvas]

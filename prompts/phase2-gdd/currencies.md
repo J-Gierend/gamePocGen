@@ -23,7 +23,7 @@ Design the complete currency system for this game. Every number, formula, and ra
 
 ## Design Principles
 
-1. **Gameplay-earned currencies**: At least one primary currency MUST be earned through active gameplay actions visible on the Canvas -- defeating enemies, completing waves, capturing objectives, harvesting resources from the game world. Not just clicking a "+1" button.
+1. **Gameplay-earned currencies**: The primary currency MUST be earned through active gameplay actions that the player PERFORMS on the Canvas -- defeating enemies they chose to target, mining blocks they clicked on, catching resources they clicked to collect. The key word is PLAYER ACTION, not automatic/passive generation. Passive generators are fine as a secondary income source, but the primary currency loop must involve the player DOING something on the Canvas and seeing the reward. Not just clicking a "+1" button, and not just watching sprites auto-fight while the player sits in the upgrade panel.
 
 2. **Early generosity, late scarcity**: Players should feel rich in the first 2 minutes, then start feeling the pinch. The first upgrade should be affordable within 10 seconds.
 
@@ -35,7 +35,9 @@ Design the complete currency system for this game. Every number, formula, and ra
 
 6. **The "almost" feeling**: At any given moment, the player should be able to see at least one thing they can almost afford. This means costs should be tuned so that the gap between "have" and "need" is usually 20-60 seconds of play.
 
-7. **Visual currency events**: When the player earns currency from gameplay (enemy death, wave complete), the UI should show it -- floating "+5 Gold" over the dead enemy on the Canvas. Design the currency flow to support these visual moments.
+7. **Visual currency events**: When the player earns currency from gameplay (enemy death, mining a block, catching a fish), the UI should show it -- floating "+5 Gold" over the dead enemy or mined block on the Canvas. Design the currency flow to support these visual moments.
+
+8. **Currencies must tie to GAMEPLAY, not just timers**: If a currency's only source is "X per second from generators," it's a spreadsheet currency. Every currency must have at least one source tied to a player ACTION on the Canvas. The player should feel like they EARNED it through gameplay, not just waited for it.
 
 ## Output Format
 

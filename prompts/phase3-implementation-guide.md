@@ -160,22 +160,26 @@ Each phase in the implementation guide MUST follow this exact template:
 
 **The visual game world comes FIRST, not last.** This is the most critical change from previous implementation guides.
 
-### Phase 1: Canvas + Game World Setup
-Phase 1 must produce a visible Canvas with something happening on it:
+### Phase 1: Canvas + Game World Setup + Player Interaction
+Phase 1 must produce a visible, INTERACTIVE Canvas:
 - Initialize Canvas element, SpriteRenderer
 - Register sprites from SpriteData (at minimum: one player entity, one enemy entity)
 - Set up the render loop with GameLoop
 - Draw a background color, draw at least one entity sprite
-- The player should SEE something on screen within the first phase
+- **CRITICAL: Implement basic player interaction with the Canvas** — the player must be able to DO something on the Canvas in Phase 1 (click to place, click to target, click to mine, etc.). This is not optional. The player should SEE something on screen AND be able to INTERACT with it.
 - Also: initialize EventBus, CurrencyManager with primary currency
 
-### Phase 2: Core Entities + Gameplay
+### Phase 2: Core Entities + Gameplay Loop
 - Create Entity class/objects with position, HP, speed, team, spriteId
-- Spawn player entities and enemy entities on the Canvas
-- Basic movement AI (enemies move toward player side, player units engage enemies)
+- Spawn entities on the Canvas that the player's actions affect
+- Implement the core gameplay INTERACTION (the thing the player DOES every 5-10 seconds):
+  - For TD: click to place towers, enemies walk paths, towers auto-shoot
+  - For mining: click blocks to mine them, they disappear, resources drop
+  - For battle: spawn units, position them, they fight enemies
+  - The specific interaction depends on the game concept, but there MUST be one
 - Basic collision detection (AABB or distance-based)
-- Entities fight: attack, take damage, die with animation
-- This IS the core game loop — entities moving and fighting on the Canvas
+- Entities interact: attack, take damage, die with visible feedback (floating damage numbers)
+- **This IS the core game — the player interacting with entities on the Canvas.** If Phase 2 produces a game where the player just watches, it has FAILED.
 
 ### Phase 3: Currency from Gameplay + HUD
 - Defeating enemies earns primary currency (floating "+5 Gold" on Canvas)
@@ -224,15 +228,16 @@ Phase 1 must produce a visible Canvas with something happening on it:
 
 ## Mandatory Rules for Phase Planning
 
-### Phase 1 is ALWAYS: Canvas + Entities + Core Visual
+### Phase 1 is ALWAYS: Canvas + Entities + Player Interaction
 
-Phase 1 must produce a visible game world:
+Phase 1 must produce a visible, INTERACTIVE game world:
 - Initialize Canvas, SpriteRenderer, GameLoop, EventBus, CurrencyManager
 - Register at least 2 sprite types
 - Draw entities on the Canvas in the render loop
-- Tests prove: Canvas renders without errors, sprites are drawn, primary currency starts at 0
+- **Implement Canvas click handling** — the player can click on the Canvas and something happens (place entity, mine block, target enemy, etc.)
+- Tests prove: Canvas renders without errors, sprites are drawn, clicking the Canvas triggers a game action, primary currency starts at 0
 
-This is the foundation everything else builds on. **The player sees a game, not a blank screen with a button.**
+This is the foundation everything else builds on. **The player PLAYS a game, not watches a screen and clicks upgrade buttons.**
 
 ### Phase Ordering Rules
 

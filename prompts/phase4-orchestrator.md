@@ -1017,22 +1017,24 @@ After all phases:
 2. Open `index.html` in the browser test runner context
 3. Verify:
    - **Canvas renders with entities visible** (not a blank canvas)
-   - **Entities move, fight, and die on the Canvas**
-   - **Floating damage numbers or reward text visible**
-   - Primary currency earned from defeating enemies
+   - **Player can CLICK on the Canvas and something gameplay-relevant happens** (place tower, mine block, spawn unit, etc.)
+   - **Entities move, fight, and die on the Canvas** with visible feedback
+   - **Floating damage numbers or reward text visible** when player actions have consequences
+   - Primary currency earned from GAMEPLAY ACTIONS on the Canvas (not just passive timers)
    - Upgrades can be purchased in bottom panel
-   - Upgrades visibly affect entities on Canvas
-   - Wave progression works
+   - Upgrades visibly affect entities/gameplay on Canvas (not just invisible stat changes)
+   - Wave/round/level progression works
    - Currency displays update in HUD
    - Save/load works
    - Prestige resets and visually transforms the world (if implemented)
    - Skill tree nodes can be unlocked with visible effects (if implemented)
+   - **THE GAME IS FUN**: Would someone actually want to play this for 5 minutes? Is there a real gameplay loop beyond clicking upgrade buttons?
 4. Write summary in `BUILD_LOG.md`
 
 ## Critical Rules
 
 1. **TDD is mandatory.** Write tests BEFORE implementation. No exceptions.
-2. **Canvas visual gameplay is mandatory.** The game MUST have animated sprites on a Canvas. If Phase 1 doesn't produce a visible Canvas with entities, everything else is wrong.
+2. **INTERACTIVE Canvas gameplay is mandatory.** The game MUST have animated sprites on a Canvas that the player INTERACTS WITH. The player must click on the Canvas to play the game — placing towers, mining blocks, directing units, etc. If Phase 1 doesn't produce a visible Canvas where the player can click and see a gameplay result, everything else is wrong. A Canvas that just shows sprites auto-fighting while the player clicks upgrade buttons below is NOT gameplay — it's a screensaver.
 3. **Use the sprite framework.** SpriteRenderer, SpriteData, ProceduralSprite are your tools for visual gameplay. Use them.
 4. **Do not modify framework/core/ files.** Only add new files to framework/mechanics/ and framework/ui/.
 5. **All game values in config.js.** No magic numbers.

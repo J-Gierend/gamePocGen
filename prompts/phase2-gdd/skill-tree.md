@@ -40,6 +40,8 @@ Design the complete skill tree. Every node, cost, effect, and connection must be
 
 6. **Visible effects**: At least half of skill nodes should produce a visible change in the Canvas game world -- faster animation, new sprite variants, new projectile types, glow effects, area effects. The player should SEE their build's identity on screen.
 
+7. **Gameplay-changing effects over stat boosts**: Skills should change HOW the player plays, not just make numbers bigger. Good: "Towers now shoot in an arc hitting multiple enemies" (changes gameplay). Bad: "+10% tower damage" (invisible stat). Even stat boosts should be dramatic enough to notice: "+100% attack speed" is visible (attacks twice as fast), "+5% damage" is not. Aim for skills that change behavior and strategy, not just tweak numbers.
+
 ## Output Format
 
 Write the file `gdd/skill-tree.md`. **DIAGRAM-FIRST** — the tree itself and all build paths are Mermaid diagrams.
