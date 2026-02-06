@@ -116,8 +116,9 @@ async function main() {
 
     // Deploy
     try {
-      const sourceDir = `${containerManager.workspacePath}/job-${job.id}/dist`;
-      const result = await deploymentManager.deployGame(job.id, job.game_name || `Game ${job.id}`, sourceDir);
+      const workspaceDir = `${containerManager.workspacePath}/job-${job.id}`;
+      const sourceDir = `${workspaceDir}/dist`;
+      const result = await deploymentManager.deployGame(job.id, job.game_name || `Game ${job.id}`, sourceDir, { workspaceDir });
       await queueManager.updatePhaseOutput(job.id, 'deployment', result);
       await queueManager.addLog(job.id, 'info', `Deployed to ${result.url}`);
 

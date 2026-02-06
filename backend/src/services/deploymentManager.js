@@ -104,13 +104,60 @@ networks:
   }
 
   /**
-   * Deploy a game: copy files, create and start nginx container with Traefik labels.
+   * Extract game metadata from workspace files (idea.md, index.html).
+   * @param {string} workspaceDir - Path to job workspace
+   * @param {string} htmlDir - Path to deployed HTML files
+   * @returns {Promise<{title: string, description: string, guide: string}>}
+   */
+  async extractMetadata(workspaceDir, htmlDir) {
+    const fs = await this._getFs();
+    const meta = { title: '', description: '', guide: '' };
+
+    // Try idea.md for title and description
+    try {
+      const idea = await fs.readFile(`${workspaceDir}/idea.md`, 'utf-8');
+      // Title is first heading (# Title or #Title)
+      const titleMatch = idea.match(/^#\s*(.+)/m);
+      if (titleMatch) meta.title = titleMatch[1].trim();
+      // Description: Theme section content
+      const themeMatch = idea.match(/## Theme\s*\n([\s\S]*?)(?=\n##|$)/);
+      if (themeMatch) meta.description = themeMatch[1].trim().split('\n')[0].trim();
+      // Guide: Core Loop section
+      const loopMatch = idea.match(/## Core Loop\s*\n([\s\S]*?)(?=\n##|$)/);
+      if (loopMatch) {
+        const loopText = loopMatch[1].trim();
+        // Extract the main paragraph before sub-sections
+        const mainParagraph = loopText.split(/\n###/)[0].trim();
+        meta.guide = mainParagraph;
+      }
+    } catch {
+      // idea.md not available
+    }
+
+    // Fallback: extract title from index.html <title> tag
+    if (!meta.title && htmlDir) {
+      try {
+        const html = await fs.readFile(`${htmlDir}/index.html`, 'utf-8');
+        const titleMatch = html.match(/<title>([^<]+)<\/title>/i);
+        if (titleMatch) meta.title = titleMatch[1].trim();
+      } catch {
+        // index.html not available
+      }
+    }
+
+    return meta;
+  }
+
+  /**
+   * Deploy a game: copy files, extract metadata, create and start nginx container.
    * @param {number} gameId
    * @param {string} gameName
    * @param {string} sourceDir - Path to source game files
+   * @param {Object} [options]
+   * @param {string} [options.workspaceDir] - Path to job workspace for metadata extraction
    * @returns {Promise<{gameId: number, url: string, deployPath: string, port: number}>}
    */
-  async deployGame(gameId, gameName, sourceDir) {
+  async deployGame(gameId, gameName, sourceDir, options = {}) {
     const fs = await this._getFs();
     const name = `gamedemo${gameId}`;
     const deployPath = `${this.deployDir}/${name}`;
@@ -123,6 +170,12 @@ networks:
 
     // Copy game files from source to html/
     await fs.cp(sourceDir, htmlPath, { recursive: true });
+
+    // Extract and save metadata
+    const workspaceDir = options.workspaceDir || sourceDir.replace(/\/dist$/, '');
+    const metadata = await this.extractMetadata(workspaceDir, htmlPath);
+    metadata.createdAt = new Date().toISOString();
+    await fs.writeFile(`${deployPath}/metadata.json`, JSON.stringify(metadata, null, 2));
 
     // Write docker-compose.yml (for reference/manual use)
     const composeContent = this.generateDockerCompose(gameId, gameName);
@@ -214,7 +267,8 @@ networks:
 
   /**
    * List all deployed games by scanning the deploy directory.
-   * @returns {Promise<Array<{gameId: number, name: string, url: string, port: number}>>}
+   * Reads metadata.json from each game directory for title/description.
+   * @returns {Promise<Array<{gameId: number, name: string, title: string, description: string, guide: string, url: string, port: number, createdAt: string}>>}
    */
   async listDeployedGames() {
     const fs = await this._getFs();
@@ -231,11 +285,31 @@ networks:
         const port = this.getGamePort(gameId);
         const url = `https://${entry.name}.${this.domain}`;
 
+        // Read metadata if available
+        let metadata = {};
+        try {
+          const metaJson = await fs.readFile(`${this.deployDir}/${entry.name}/metadata.json`, 'utf-8');
+          metadata = JSON.parse(metaJson);
+        } catch {
+          // No metadata file, try extracting title from HTML
+          try {
+            const html = await fs.readFile(`${this.deployDir}/${entry.name}/html/index.html`, 'utf-8');
+            const titleMatch = html.match(/<title>([^<]+)<\/title>/i);
+            if (titleMatch) metadata.title = titleMatch[1].trim();
+          } catch {
+            // No HTML either
+          }
+        }
+
         games.push({
           gameId,
           name: entry.name,
+          title: metadata.title || '',
+          description: metadata.description || '',
+          guide: metadata.guide || '',
           url,
           port,
+          createdAt: metadata.createdAt || '',
         });
       }
     }
