@@ -33,13 +33,15 @@ export function createHandlers({ queueManager, containerManager, deploymentManag
         const n = parseInt(count, 10);
 
         if (options.compare) {
-          // Comparison mode: create paired jobs
+          // Comparison mode: create paired jobs with same idea
           const pairs = [];
           for (let i = 0; i < n; i++) {
+            const baseName = options.name || `Game-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+
             // Job A: z.ai provider
             const [jobAId] = await queueManager.addJob({
               count: 1,
-              options: { ...options, compare: undefined, provider: 'zai' },
+              options: { ...options, compare: undefined, provider: 'zai', name: `ZAI-${baseName}` },
             });
 
             // Job B: anthropic provider, copies idea from Job A
@@ -51,6 +53,7 @@ export function createHandlers({ queueManager, containerManager, deploymentManag
                 provider: 'anthropic',
                 model: options.model || 'claude-opus-4-6',
                 sourceJobId: jobAId,
+                name: `Claude-${baseName}`,
               },
             });
 
