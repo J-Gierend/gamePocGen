@@ -29,6 +29,12 @@ Thumbs.db
 # Test coverage
 coverage/
 
+# Playwright test screenshots
+scripts/shots/
+
+# Package lock files (scripts)
+scripts/package-lock.json
+
 # Build output
 dist/
 build/
