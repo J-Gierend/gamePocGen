@@ -103,6 +103,23 @@ async function main() {
   }
 
   async function processJob(job) {
+    const provider = job.config?.provider || 'zai';
+    const sourceJobId = job.config?.sourceJobId;
+
+    await queueManager.addLog(job.id, 'info', `Provider: ${provider}${sourceJobId ? `, source job: ${sourceJobId}` : ''}`);
+
+    // Build provider-specific env vars
+    const providerEnv = [];
+    if (provider === 'anthropic') {
+      providerEnv.push(
+        'AUTH_MODE=subscription',
+        `CLAUDE_CODE_OAUTH_TOKEN=${process.env.CLAUDE_CODE_OAUTH_TOKEN || ''}`,
+        `CLAUDE_CODE_REFRESH_TOKEN=${process.env.CLAUDE_CODE_REFRESH_TOKEN || ''}`,
+        `CLAUDE_CODE_TOKEN_EXPIRES=${process.env.CLAUDE_CODE_TOKEN_EXPIRES || ''}`,
+        `MODEL=${job.config?.model || 'claude-opus-4-6'}`,
+      );
+    }
+
     const phases = ['phase1', 'phase2', 'phase3', 'phase4'];
 
     for (const phase of phases) {
@@ -110,10 +127,44 @@ async function main() {
         await queueManager.updateStatus(job.id, `phase_${phase.replace('phase', '')}`);
         await queueManager.addLog(job.id, 'info', `Starting ${phase}`);
 
+        // For comparison jobs: skip phase1 and copy idea from source
+        if (phase === 'phase1' && sourceJobId) {
+          await queueManager.addLog(job.id, 'info', `Comparison job: waiting for source job ${sourceJobId} phase1...`);
+
+          // Wait for source job to finish phase1 (poll every 5s, 30min timeout)
+          const maxWait = 30 * 60 * 1000;
+          const startWait = Date.now();
+          let sourceReady = false;
+          while (Date.now() - startWait < maxWait) {
+            const sourceJob = await queueManager.getJob(sourceJobId);
+            if (!sourceJob) throw new Error(`Source job ${sourceJobId} not found`);
+            if (sourceJob.status === 'failed') throw new Error(`Source job ${sourceJobId} failed`);
+            // Source is past phase1 if status is phase_2 or later
+            const pastPhase1 = ['phase_2', 'phase_3', 'phase_4', 'completed'].includes(sourceJob.status);
+            if (pastPhase1) { sourceReady = true; break; }
+            await new Promise(r => setTimeout(r, 5000));
+          }
+          if (!sourceReady) throw new Error(`Timeout waiting for source job ${sourceJobId} to complete phase1`);
+
+          // Copy idea.md from source workspace to our workspace
+          const sourceDir = `${containerManager.workspacePath}/job-${sourceJobId}`;
+          const destDir = `${containerManager.workspacePath}/job-${job.id}`;
+          const { mkdirSync, copyFileSync, existsSync } = await import('node:fs');
+          mkdirSync(destDir, { recursive: true });
+          const ideaSrc = `${sourceDir}/idea.md`;
+          const ideaJsonSrc = `${sourceDir}/idea.json`;
+          if (existsSync(ideaSrc)) copyFileSync(ideaSrc, `${destDir}/idea.md`);
+          if (existsSync(ideaJsonSrc)) copyFileSync(ideaJsonSrc, `${destDir}/idea.json`);
+
+          await queueManager.addLog(job.id, 'info', `Copied idea from source job ${sourceJobId}`);
+          await queueManager.updatePhaseOutput(job.id, 'phase1', { copied_from: sourceJobId });
+          continue; // Skip spawning phase1 container
+        }
+
         // Pass diversity env vars to phase1
         if (phase === 'phase1') {
           try {
-            const extraEnv = [];
+            const extraEnv = [...providerEnv];
 
             // Existing game names for title/genre diversity
             const existingGames = await deploymentManager.listDeployedGames();
@@ -144,7 +195,8 @@ async function main() {
             console.error(`Genre seed selection failed: ${err.message}`);
           }
         } else {
-          delete job.extraEnv;
+          // Non-phase1: still pass provider env vars
+          job.extraEnv = [...providerEnv];
         }
 
         const { containerId } = await containerManager.spawnContainer(job, phase);

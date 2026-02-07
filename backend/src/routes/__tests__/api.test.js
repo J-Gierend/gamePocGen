@@ -377,6 +377,79 @@ export function runTests() {
       assert(res.body.error, 'should have error message');
     },
 
+    // === Comparison mode ===
+
+    'POST /generate with compare=true creates paired jobs': async () => {
+      let addJobCalls = [];
+      const services = createMockServices({
+        queueManager: {
+          addJob: async ({ count, options }) => {
+            addJobCalls.push({ count, options });
+            return [addJobCalls.length * 10]; // 10, 20, 30, 40...
+          },
+        },
+      });
+      const handlers = createHandlers(services);
+      const req = createMockReq({ body: { count: 2, options: { compare: true } } });
+      const res = createMockRes();
+
+      await handlers.generateGames(req, res);
+
+      assertEqual(res.statusCode, 201, 'status should be 201');
+      assertEqual(res.body.jobIds.length, 4, 'should return 4 job IDs (2 pairs)');
+      assertEqual(res.body.comparison.pairCount, 2, 'should have 2 pairs');
+      // Verify pair structure
+      assertEqual(res.body.comparison.pairs[0].zai, 10, 'first pair zai job');
+      assertEqual(res.body.comparison.pairs[0].anthropic, 20, 'first pair anthropic job');
+    },
+
+    'POST /generate with compare=true sets provider and sourceJobId': async () => {
+      let addJobCalls = [];
+      let callIndex = 0;
+      const services = createMockServices({
+        queueManager: {
+          addJob: async ({ count, options }) => {
+            callIndex++;
+            addJobCalls.push({ count, options });
+            return [callIndex * 100];
+          },
+        },
+      });
+      const handlers = createHandlers(services);
+      const req = createMockReq({ body: { count: 1, options: { compare: true } } });
+      const res = createMockRes();
+
+      await handlers.generateGames(req, res);
+
+      assertEqual(addJobCalls.length, 2, 'should call addJob twice');
+      assertEqual(addJobCalls[0].options.provider, 'zai', 'first job should be zai provider');
+      assertEqual(addJobCalls[1].options.provider, 'anthropic', 'second job should be anthropic provider');
+      assertEqual(addJobCalls[1].options.sourceJobId, 100, 'second job sourceJobId should point to first job');
+      assertEqual(addJobCalls[1].options.model, 'claude-opus-4-6', 'second job should have model');
+    },
+
+    'POST /generate with compare=true strips compare flag from child options': async () => {
+      let capturedOptions = [];
+      const services = createMockServices({
+        queueManager: {
+          addJob: async ({ options }) => {
+            capturedOptions.push(options);
+            return [1];
+          },
+        },
+      });
+      const handlers = createHandlers(services);
+      const req = createMockReq({ body: { count: 1, options: { compare: true, genre: 'rpg' } } });
+      const res = createMockRes();
+
+      await handlers.generateGames(req, res);
+
+      for (const opts of capturedOptions) {
+        assertEqual(opts.compare, undefined, 'compare should be stripped from child options');
+        assertEqual(opts.genre, 'rpg', 'other options should be preserved');
+      }
+    },
+
     // === Error handling ===
 
     'service error on generateGames returns 500': async () => {

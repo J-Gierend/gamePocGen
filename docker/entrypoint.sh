@@ -5,7 +5,13 @@ set -e
 : "${PHASE:?PHASE is required (phase1|phase2|phase3|phase4)}"
 : "${JOB_ID:?JOB_ID is required}"
 : "${GAME_NAME:?GAME_NAME is required}"
-: "${ZAI_API_KEY:?ZAI_API_KEY is required}"
+
+# Auth mode: "apikey" (default, z.ai) or "subscription" (Claude Code OAuth)
+AUTH_MODE="${AUTH_MODE:-apikey}"
+
+if [ "$AUTH_MODE" = "apikey" ]; then
+    : "${ZAI_API_KEY:?ZAI_API_KEY is required when AUTH_MODE=apikey}"
+fi
 
 WORKSPACE_DIR="${WORKSPACE_DIR:-/workspace}"
 TIMEOUT_SECONDS="${TIMEOUT_SECONDS:-3600}"
@@ -37,12 +43,47 @@ STATUSEOF
 
 write_status "running" "Starting ${PHASE}"
 
-# Z.AI Configuration
-export ANTHROPIC_AUTH_TOKEN="$ZAI_API_KEY"
-export ANTHROPIC_BASE_URL="${ZAI_BASE_URL:-https://api.z.ai/api/anthropic}"
+# --- Auth Configuration ---
+if [ "$AUTH_MODE" = "subscription" ]; then
+    # Subscription mode: use OAuth token from Claude Code login
+    # Do NOT set ANTHROPIC_AUTH_TOKEN or ANTHROPIC_BASE_URL
+    # Do NOT delete .credentials.json
+    echo "[auth] Using subscription mode (OAuth)"
 
-# Configure Claude Code settings - sandbox IS the security boundary
-cat > /home/claude/.claude/settings.json <<EOF
+    # Write credentials file if CLAUDE_CODE_OAUTH_TOKEN is provided
+    if [ -n "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]; then
+        mkdir -p /home/claude/.claude
+        cat > /home/claude/.claude/.credentials.json <<CREDEOF
+{
+  "oauth": {
+    "accessToken": "${CLAUDE_CODE_OAUTH_TOKEN}",
+    "refreshToken": "${CLAUDE_CODE_REFRESH_TOKEN:-}",
+    "expiresAt": "${CLAUDE_CODE_TOKEN_EXPIRES:-2099-01-01T00:00:00.000Z}"
+  }
+}
+CREDEOF
+        echo "[auth] Credentials file written"
+    fi
+
+    # Settings without API key overrides
+    cat > /home/claude/.claude/settings.json <<EOF
+{
+  "env": {
+    "API_TIMEOUT_MS": "3600000"
+  },
+  "permissions": {
+    "allow": ["Bash", "Read", "Write", "Edit", "Glob", "Grep", "Task", "WebFetch(domain:*)", "WebSearch"],
+    "deny": []
+  }
+}
+EOF
+else
+    # API key mode (default): z.ai proxy
+    echo "[auth] Using API key mode (z.ai)"
+    export ANTHROPIC_AUTH_TOKEN="$ZAI_API_KEY"
+    export ANTHROPIC_BASE_URL="${ZAI_BASE_URL:-https://api.z.ai/api/anthropic}"
+
+    cat > /home/claude/.claude/settings.json <<EOF
 {
   "env": {
     "ANTHROPIC_AUTH_TOKEN": "${ZAI_API_KEY}",
@@ -55,6 +96,10 @@ cat > /home/claude/.claude/settings.json <<EOF
   }
 }
 EOF
+
+    # Force API key auth - remove any cached credentials
+    rm -f /home/claude/.claude/.credentials.json
+fi
 
 # Skip onboarding wizard
 cat > /home/claude/.claude.json <<EOF
@@ -70,9 +115,6 @@ if [ ! -d "${WORKSPACE_DIR}/.git" ]; then
     git commit -m "initial workspace" --allow-empty 2>/dev/null || true
 fi
 
-# Force API key auth
-rm -f /home/claude/.claude/.credentials.json
-
 # Copy framework files into workspace
 cp -rn "$FRAMEWORK_DIR"/* "$WORKSPACE_DIR/" 2>/dev/null || true
 
@@ -82,11 +124,18 @@ run_claude() {
     local prompt="$1"
     local label="$2"
 
-    echo "[${label}] Starting with ${TIMEOUT_SECONDS}s timeout..."
+    local model_flag=""
+    if [ -n "${MODEL:-}" ]; then
+        model_flag="--model ${MODEL}"
+        echo "[${label}] Using model: ${MODEL}"
+    fi
+
+    echo "[${label}] Starting with ${TIMEOUT_SECONDS}s timeout (auth=${AUTH_MODE})..."
 
     timeout --signal=TERM --kill-after=30s "${TIMEOUT_SECONDS}" \
         claude -p --dangerously-skip-permissions \
         --verbose \
+        $model_flag \
         -- \
         "$prompt"
 

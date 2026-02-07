@@ -108,7 +108,11 @@ Read the existing names carefully and identify their genres. Then design somethi
 
 8. **Clear progression hooks**: The player should always see what they're working toward.
 
-9. **A unique twist**: Something unexpected that makes this game memorable. Not just a genre — a mechanic nobody expects.
+9. **Controls Display**: List the 3-5 primary player actions (click, hotkeys, drag, etc.) that will be shown on-screen in a permanent controls panel. Every game MUST have a visible controls reference so new players know what to do immediately.
+
+10. **Getting Started Tutorial**: Define a 3-4 bullet point "How to Play" overlay that appears on first load, explaining the goal and basic controls. Players must be able to interact meaningfully within 5 seconds of page load.
+
+11. **A unique twist**: Something unexpected that makes this game memorable. Not just a genre — a mechanic nobody expects.
 
 ## The Gameplay Test (CRITICAL)
 
@@ -249,6 +253,12 @@ Write the file `idea.md` with EXACTLY this structure:
 - **Prestige currency**: [What they earn]
 - **Acceleration**: [How Run 2 plays DIFFERENTLY, not just faster]
 - **Visual transformation**: [How the Canvas LOOKS different after prestige]
+
+## Controls Display
+[List the 3-5 primary player actions that will be shown in a permanent on-screen controls panel. Format: action → what it does. Example: "Left Click → Place tower", "Right Click → Sell tower", "Space → Start wave", "1-5 → Select tower type"]
+
+## Getting Started Tutorial
+[Write exactly 3-4 bullet points for the "How to Play" overlay shown on first load. Must explain: 1) The goal, 2) How to do the main action, 3) How to progress. Example: "• Click on the map to place towers", "• Enemies come in waves - stop them from reaching your base", "• Earn gold by defeating enemies to buy upgrades"]
 
 ## Unique Selling Point
 [1-2 sentences. What is the ONE mechanic that makes this game interesting to PLAY (not just interesting to read about)?]

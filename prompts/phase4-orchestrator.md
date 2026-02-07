@@ -1029,19 +1029,37 @@ After all phases:
    - Prestige resets and visually transforms the world (if implemented)
    - Skill tree nodes can be unlocked with visible effects (if implemented)
    - **THE GAME IS FUN**: Would someone actually want to play this for 5 minutes? Is there a real gameplay loop beyond clicking upgrade buttons?
-4. Write summary in `BUILD_LOG.md`
+   - **CONTROLS PANEL VISIBLE**: A controls panel listing all hotkeys/interactions MUST be visible on screen at all times. If a new player cannot see what buttons to press or where to click, the game fails. The controls panel should be at the bottom of the screen or as a semi-transparent overlay bar
+   - **HOW TO PLAY OVERLAY**: The game MUST show a brief "How to Play" tutorial overlay on first page load with 3-4 bullet points explaining the goal and controls. Must be dismissible with a "Got it!" button. Use localStorage to avoid showing again
+   - **PLAYER CAN INTERACT WITHIN 5 SECONDS**: From page load to first meaningful interaction must take under 5 seconds. No waiting for animations, no mandatory cutscenes
+   - **AT LEAST 3 CANVAS CLICK ACTIONS**: Clicking different positions on the canvas must produce at least 3 distinct visible results
+   - **THE 10-SECOND RULE**: If a new player who has never seen this game cannot figure out what to do within 10 seconds of reading the tutorial overlay, the game FAILS
+
+5. **COMPLETE SYSTEM VERIFICATION (MANDATORY)** -- Every system described in the GDD must be fully implemented with BOTH backend logic AND visible frontend UI. A system that exists in code but has no user-facing interaction is NOT implemented. Walk through this checklist:
+   - **Currency earning**: Can the player SEE currency numbers go up? Can they earn currency through gameplay actions (not just timers)?
+   - **Currency spending**: Can the player CLICK a buy button, see the cost deducted, and see the upgrade take effect?
+   - **Upgrades**: Is every upgrade from the GDD present as a clickable button with visible cost, current level, and effect description?
+   - **Skill tree** (if in GDD): Is there a visual skill tree with clickable nodes? Can the player spend skill points? Does unlocking a node produce a visible effect?
+   - **Prestige** (if in GDD): Is there a prestige button? Does clicking it reset the right things and grant prestige currency? Does the visual world change after prestige?
+   - **Wave/progression system**: Do waves advance? Can the player see wave numbers? Do enemies get harder?
+   - **Entity interactions**: Can the player see entities fighting, moving, dying on canvas? Are death animations visible? Do entities drop collectibles?
+   - **Tab system**: Does every tab in the GDD exist and contain working content? No empty tabs!
+   - If ANY system from the GDD exists only as backend code without a working UI, the game is INCOMPLETE. Go back and implement the UI.
+
+6. Write summary in `BUILD_LOG.md`
 
 ## Critical Rules
 
 1. **TDD is mandatory.** Write tests BEFORE implementation. No exceptions.
 2. **INTERACTIVE Canvas gameplay is mandatory.** The game MUST have animated sprites on a Canvas that the player INTERACTS WITH. The player must click on the Canvas to play the game — placing towers, mining blocks, directing units, etc. If Phase 1 doesn't produce a visible Canvas where the player can click and see a gameplay result, everything else is wrong. A Canvas that just shows sprites auto-fighting while the player clicks upgrade buttons below is NOT gameplay — it's a screensaver.
-3. **Use the sprite framework.** SpriteRenderer, SpriteData, ProceduralSprite are your tools for visual gameplay. Use them.
-4. **Do not modify framework/core/ files.** Only add new files to framework/mechanics/ and framework/ui/.
-5. **All game values in config.js.** No magic numbers.
-6. **EventBus for decoupling.** UI listens to events, doesn't read state directly.
-7. **BigNum for all currency amounts.** Always `BigNum.from()`.
-8. **Each phase must be independently verifiable.**
-9. **Max 3 retries per phase.**
-10. **No external dependencies.** Everything runs from local files.
-11. **Browser-first.** The game runs in the browser.
-12. **Keep it simple.** Working PoC, not production code.
+3. **EVERY SYSTEM MUST BE PLAYABLE.** If the GDD describes a skill tree, there must be a visible, clickable skill tree. If it describes prestige, there must be a prestige button that works. "Implemented in backend" is NOT done — the player must be able to USE every system through the UI. A human evaluates the game by PLAYING it, not by reading the code.
+4. **Use the sprite framework.** SpriteRenderer, SpriteData, ProceduralSprite are your tools for visual gameplay. Use them.
+5. **Do not modify framework/core/ files.** Only add new files to framework/mechanics/ and framework/ui/.
+6. **All game values in config.js.** No magic numbers.
+7. **EventBus for decoupling.** UI listens to events, doesn't read state directly.
+8. **BigNum for all currency amounts.** Always `BigNum.from()`.
+9. **Each phase must be independently verifiable.**
+10. **Max 3 retries per phase.**
+11. **No external dependencies.** Everything runs from local files.
+12. **Browser-first.** The game runs in the browser.
+13. **Keep it simple.** Working PoC, not production code.

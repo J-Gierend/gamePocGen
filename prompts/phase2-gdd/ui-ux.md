@@ -564,6 +564,51 @@ stateDiagram-v2
 - **Color**: [Changes based on completion %? Gradient?]
 - **Label**: [Percentage? Current/Max? Both?]
 
+## Controls Panel (MANDATORY - Always Visible)
+
+The game MUST have a permanently visible controls panel showing all player interactions. This is NOT optional. Games without visible controls are unplayable.
+
+### Controls Panel Layout
+```
++--------------------------------------------------+
+|  CONTROLS: [Action1: Key/Click] | [Action2: Key] |
+|  [Action3: Key/Click] | [Action4: Key]           |
++--------------------------------------------------+
+```
+
+- **Position**: Bottom of screen, below the game canvas, OR as a semi-transparent overlay bar at the bottom of the canvas
+- **Always visible**: Never hidden behind a tab or menu. The controls panel is ALWAYS on screen
+- **Content**: List every player action with its trigger (click, hotkey, drag). Minimum 3 actions
+- **Style**: Compact, single-line or two-line. Semi-transparent dark background. Light text. Monospace for hotkeys
+- **Responsive**: If space is tight, use icon + hotkey shorthand (e.g., "🖱️ Place | ⌫ Sell | Space Start")
+
+Design the exact content and layout for this game's controls panel. Every interaction from the "Player Interaction" section of idea.md must appear here.
+
+## Getting Started Overlay (MANDATORY - Shows on First Load)
+
+The game MUST show a "How to Play" overlay on first load. This appears ONCE, centered on screen, over the canvas.
+
+### Tutorial Overlay Layout
+```
++----------------------------------+
+|         HOW TO PLAY              |
+|                                  |
+|  • [Goal of the game]           |
+|  • [Primary action + how]       |
+|  • [Secondary action + how]     |
+|  • [How to progress/win]        |
+|                                  |
+|       [ GOT IT! ]               |
++----------------------------------+
+```
+
+- **Trigger**: Shows automatically on first page load
+- **Dismiss**: "Got it!" button OR click anywhere outside
+- **Persistence**: Use localStorage to remember dismissal. Don't show again after first dismiss
+- **Content**: 3-4 concise bullet points from the idea.md "Getting Started Tutorial" section
+- **Style**: Semi-transparent dark overlay. Centered modal. Large readable text. Prominent dismiss button
+- **Z-index**: Above everything including the canvas
+
 ## Responsive Considerations
 - **Minimum width**: 1280px
 - **Maximum width**: [full viewport or capped at Xpx?]
@@ -699,6 +744,10 @@ Before writing your output, verify:
 - [ ] CONFIG.effects spec has particle, floatingText, and screenFlash definitions
 - [ ] CONFIG.colorPalette has hex values for every UI color role
 - [ ] Entity state definitions in CONFIG match the state machine diagrams exactly
+- [ ] A permanent controls panel is designed showing ALL player interactions (minimum 3 actions)
+- [ ] A "How to Play" overlay is designed for first-load tutorial (3-4 bullet points)
+- [ ] The controls panel is ALWAYS visible (not hidden behind tabs/menus)
+- [ ] The tutorial overlay has a dismiss button and localStorage persistence
 
 ## Execution
 

@@ -21,6 +21,9 @@ services:
       - GALLERY_DATA_PATH=/data/deployed/gallery/games.json
       - DOMAIN=namjo-games.com
       - WORKER_IMAGE=gamepocgen-worker
+      - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
+      - CLAUDE_CODE_REFRESH_TOKEN=${CLAUDE_CODE_REFRESH_TOKEN:-}
+      - CLAUDE_CODE_TOKEN_EXPIRES=${CLAUDE_CODE_TOKEN_EXPIRES:-}
     depends_on:
       postgres:
         condition: service_healthy

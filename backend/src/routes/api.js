@@ -20,12 +20,53 @@ export function createHandlers({ queueManager, containerManager, deploymentManag
   return {
     /**
      * POST /api/generate - Start N game generation jobs.
+     *
+     * If options.compare is true, creates paired jobs:
+     * - Job A: z.ai provider (default)
+     * - Job B: anthropic provider (subscription), copies idea from Job A
+     *
+     * Returns { jobIds, count, comparison? } where comparison has { pairs }.
      */
     async generateGames(req, res) {
       try {
         const { count = 1, options = {} } = req.body;
-        const ids = await queueManager.addJob({ count: parseInt(count, 10), options });
-        res.status(201).json({ jobIds: ids, count: ids.length });
+        const n = parseInt(count, 10);
+
+        if (options.compare) {
+          // Comparison mode: create paired jobs
+          const pairs = [];
+          for (let i = 0; i < n; i++) {
+            // Job A: z.ai provider
+            const [jobAId] = await queueManager.addJob({
+              count: 1,
+              options: { ...options, compare: undefined, provider: 'zai' },
+            });
+
+            // Job B: anthropic provider, copies idea from Job A
+            const [jobBId] = await queueManager.addJob({
+              count: 1,
+              options: {
+                ...options,
+                compare: undefined,
+                provider: 'anthropic',
+                model: options.model || 'claude-opus-4-6',
+                sourceJobId: jobAId,
+              },
+            });
+
+            pairs.push({ zai: jobAId, anthropic: jobBId });
+          }
+
+          const allIds = pairs.flatMap(p => [p.zai, p.anthropic]);
+          res.status(201).json({
+            jobIds: allIds,
+            count: allIds.length,
+            comparison: { pairs, pairCount: pairs.length },
+          });
+        } else {
+          const ids = await queueManager.addJob({ count: n, options });
+          res.status(201).json({ jobIds: ids, count: ids.length });
+        }
       } catch (err) {
         res.status(500).json({ error: err.message });
       }
