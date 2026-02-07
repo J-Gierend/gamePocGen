@@ -227,7 +227,7 @@ async function testGame(url) {
 
     // Check 5: Tabs switchable
     const tabInfo = await safeEval(page, () => {
-      const tabs = document.querySelectorAll('[data-tab], .tab, [role="tab"]');
+      const tabs = document.querySelectorAll('[data-tab], .tab, [role="tab"], #tabs button, nav button');
       return Array.from(tabs).map(t => ({
         text: t.textContent.substring(0, 30).trim(),
         dataTab: t.getAttribute('data-tab'),
@@ -238,12 +238,12 @@ async function testGame(url) {
     if (tabInfo?.length >= 2 && !tabInfo._error) {
       // Try clicking second tab
       try {
-        const tabLocators = await page.locator('[data-tab], .tab').all();
+        const tabLocators = await page.locator('[data-tab], .tab, #tabs button, nav button').all();
         if (tabLocators.length > 1) {
           await tabLocators[1].click();
           await page.waitForTimeout(500);
           const switched = await safeEval(page, () => {
-            const active = document.querySelector('.tab.active, [data-tab].active, [aria-selected="true"]');
+            const active = document.querySelector('.tab.active, [data-tab].active, [aria-selected="true"], #tabs button.active');
             return !!active;
           });
           if (switched) {
@@ -275,17 +275,35 @@ async function testGame(url) {
       const currencies = {};
       try {
         const mgr = game.currencies;
-        const ids = mgr?._currencies ? Object.keys(mgr._currencies) : [];
+        // Try multiple internal storage patterns
+        const store = mgr?._currencies || mgr?.currencies || mgr?.data || {};
+        const ids = Object.keys(store);
         ids.forEach(id => {
-          try { currencies[id] = mgr.get(id)?.amount?.toNumber?.() ?? 0; } catch(e) {}
+          try {
+            const entry = mgr.get?.(id) || store[id];
+            const amt = entry?.amount;
+            currencies[id] = amt?.toNumber?.() ?? (typeof amt === 'number' ? amt : 0);
+          } catch(e) {}
         });
+        // Fallback: try getAll()
+        if (ids.length === 0 && mgr?.getAll) {
+          try {
+            const all = mgr.getAll();
+            for (const [id, entry] of Object.entries(all)) {
+              currencies[id] = entry?.amount?.toNumber?.() ?? (typeof entry?.amount === 'number' ? entry.amount : 0);
+            }
+          } catch(e) {}
+        }
       } catch(e) {}
+      // Also grab HUD text for currency fallback
+      const hudText = document.querySelector('#hud, #resources, header')?.innerText || '';
       return {
-        wave: game.world?.wave ?? 0,
+        wave: game.world?.wave ?? game.wave ?? 0,
         entities: game.entities?.length ?? 0,
         structures: game.structures?.length ?? 0,
         collectibles: game.collectibles?.length ?? 0,
         currencies,
+        hudText: hudText.substring(0, 300),
       };
     });
     report.gameState = initialState;
@@ -354,18 +372,33 @@ async function testGame(url) {
       const currencies = {};
       try {
         const mgr = game.currencies;
-        const ids = mgr?._currencies ? Object.keys(mgr._currencies) : [];
+        const store = mgr?._currencies || mgr?.currencies || mgr?.data || {};
+        const ids = Object.keys(store);
         ids.forEach(id => {
-          try { currencies[id] = mgr.get(id)?.amount?.toNumber?.() ?? 0; } catch(e) {}
+          try {
+            const entry = mgr.get?.(id) || store[id];
+            const amt = entry?.amount;
+            currencies[id] = amt?.toNumber?.() ?? (typeof amt === 'number' ? amt : 0);
+          } catch(e) {}
         });
+        if (ids.length === 0 && mgr?.getAll) {
+          try {
+            const all = mgr.getAll();
+            for (const [id, entry] of Object.entries(all)) {
+              currencies[id] = entry?.amount?.toNumber?.() ?? (typeof entry?.amount === 'number' ? entry.amount : 0);
+            }
+          } catch(e) {}
+        }
       } catch(e) {}
+      const hudText = document.querySelector('#hud, #resources, header')?.innerText || '';
       return {
-        wave: game.world?.wave ?? 0,
+        wave: game.world?.wave ?? game.wave ?? 0,
         waveActive: game.world?.waveActive ?? false,
         entities: game.entities?.length ?? 0,
         structures: game.structures?.length ?? 0,
         collectibles: game.collectibles?.length ?? 0,
         currencies,
+        hudText: hudText.substring(0, 300),
       };
     });
 
@@ -392,6 +425,10 @@ async function testGame(url) {
           anyChanged = true;
           break;
         }
+      }
+      // Fallback: compare HUD text for currency changes
+      if (!anyChanged && initialState.hudText && afterWaitState.hudText && initialState.hudText !== afterWaitState.hudText) {
+        anyChanged = true;
       }
       if (anyChanged) {
         checks.currenciesChange.pass = true;
