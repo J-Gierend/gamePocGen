@@ -367,6 +367,12 @@
     function renderGames(games) {
         elements.gamesGrid.innerHTML = '';
         if (!games || games.length === 0) { showEmpty(); return; }
+        // Sort by date descending (newest first)
+        games.sort((a, b) => {
+            const da = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+            const db = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+            return db - da;
+        });
         games.forEach(game => { elements.gamesGrid.appendChild(createGameCard(game)); });
         showGames(games);
     }
