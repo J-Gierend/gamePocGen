@@ -244,15 +244,17 @@ async function main() {
     }
 
     // Phase 5: Repair loop (max 3 iterations)
+    // Use internal Docker network URL for Playwright tests (avoids hairpin NAT)
     const gameUrl = deployResult.url;
+    const testUrl = `http://gamedemo${job.id}`;
     const MAX_REPAIR_ATTEMPTS = 3;
     const PASS_SCORE = 6;
     const FAIL_SCORE = 4;
 
     for (let attempt = 1; attempt <= MAX_REPAIR_ATTEMPTS; attempt++) {
       try {
-        await queueManager.addLog(job.id, 'info', `Repair loop iteration ${attempt}/${MAX_REPAIR_ATTEMPTS}: testing ${gameUrl}`);
-        const testResult = await runPlaywrightTest(gameUrl);
+        await queueManager.addLog(job.id, 'info', `Repair loop iteration ${attempt}/${MAX_REPAIR_ATTEMPTS}: testing ${testUrl}`);
+        const testResult = await runPlaywrightTest(testUrl);
         const score = testResult.score ?? 0;
         await queueManager.addLog(job.id, 'info', `Test score: ${score}/10`);
         await queueManager.updatePhaseOutput(job.id, `repair_${attempt}`, { score, defectCount: testResult.defects?.length ?? 0 });
