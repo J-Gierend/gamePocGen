@@ -122,20 +122,180 @@ Write the file `gdd/ui-ux.md` with EXACTLY this structure:
 - **Click/touch interaction (CRITICAL)**: [What happens when the player clicks on the Canvas? This MUST describe real gameplay interactions -- placing units/towers, mining blocks, selecting targets, activating abilities. The player MUST interact with the Canvas as their primary game action. If the answer is "nothing" or "just watches," the design has failed. Describe at least 3 different click/interaction behaviors on the Canvas.]
 
 ### Entity Visual Specs
-[For each entity type from idea.md, specify visual treatment on Canvas]
 
-#### [Entity Type 1]
-- **Sprite**: [SpriteData name or ProceduralSprite description]
-- **Scale**: [multiplier, e.g., 3x = 48px on screen]
-- **Animation**: [which frames cycle, speed in ms per frame]
-- **States**: idle (frames 0-1, 500ms), moving (frames 0-3, 200ms), attacking (frames 2-3, 100ms), dying (fade out over 300ms)
-- **Health bar**: [small bar above entity? Color? Size?]
-- **Facing**: [flipX when moving left/right?]
+For EVERY entity type from idea.md, provide a state machine diagram and a CONFIG entry. This is the most important section for the Phase 4 coding agent.
 
-#### [Entity Type 2]
-- [Same format]
+#### Entity State Machine Template
 
-#### [Additional entity types]
+Each entity type MUST have a state machine diagram showing all visual states and transitions:
+
+```mermaid
+stateDiagram-v2
+    [*] --> Spawning: created
+    Spawning --> Idle: spawn animation complete (300ms)
+    Idle --> Moving: has target / patrol
+    Moving --> Attacking: target in range
+    Attacking --> Moving: target dead / out of range
+    Attacking --> Idle: no targets
+    Moving --> Dying: hp <= 0
+    Attacking --> Dying: hp <= 0
+    Idle --> Dying: hp <= 0
+    Dying --> [*]: death animation complete (500ms)
+
+    note right of Spawning
+        Animation: scale 0→1
+        Duration: 300ms
+        Invulnerable: true
+    end note
+
+    note right of Idle
+        Frames: 0-1
+        Frame duration: 500ms
+        Facing: last direction
+    end note
+
+    note right of Moving
+        Frames: 0-3
+        Frame duration: 200ms
+        flipX: based on direction
+        Speed: from CONFIG
+    end note
+
+    note right of Attacking
+        Frames: 2-3
+        Frame duration: 100ms
+        Spawns projectile on frame 2
+        Glow: brief flash on attack
+    end note
+
+    note right of Dying
+        Animation: fade opacity 1→0
+        Duration: 500ms
+        Spawns: death particles (spark sprite × 5)
+        Spawns: reward collectible
+        On complete: remove from entity list
+    end note
+```
+
+Create one diagram per entity type (player units, enemy types, structures, projectiles, collectibles). Customize states for each — e.g., structures don't have Moving, projectiles don't have Idle.
+
+#### Entity Interaction Diagram
+
+Show how entities interact with each other on the Canvas:
+
+```mermaid
+flowchart LR
+    subgraph Player Entities
+        Unit["Player Unit\n(attacks enemies)"]
+        Structure["Structure\n(produces/defends)"]
+        Projectile["Projectile\n(deals damage)"]
+    end
+    subgraph Enemy Entities
+        Enemy["Enemy\n(attacks player entities)"]
+        Boss["Boss\n(stronger enemy)"]
+    end
+    subgraph Collectibles
+        Drop["Resource Drop\n(clickable)"]
+    end
+
+    Unit -->|"spawns"| Projectile
+    Projectile -->|"hits"| Enemy
+    Projectile -->|"hits"| Boss
+    Enemy -->|"attacks"| Structure
+    Enemy -->|"attacks"| Unit
+    Boss -->|"attacks"| Structure
+    Enemy -->|"on death → spawns"| Drop
+    Boss -->|"on death → spawns"| Drop
+    Structure -->|"produces"| Drop
+    Drop -->|"player clicks → collect"| Unit
+```
+
+Adapt to the game's actual entity relationships.
+
+### CONFIG Spec: entities Section
+
+Your output MUST include a CONFIG.entities specification for every entity type.
+
+```javascript
+// EXAMPLE — adapt to your game
+CONFIG.entities = {
+  // Player units
+  knight: {
+    sprite: 'knight',
+    scale: 3, // 3x = 48px rendered
+    team: 'player',
+    hp: 100,
+    damage: 15,
+    attackSpeed: 1.0, // attacks per second
+    attackRange: 50, // pixels
+    moveSpeed: 40, // pixels per second
+    states: {
+      idle: { frames: [0, 1], frameDuration: 500 },
+      moving: { frames: [0, 1, 2, 3], frameDuration: 200 },
+      attacking: { frames: [2, 3], frameDuration: 100 },
+      dying: { type: 'fadeOut', duration: 500, particles: 'spark', particleCount: 5 },
+      spawning: { type: 'scaleIn', duration: 300 },
+    },
+    healthBar: { show: true, width: 40, height: 4, yOffset: -8, color: '#4CAF50' },
+    flipX: true, // flip sprite based on movement direction
+  },
+
+  // Enemies
+  slime: {
+    sprite: 'slime',
+    scale: 2.5,
+    team: 'enemy',
+    hp: 50,
+    damage: 5,
+    moveSpeed: 20,
+    reward: { gold: 2 },
+    states: {
+      moving: { frames: [0, 1, 2, 3], frameDuration: 300 },
+      attacking: { frames: [2, 3], frameDuration: 150 },
+      dying: { type: 'fadeOut', duration: 500, particles: 'spark', particleCount: 5, spawnCollectible: 'goldCoin' },
+    },
+    healthBar: { show: true, width: 30, height: 3, yOffset: -6, color: '#F44336' },
+  },
+
+  // Structures
+  turret: {
+    sprite: 'wizard', // blue variant
+    scale: 3,
+    team: 'player',
+    hp: 30,
+    damage: 10,
+    attackSpeed: 1.0,
+    attackRange: 150,
+    moveSpeed: 0, // static
+    projectileType: 'fireball',
+    states: {
+      idle: { frames: [0, 1], frameDuration: 600 },
+      attacking: { frames: [2, 3], frameDuration: 100, spawnsProjectile: true },
+      dying: { type: 'explode', duration: 400, particles: 'spark', particleCount: 10 },
+    },
+    placementRules: { snapToGrid: true, gridSize: 48, blocksMovement: false },
+  },
+
+  // Projectiles
+  fireball: {
+    sprite: 'fireball',
+    scale: 2,
+    speed: 300, // pixels per second
+    pierceCount: 1, // how many enemies it can hit
+    lifetime: 2, // seconds
+    states: {
+      flying: { frames: [0, 1, 2, 3], frameDuration: 50, rotate: true },
+      impact: { type: 'burst', duration: 200, particles: 'spark', particleCount: 3 },
+    },
+  },
+
+  // Collectibles — see currencies.md CONFIG.collectibles
+};
+```
+
+Every entity in the game must have an entry. State definitions must match the state machine diagrams.
+
+[For each entity type not covered by the state machine template above, add additional state machine diagrams with entity-specific states.]
 
 ### HUD Overlay (drawn ON the Canvas)
 | Element | Position | Content | Behavior |
@@ -284,6 +444,95 @@ Write the file `gdd/ui-ux.md` with EXACTLY this structure:
 - **Position**: Above element, clamped to viewport
 - **Delay**: 200ms hover before showing
 
+## UI Event Flow Diagrams
+
+### Player Interaction → Canvas → UI Flow
+
+Show the complete event chain for the primary player interactions.
+
+```mermaid
+sequenceDiagram
+    actor Player
+    participant Canvas as Canvas
+    participant Entities as Entity System
+    participant Events as EventBus
+    participant UI as HUD/Panels
+
+    Note over Player,UI: Player places a structure
+    Player->>Canvas: clicks canvas at (x, y)
+    Canvas->>Canvas: check: placement mode active?
+    Canvas->>Canvas: check: valid position? (grid snap, no overlap)
+    Canvas->>Entities: createEntity(type, x, y)
+    Entities->>Canvas: spawn animation (scale 0→1, 300ms)
+    Entities->>Events: emit('structure-placed', {type, position})
+    Events->>UI: deduct cost, update currency display
+    Events->>UI: update placement count
+    Events->>Canvas: placement flash effect (200ms)
+```
+
+```mermaid
+sequenceDiagram
+    actor Player
+    participant Canvas as Canvas
+    participant Entities as Entity System
+    participant Events as EventBus
+    participant UI as HUD/Panels
+
+    Note over Player,UI: Enemy dies → drops → player collects
+    Entities->>Entities: enemy.hp <= 0
+    Entities->>Canvas: death animation (fade + spark particles)
+    Entities->>Events: emit('enemy-killed', {type, position, reward})
+    Events->>Canvas: spawnCollectible(goldCoin, position)
+    Canvas->>Canvas: collectible bob animation
+    Player->>Canvas: clicks collectible (within radius)
+    Canvas->>Events: emit('collectible-collected', {type, value})
+    Events->>UI: floatingText("+5 Gold", position, color)
+    Events->>UI: currency count-up animation (300ms)
+    Events->>UI: gameplay-earned flash/pulse on currency display
+```
+
+Create one sequence diagram per major interaction path. At minimum:
+1. Structure/unit placement
+2. Enemy death → collectible → collection
+3. Upgrade purchase → visible effect on Canvas
+4. Wave start → wave complete → rewards
+
+### UI State Machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> Loading: page load
+    Loading --> Playing: assets loaded
+
+    state Playing {
+        [*] --> PreWave: between waves
+        PreWave --> WaveActive: countdown complete
+        WaveActive --> PreWave: wave cleared
+        WaveActive --> GameOver: core destroyed / all units dead
+
+        state PreWave {
+            [*] --> BuildPhase
+            BuildPhase: Player can place structures
+            BuildPhase: Bottom panel fully visible
+            BuildPhase: Canvas interactive (placement mode)
+        }
+
+        state WaveActive {
+            [*] --> Combat
+            Combat: Enemies spawning/moving
+            Combat: Player can click collectibles
+            Combat: Player can use abilities
+            Combat: Bottom panel can be collapsed for more canvas space
+        }
+    }
+
+    Playing --> PrestigeScreen: player prestiges
+    PrestigeScreen --> Playing: new run starts
+    Playing --> SettingsModal: gear icon clicked
+    SettingsModal --> Playing: modal closed
+    GameOver --> Playing: restart
+```
+
 ## Feedback Systems
 
 ### Visual Feedback Catalog
@@ -339,6 +588,87 @@ Write the file `gdd/ui-ux.md` with EXACTLY this structure:
 | [Import save] | Button | N/A | Paste save string |
 ```
 
+## CONFIG Spec: canvas, ui, and effects Sections
+
+Your output MUST include CONFIG specs for canvas dimensions, UI layout, and visual effects.
+
+```javascript
+// EXAMPLE — adapt to your game
+CONFIG.canvas = {
+  width: 800,
+  height: 450,
+  backgroundColor: '#1a1a2e',
+  gridCellSize: 16, // for placement snapping
+  layers: ['background', 'entities', 'effects', 'hudOverlay'],
+};
+
+CONFIG.ui = {
+  tickRate: 20, // UI updates per second
+  autoSaveInterval: 30000, // ms
+  theme: 'dark',
+  hudHeight: 50, // px
+  bottomPanelHeight: 250, // px
+  bottomPanelCollapsedHeight: 40, // px (just tab bar)
+  canvasMinHeight: 400, // px
+
+  tabs: [
+    { id: 'build', label: 'Build', icon: '🔨', unlockedAt: 'gameStart' },
+    { id: 'upgrades', label: 'Upgrades', icon: '⬆️', unlockedAt: 'waveComplete >= 3' },
+    { id: 'skills', label: 'Skills', icon: '🌟', unlockedAt: 'waveComplete >= 10' },
+    { id: 'prestige', label: 'Prestige', icon: '✨', unlockedAt: 'waveComplete >= 15' },
+  ],
+
+  notifications: {
+    toastDuration: 3000, // ms
+    toastPosition: 'top-right',
+    milestoneDisplayDuration: 5000, // ms
+    stackLimit: 3, // max simultaneous toasts
+  },
+};
+
+CONFIG.effects = {
+  particles: {
+    crystalCollection: { count: 5, sprite: 'spark', lifetime: 500, spread: 20 },
+    enemyDeath: { count: 5, sprite: 'spark', lifetime: 400, spread: 15 },
+    bossDeath: { count: 30, sprite: 'spark', lifetime: 800, spread: 40 },
+    structureDestroyed: { count: 10, sprite: 'spark', lifetime: 600, spread: 25 },
+  },
+  floatingText: {
+    duration: 800, // ms
+    riseSpeed: 30, // px/sec
+    fontSize: 14,
+    fontWeight: 'bold',
+    colors: {
+      gold: '#FFD700',
+      damage: '#FF4444',
+      heal: '#44FF44',
+      xp: '#44AAFF',
+    },
+  },
+  screenFlash: {
+    waveComplete: { color: '#FFFFFF', opacity: 0.3, duration: 200 },
+    prestige: { color: '#FFFFFF', opacity: 1.0, duration: 500 },
+    bossSpawn: { color: '#FF0000', opacity: 0.2, duration: 300 },
+  },
+  placementFlash: { duration: 200, color: '#FFFFFF', opacity: 0.5 },
+};
+
+CONFIG.colorPalette = {
+  background: { primary: '#0f0f1a', secondary: '#1a1a2e', tertiary: '#2a2a4e' },
+  canvas: '#1a1a2e',
+  text: { primary: '#e0e0e0', secondary: '#a0a0a0', muted: '#606060' },
+  accent1: '#FFD700', // primary currency
+  accent2: '#4FC3F7', // secondary currency
+  accent3: '#E040FB', // tertiary/prestige
+  success: '#4CAF50',
+  warning: '#FF9800',
+  danger: '#F44336',
+  prestige: '#E040FB',
+};
+```
+
+Adapt every value to the game's actual visual identity. Every color must be a hex value, every duration in milliseconds, every size in pixels.
+
 ## Quality Criteria
 
 Before writing your output, verify:
@@ -359,6 +689,16 @@ Before writing your output, verify:
 - [ ] Accessibility basics are covered (contrast, keyboard, reduced motion)
 - [ ] The design works at 1280x720 minimum resolution
 - [ ] There is NO language about "the UI IS the game" -- the Canvas is the game
+- [ ] Every entity type has a state machine diagram with all visual states
+- [ ] Entity interaction diagram shows how all entity types relate
+- [ ] UI event flow diagrams cover all major interaction paths (place, kill, collect, upgrade, wave)
+- [ ] UI state machine shows game phases (loading, pre-wave, wave-active, prestige, game over)
+- [ ] CONFIG.entities spec has every entity with sprite, scale, team, hp, states, healthBar
+- [ ] CONFIG.canvas spec has width, height, backgroundColor, gridCellSize, layers
+- [ ] CONFIG.ui spec has tab definitions with unlock conditions
+- [ ] CONFIG.effects spec has particle, floatingText, and screenFlash definitions
+- [ ] CONFIG.colorPalette has hex values for every UI color role
+- [ ] Entity state definitions in CONFIG match the state machine diagrams exactly
 
 ## Execution
 

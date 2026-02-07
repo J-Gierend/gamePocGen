@@ -175,6 +175,142 @@ sequenceDiagram
     UI->>Player: toast "Power Up! 🏆"
 ```
 
+#### 7. Entity Spawn/Unlock State Machine
+
+Every entity type must have its lifecycle defined: when it becomes available, how it spawns, and what triggers its appearance.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Locked: game start
+    Locked --> Unlocked: unlock condition met
+    Unlocked --> Available: player sees "New!" indicator
+    Available --> Spawning: player action or auto-spawn trigger
+    Spawning --> Active: spawn animation complete
+    Active --> Fighting: enters combat range
+    Active --> Idle: no targets / waiting
+    Fighting --> Dying: hp <= 0
+    Dying --> Dead: death animation complete
+    Dead --> [*]: drop rewards, remove from canvas
+
+    note right of Locked
+        Not visible in UI
+        Entity type hidden
+        No hint shown
+    end note
+
+    note right of Unlocked
+        Toast: "New unit: {name}!"
+        Tab shows new option
+        Canvas preview available
+    end note
+
+    note right of Spawning
+        Animation: scale 0→1 (300ms)
+        Position: spawn point
+        Brief invulnerability (500ms)
+    end note
+```
+
+Create one state machine per entity CATEGORY (player units, enemy types, structures, projectiles). Each must specify:
+- Unlock condition (what triggers visibility)
+- Spawn trigger (player action vs automatic)
+- Active states (idle, moving, attacking, special ability)
+- Death/removal (animation, drops, cleanup)
+
+#### 8. Wave/Round State Machine
+
+The wave/round system must be fully specified as a state machine.
+
+```mermaid
+stateDiagram-v2
+    [*] --> PreWave: game start / previous wave complete
+    PreWave --> Spawning: countdown complete (3s)
+    Spawning --> Active: all enemies spawned
+    Active --> BossPhase: boss wave trigger
+    Active --> WaveComplete: all enemies defeated
+    BossPhase --> WaveComplete: boss defeated
+    WaveComplete --> Reward: +gold, +dp, milestone check
+    Reward --> PreWave: next wave begins
+    Reward --> PrestigeCheck: wave >= prestige threshold
+
+    note right of PreWave
+        UI: "Wave {n} incoming!" (2s)
+        Canvas: spawn indicators pulse
+        Player: last chance to build/upgrade
+    end note
+
+    note right of Spawning
+        Enemies spawn from right/edges
+        spawnInterval from CONFIG.waves
+        Enemy types per wave table
+    end note
+
+    note right of WaveComplete
+        UI: toast "Wave {n} Complete!"
+        Canvas: brief flash
+        Currencies awarded
+    end note
+```
+
+### CONFIG Spec: progression and waves Sections
+
+Your output MUST include CONFIG specs for the progression and wave systems.
+
+```javascript
+// EXAMPLE — adapt to your game
+CONFIG.waves = {
+  baseEnemyCount: 3,
+  enemyCountGrowth: 1.2, // enemies per wave = floor(base * growth^(wave-1))
+  spawnInterval: 2, // seconds between enemy spawns
+  preWaveCountdown: 3, // seconds before wave starts
+  bossWaveInterval: 10, // boss every N waves
+};
+
+CONFIG.waveComposition = {
+  // waveNumber: [{ type, count, delay }]
+  // or formula-based:
+  getEnemies: 'function(waveNum) => [...]', // describe the algorithm
+};
+
+CONFIG.unlocks = {
+  // unlockId: { requirement, what it unlocks, visual indicator }
+  turretUpgrades: {
+    requirement: 'waveComplete >= 3',
+    unlocks: 'upgradesTab',
+    toast: 'Upgrades Available!',
+    indicator: 'tab-glow',
+  },
+  secondaryCurrency: {
+    requirement: 'firstBossDefeated',
+    unlocks: 'gemsDisplay',
+    toast: 'Gems discovered!',
+    indicator: 'hud-reveal',
+  },
+  skillTree: {
+    requirement: 'waveComplete >= 10',
+    unlocks: 'skillTreeTab',
+    toast: 'Skill Tree Unlocked!',
+    indicator: 'tab-glow',
+  },
+  prestigeTeaser: {
+    requirement: 'waveComplete >= 15',
+    unlocks: 'prestigeButton',
+    toast: 'Prestige approaches...',
+    indicator: 'button-pulse',
+  },
+  // ... one entry per unlock
+};
+
+CONFIG.milestones = [
+  { id: 'firstBlood', trigger: 'enemiesKilled >= 1', reward: { gold: 5 }, toast: 'First Blood!' },
+  { id: 'wave1', trigger: 'wavesCompleted >= 1', reward: { unlocks: ['upgradesTab'] }, toast: 'Survived!' },
+  { id: 'bossSlayer', trigger: 'bossesDefeated >= 1', reward: { gems: 5 }, toast: 'Boss Defeated!' },
+  // ... 8-12 milestones total
+];
+```
+
+Adapt to the game's actual unlock sequence, wave composition, and milestones.
+
 ### Text Sections (keep brief)
 
 **Anti-Frustration Features:**
@@ -204,6 +340,11 @@ Before writing your output, verify:
 - [ ] Prestige is teased before it's available
 - [ ] There are at least 8 milestones spread across the session
 - [ ] A developer can read the diagrams and know exactly when to show/hide every UI element
+- [ ] Entity spawn/unlock state machines cover every entity category
+- [ ] Wave/round state machine defines the complete wave lifecycle
+- [ ] CONFIG.waves spec has exact values for enemy count, growth, spawn interval
+- [ ] CONFIG.unlocks spec has every unlock with requirement, toast, and indicator
+- [ ] CONFIG.milestones spec has 8-12 milestones with trigger conditions and rewards
 
 ## Execution
 

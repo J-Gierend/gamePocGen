@@ -172,10 +172,130 @@ Node effects (all multiplicative unless noted):
   ...
 ```
 
+#### 6. Skill Effect State Machine
+
+Show how skill effects are applied and interact with the game.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Inactive: node not purchased
+    Inactive --> Active: player purchases node
+    Active --> Applied: effect registered in game systems
+
+    state Applied {
+        [*] --> StatModifier: if effect is stat change
+        [*] --> BehaviorChange: if effect changes entity behavior
+        [*] --> VisualChange: if effect adds visual
+        [*] --> NewAbility: if effect unlocks new mechanic
+
+        StatModifier --> Recalculate: on prestige reset (if tree resets)
+        BehaviorChange --> Recalculate: on prestige reset
+        VisualChange --> Recalculate: on prestige reset
+        NewAbility --> Recalculate: on prestige reset
+    }
+
+    Recalculate --> Inactive: tree resets on prestige
+    Recalculate --> Applied: tree persists through prestige
+
+    note right of StatModifier
+        Examples: attackSpeed *= 1.5
+        Applied via multiplier stack
+        Visible in tooltip: "Base: 1.0 → Modified: 1.5"
+    end note
+
+    note right of BehaviorChange
+        Examples: projectilePierceCount = 2
+        Changes entity update() logic
+        Visible on Canvas immediately
+    end note
+
+    note right of VisualChange
+        Examples: glow effect on units
+        Applied via SpriteRenderer options
+        Player sees change on Canvas
+    end note
+```
+
+### CONFIG Spec: skillTree Section
+
+Your output MUST include a CONFIG.skillTree specification.
+
+```javascript
+// EXAMPLE — adapt to your game
+CONFIG.skillTree = {
+  unlockWave: 10, // when skill tree tab appears
+  resetsOnPrestige: true, // or false if it uses prestige currency
+  currency: 'skillPoints', // what currency buys nodes
+
+  pointSources: {
+    waveCleared: 1, // SP per wave
+    bossDefeated: 2, // SP per boss
+    milestone: 1, // SP per milestone
+  },
+  estimatedPointsPerRun: 24,
+
+  branches: {
+    offense: {
+      name: 'The Striker',
+      color: '#FF4444',
+      icon: '⚡',
+      nodes: [
+        {
+          id: 'rapidFire',
+          label: 'Rapid Fire',
+          cost: 2,
+          tier: 1,
+          requires: [],
+          effect: { type: 'stat', target: 'attackSpeed', operation: 'multiply', value: 1.5 },
+          visual: { type: 'animationSpeed', description: 'faster attack animation' },
+        },
+        {
+          id: 'piercingShot',
+          label: 'Piercing Shot',
+          cost: 3,
+          tier: 2,
+          requires: ['rapidFire'],
+          effect: { type: 'behavior', target: 'projectilePierceCount', operation: 'set', value: 2 },
+          visual: { type: 'sprite', description: 'fireball sprite for projectiles' },
+        },
+        // ... continue for all nodes
+      ],
+    },
+    economy: {
+      name: 'The Tycoon',
+      color: '#FFD700',
+      icon: '🔧',
+      nodes: [/* ... */],
+    },
+    defense: {
+      name: 'The Warden',
+      color: '#4488FF',
+      icon: '💪',
+      nodes: [/* ... */],
+    },
+  },
+
+  synergies: [
+    {
+      id: 'warProfileer',
+      label: 'War Profiteer',
+      cost: 4,
+      requires: ['rapidFire', 'scavenger'], // cross-branch
+      effect: { type: 'conditional', description: 'kills during fast attacks give 3x gold' },
+      visual: { type: 'particle', description: 'gold explosion on fast kills' },
+    },
+    // ...
+  ],
+};
+```
+
+Adapt to the game's actual skill tree structure. Every node must have typed effect and visual descriptions.
+
 **Implementation Notes:**
-- Nodes array format: `{ id, label, icon, cost, effect, branch, tier, requires: [nodeIds], visual: 'description' }`
-- Connections array format: `{ from, to, type: 'progression' | 'synergy' }`
-- Visual effects reference which SpriteRenderer features to use (glow, scale, palette swap)
+- Node effect types: `stat` (multiply/add a value), `behavior` (change entity logic), `visual` (add rendering effect), `unlock` (enable new mechanic)
+- Visual effect types: `animationSpeed`, `sprite`, `glow`, `particle`, `scale`, `palette`
+- Connections are implicit from `requires` arrays — no separate connections array needed
+- Render layout: branches as columns, tiers as rows, synergies as dotted cross-links
 
 ## Quality Criteria
 
@@ -192,6 +312,11 @@ Before writing your output, verify:
 - [ ] The complete tree diagram is renderable as HTML/CSS from the Mermaid spec
 - [ ] The skill point economy math checks out
 - [ ] A developer can implement the entire skill tree from diagrams alone
+- [ ] Skill effect state machine shows how effects are applied and reset
+- [ ] CONFIG.skillTree spec has exact values for every node (id, cost, tier, requires, effect, visual)
+- [ ] Effect types are categorized (stat/behavior/visual/unlock) with typed operations
+- [ ] Visual effect types reference SpriteRenderer capabilities (glow, scale, palette, animationSpeed)
+- [ ] Point sources and estimated points per run are specified in CONFIG
 
 ## Execution
 

@@ -156,9 +156,152 @@ graph LR
 
 Show each upgrade/generator with key level breakpoints, costs, and effects.
 
+#### 6. Collectible Entity State Machine
+
+Every collectible (crystals, coins, drops) that appears on the Canvas must have its lifecycle defined as a state machine.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Spawning: entity dies / generator tick
+    Spawning --> Active: spawn animation complete (300ms)
+    Active --> Collected: player clicks within radius
+    Active --> Expired: lifetime exceeded
+    Active --> Drifting: magnetism/auto-collect active
+    Drifting --> Collected: reaches player/collector
+    Collected --> [*]: add currency + floating text + particle
+    Expired --> [*]: fade out (500ms)
+
+    note right of Active
+        Visual: bob animation, glow
+        Clickable radius: 16-24px
+        Shows value on hover
+    end note
+
+    note right of Collected
+        Triggers: currency.add(value)
+        Triggers: floatingText("+{value}", color)
+        Triggers: particle burst (5 particles)
+        Sound: collect.mp3
+    end note
+```
+
+One state machine diagram per collectible type (e.g., gold coins, crystals, rare drops). Specify spawn conditions, lifetime, visual states, collection radius, and what happens on collect.
+
+#### 7. Currency Event Flow
+
+Show the complete event chain from gameplay action to UI update.
+
+```mermaid
+sequenceDiagram
+    participant Canvas as Canvas (Game World)
+    participant Entity as Entity System
+    participant Currency as CurrencyManager
+    participant UI as HUD Display
+    participant EventBus as EventBus
+
+    Canvas->>Entity: enemy.takeDamage(amount)
+    Entity->>Entity: hp <= 0 → die()
+    Entity->>Canvas: death animation + particles
+    Entity->>EventBus: emit('enemy-killed', {type, position, reward})
+    EventBus->>Currency: currency.add('gold', reward.gold)
+    EventBus->>Canvas: spawnCollectible({type: 'goldCoin', position, value})
+    Canvas->>Canvas: collectible appears with spawn animation
+    Note over Canvas: Player clicks collectible
+    Canvas->>EventBus: emit('collectible-collected', {type, value, position})
+    EventBus->>Currency: currency.add('gold', value)
+    EventBus->>UI: floatingText("+{value} Gold", position)
+    EventBus->>UI: updateDisplay('gold')
+    UI->>UI: count-up animation (300ms)
+```
+
+Create one event flow per major currency-earning pathway (gameplay kills, wave completion, passive generation, conversion).
+
+### CONFIG Spec: currencies Section
+
+Your output MUST include a `CONFIG.currencies` specification — the exact JavaScript object structure for the config file. This is what the Phase 4 coding agent implements directly.
+
+```javascript
+// EXAMPLE — adapt to your game's actual currencies
+CONFIG.currencies = {
+  gold: {
+    displayName: 'Gold',
+    icon: '🪙',
+    startingAmount: 0,
+    cap: null, // null = uncapped
+    decimals: 0,
+    suffixes: ['K', 'M', 'B', 'T'],
+  },
+  gems: {
+    displayName: 'Gems',
+    icon: '💎',
+    startingAmount: 0,
+    cap: null,
+    decimals: 0,
+    suffixes: ['K', 'M', 'B'],
+  },
+  essence: {
+    displayName: 'Essence',
+    icon: '✨',
+    startingAmount: 0,
+    cap: null,
+    decimals: 0,
+    persistsOnPrestige: true,
+  },
+};
+
+CONFIG.currencySources = {
+  enemyKill: {
+    currency: 'gold',
+    formula: 'baseReward * (1 + 0.1 * waveNumber) * killMultiplier',
+    baseReward: 5,
+  },
+  waveComplete: {
+    currency: 'gold',
+    formula: 'waveNumber * baseWaveReward',
+    baseWaveReward: 10,
+  },
+  bossKill: {
+    currency: 'gems',
+    formula: 'baseBossReward * bossLevel',
+    baseBossReward: 5,
+  },
+};
+
+CONFIG.collectibles = {
+  goldCoin: {
+    sprite: 'goldCoin',
+    scale: 1.5,
+    lifetime: 8, // seconds before expiry
+    collectRadius: 20, // pixels
+    bobAmplitude: 2, // pixels
+    bobSpeed: 2, // Hz
+    spawnAnimation: 'popIn', // 300ms scale 0→1
+    collectAnimation: 'burst', // 5 particles
+  },
+  // ... one entry per collectible type
+};
+
+CONFIG.upgradeCosts = {
+  // upgradeName: { baseCost, costMultiplier, currency }
+  unitDamage: { baseCost: 10, costMultiplier: 1.15, currency: 'gold' },
+  unitSpeed: { baseCost: 15, costMultiplier: 1.2, currency: 'gold' },
+  // ...
+};
+
+CONFIG.conversions = {
+  goldToGems: {
+    input: { currency: 'gold', amount: 100 },
+    output: { currency: 'gems', amount: 1 },
+    unlockCondition: 'gold >= 500',
+  },
+};
+```
+
+Adapt this structure to the game's actual currencies, sources, collectibles, and conversions. Every value must be a concrete number, not a placeholder.
+
 ### Text Sections (keep brief)
 
-After the diagrams, include these SHORT text sections:
+After the diagrams and CONFIG spec, include these SHORT text sections:
 
 **Exact Formulas** (one-liners, implementable):
 ```
@@ -196,6 +339,13 @@ Before writing your output, verify:
 - [ ] All formulas use consistent variable naming
 - [ ] The economy forms a web (not a chain)
 - [ ] A developer can implement the entire economy from diagrams alone
+- [ ] Collectible entity state machines define lifecycle for every drop type
+- [ ] Currency event flow diagrams show the complete chain from gameplay action to UI update
+- [ ] CONFIG.currencies spec has exact values for every currency property
+- [ ] CONFIG.collectibles spec defines every collectible with sprite, scale, lifetime, radius
+- [ ] CONFIG.currencySources spec defines every earning pathway with formula and base values
+- [ ] CONFIG.upgradeCosts spec defines every upgrade with baseCost, costMultiplier, currency
+- [ ] CONFIG.conversions spec defines every conversion with input/output amounts and unlock conditions
 
 ## Execution
 

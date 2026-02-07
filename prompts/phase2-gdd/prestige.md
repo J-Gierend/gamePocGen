@@ -246,6 +246,110 @@ Tier 2 (prestiges 3-5): Purple/dark palette, new ProceduralSprite geometric enem
 Tier 3 (prestiges 6+): Gold/elite palette, all enemies have glow effect
 ```
 
+#### 7. Prestige State Machine
+
+The complete prestige lifecycle from trigger to new run.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Unavailable: game start
+    Unavailable --> Teased: wave >= teaserThreshold
+    Teased --> Available: wave >= minPrestigeWave
+    Available --> PreviewOpen: player clicks prestige button
+    PreviewOpen --> Confirmed: player clicks "Prestige!"
+    PreviewOpen --> Available: player clicks "Cancel"
+    Confirmed --> Transitioning: begin reset sequence
+    Transitioning --> NewRun: reset complete
+
+    state Transitioning {
+        [*] --> SavePrestige: save prestige currency + upgrades
+        SavePrestige --> ResetCurrencies: zero all non-prestige currencies
+        ResetCurrencies --> ResetEntities: despawn all canvas entities
+        ResetEntities --> ResetProgression: relock all unlocks
+        ResetProgression --> ApplyVisuals: set new tier palette
+        ApplyVisuals --> FadeTransition: canvas fade to white (500ms)
+        FadeTransition --> FadeIn: new world fades in (500ms)
+        FadeIn --> [*]
+    }
+
+    note right of Teased
+        Prestige button visible but grayed
+        Shows "Reach wave {min} to prestige"
+        Projected essence shown
+    end note
+
+    note right of Available
+        Prestige button glows/pulses
+        Shows "Prestige for {X} Essence"
+        Updated every wave
+    end note
+```
+
+### CONFIG Spec: prestige Section
+
+Your output MUST include a CONFIG.prestige specification.
+
+```javascript
+// EXAMPLE — adapt to your game
+CONFIG.prestige = {
+  teaserWave: 15, // when prestige button first appears (grayed)
+  minWave: 20, // when prestige becomes clickable
+  formula: 'floor(sqrt(lifetimePrimary / threshold))',
+  threshold: 10000, // primary currency needed for 1 essence
+
+  resets: [
+    'currencies.gold', 'currencies.gems',
+    'upgrades', 'skillTree.allocated',
+    'progression.unlocks', 'wave',
+    'entities', // despawn all canvas entities
+  ],
+  persists: [
+    'currencies.essence',
+    'prestige.upgrades',
+    'achievements',
+    'statistics',
+    'tutorialFlags',
+  ],
+
+  visualTiers: [
+    {
+      tier: 0,
+      minPrestiges: 0,
+      background: '#1a1a2e', // base canvas bg
+      enemyPalette: null, // default sprites
+      effects: 'basic',
+    },
+    {
+      tier: 1,
+      minPrestiges: 1,
+      background: '#2e1a1a', // red-shifted
+      enemyPalette: { hueShift: 30, saturation: 1.2 },
+      effects: 'enhanced', // screen flash on boss death
+    },
+    {
+      tier: 2,
+      minPrestiges: 3,
+      background: '#1a2e1a', // different biome
+      enemyPalette: { hueShift: 120, saturation: 1.5 },
+      effects: 'full', // glow on elites, enhanced death anims
+      newEnemyTypes: ['eliteVariant'],
+    },
+  ],
+
+  upgrades: {
+    headstart: { cost: 1, effect: 'startingGold = 100', tier: 1 },
+    battleHardened: { cost: 2, effect: 'unitDamage *= 1.5', tier: 1 },
+    quickDeploy: { cost: 2, effect: 'firstUnitUnlocked = true', tier: 1 },
+    veteranUnits: { cost: 3, effect: 'allUpgradeCosts *= 0.8', tier: 2, requires: ['headstart'] },
+    rareDrops: { cost: 4, effect: 'secondaryCurrencyDropRate *= 2', tier: 2, requires: ['battleHardened'] },
+    essenceMagnet: { cost: 7, effect: 'essenceFromPrestige *= 1.25', tier: 3, requires: ['veteranUnits'] },
+    // ...
+  },
+};
+```
+
+Adapt to the game's actual prestige formula, visual tiers, and upgrade tree.
+
 **Edge Cases:**
 - Minimum prestige: gives 1 Essence — barely worth it, player learns to push further
 - No-spend prestige: Run 2 identical to Run 1 (prestige currency does nothing until spent)
@@ -266,6 +370,12 @@ Before writing your output, verify:
 - [ ] The UI flow shows exactly what the player sees during prestige
 - [ ] The Canvas transition is described (fade to white, new world fades in)
 - [ ] A developer can implement the entire prestige system from diagrams alone
+- [ ] Prestige state machine covers the complete lifecycle (unavailable → teased → available → transition → new run)
+- [ ] Transition sub-states specify the exact reset sequence
+- [ ] CONFIG.prestige spec has exact values for formula, threshold, teaserWave, minWave
+- [ ] CONFIG.prestige.resets and CONFIG.prestige.persists list every category explicitly
+- [ ] CONFIG.prestige.visualTiers has background color, enemy palette shift, and effect level per tier
+- [ ] CONFIG.prestige.upgrades has every upgrade with cost, effect, tier, and requires
 
 ## Execution
 
