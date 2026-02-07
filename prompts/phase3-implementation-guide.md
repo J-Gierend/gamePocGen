@@ -9,20 +9,19 @@ Read ALL of the following files from the workspace:
 ```
 idea.md                    # Game concept, theme, hook, visual game world, entity types
 gdd/currencies.md          # Currency system design
-gdd/progression.md         # Unlock sequence and pacing
-gdd/prestige.md            # Reset/rebirth mechanics + visual transformation
-gdd/skill-tree.md          # Branching upgrade paths with visible effects
+gdd/progression.md         # Unlock sequence, pacing, prestige system, and upgrade tiers
 gdd/ui-ux.md               # Canvas layout, HUD, bottom panel, entity visual specs
-gdd/psychology-review.md   # Engagement audit and recommendations
 ```
 
 If any file is missing, note it and work with what you have. The minimum viable set is `idea.md` and `gdd/currencies.md`.
+
+**NOTE**: The prestige system, upgrade tiers, and engagement audit are now integrated into `gdd/progression.md` and `gdd/ui-ux.md`. There are no separate prestige, skill-tree, or psychology-review files.
 
 ## Output
 
 Write a single file: `implementation-guide.md`
 
-This file must contain 6-10 ordered implementation phases that transform the GDD into a working browser game WITH A CANVAS-BASED VISUAL GAME WORLD as the primary experience.
+This file must contain **exactly 6** ordered implementation phases that transform the GDD into a working browser game WITH A CANVAS-BASED VISUAL GAME WORLD as the primary experience. Do NOT create more than 6 phases — fewer phases with more content each produces better results than many thin phases that risk running out of time.
 
 ## Framework Reference
 
@@ -203,28 +202,7 @@ Phase 1 must produce a visible, INTERACTIVE Canvas:
 - New enemy types appear at higher waves (color variants via ProceduralSprite)
 - Boss waves with stronger enemies
 
-### Phase 7: Skill Tree
-- Skill tree tab in bottom panel
-- Skill points earned from gameplay milestones
-- Skills with visible Canvas effects (glow, new projectiles, faster animations)
-
-### Phase 8: Prestige System
-- Prestige threshold, formula, reset logic
-- Visual transformation after prestige (enemy palette swap, background change)
-- Prestige upgrade shop
-
-### Phase 9: Save/Load + Polish
-- Save/load persistence
-- Floating damage numbers, death particles, screen shake
-- Notification toasts, milestone popups
-- Canvas quality settings
-
-### Phase 10: Integration Testing
-- End-to-end verification
-- All systems working together
-- Performance check (30fps target on Canvas)
-
-**Adjust this based on the GDD. Not every game needs all 10 phases. Minimum is 6. But the Canvas/entity phases ALWAYS come first.**
+**IMPORTANT: The plan MUST have exactly 6 phases. Combine features as needed to fit. The Canvas/entity phases ALWAYS come first. Prestige, save/load, and polish go in the final phase.**
 
 ## Mandatory Rules for Phase Planning
 
@@ -245,8 +223,8 @@ This is the foundation everything else builds on. **The player PLAYS a game, not
 2. Phases must be strictly ordered -- no circular dependencies
 3. Canvas/entity/combat setup ALWAYS comes before UI panels and upgrades
 4. UI for a mechanic goes in the same phase as the mechanic
-5. Prestige and skill tree are always in the later half (Phase 5+)
-6. The final phase is always integration testing + polish
+5. Prestige and tiered upgrades are always in the later half (Phase 5+)
+6. The final phase (Phase 6) combines: prestige, save/load, polish, and integration testing
 
 ### Test Requirements
 
@@ -379,11 +357,10 @@ Before writing the implementation guide, verify:
 - [ ] The prestige system includes visual transformation (palette swaps, background changes)
 - [ ] The skill tree includes visible Canvas effects
 - [ ] UI layout from gdd/ui-ux.md is reflected (HUD bar + Canvas + bottom panel)
-- [ ] Psychology review recommendations are addressed
 - [ ] Phase 1 is independently testable (Canvas renders, entities draw)
 - [ ] Each phase produces a testable increment
 - [ ] No phase has more than 2 dependencies
-- [ ] Total phases are between 6 and 10
+- [ ] Total phases are exactly 6
 
 ## Execution
 

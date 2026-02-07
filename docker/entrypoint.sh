@@ -2,7 +2,7 @@
 set -e
 
 # Required environment variables
-: "${PHASE:?PHASE is required (phase1|phase2|phase3|phase4)}"
+: "${PHASE:?PHASE is required (phase1|phase2|phase3|phase4|phase5)}"
 : "${JOB_ID:?JOB_ID is required}"
 : "${GAME_NAME:?GAME_NAME is required}"
 
@@ -20,7 +20,7 @@ PROMPTS_DIR="/home/claude/prompts"
 FRAMEWORK_DIR="/home/claude/framework"
 
 # Phase 2 sub-agents
-PHASE2_AGENTS="currencies progression prestige skill-tree ui-ux psychology-review"
+PHASE2_AGENTS="currencies progression ui-ux"
 
 # --- Setup ---
 
@@ -321,8 +321,32 @@ Build the complete playable game in: ${WORKSPACE_DIR}/dist/"
         EXIT_CODE=$?
         ;;
 
+    phase5)
+        PROMPT_FILE="${PROMPTS_DIR}/phase5-repair-agent.md"
+        if [ ! -f "$PROMPT_FILE" ]; then
+            write_status "failed" "Missing prompt: ${PROMPT_FILE}"
+            exit 1
+        fi
+
+        PROMPT="$(cat "$PROMPT_FILE")
+
+Game name: ${GAME_NAME}
+Job ID: ${JOB_ID}
+Workspace: ${WORKSPACE_DIR}
+Game URL: ${GAME_URL:-}
+
+Defect report:
+${DEFECT_REPORT:-No defect report provided}
+
+Fix the defects listed above. The game source files are in ${WORKSPACE_DIR}/dist/
+After fixing, rebuild the game in place in ${WORKSPACE_DIR}/dist/"
+
+        run_claude "$PROMPT" "phase5-repair"
+        EXIT_CODE=$?
+        ;;
+
     *)
-        echo "Unknown PHASE: ${PHASE}. Must be phase1, phase2, phase3, or phase4."
+        echo "Unknown PHASE: ${PHASE}. Must be phase1, phase2, phase3, phase4, or phase5."
         write_status "failed" "Unknown phase: ${PHASE}"
         exit 1
         ;;

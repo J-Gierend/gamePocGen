@@ -107,10 +107,11 @@ export function runTests() {
     'constructor sets phase timeouts': () => {
       const docker = createMockDocker();
       const cm = new ContainerManager(docker);
-      assertEqual(cm.timeouts.phase1, 600, 'phase1 = 10min = 600s');
-      assertEqual(cm.timeouts.phase2, 3600, 'phase2 = 60min = 3600s');
-      assertEqual(cm.timeouts.phase3, 900, 'phase3 = 15min = 900s');
-      assertEqual(cm.timeouts.phase4, 7200, 'phase4 = 120min = 7200s');
+      assertEqual(cm.timeouts.phase1, 43200, 'phase1 = 12h = 43200s');
+      assertEqual(cm.timeouts.phase2, 43200, 'phase2 = 12h = 43200s');
+      assertEqual(cm.timeouts.phase3, 43200, 'phase3 = 12h = 43200s');
+      assertEqual(cm.timeouts.phase4, 43200, 'phase4 = 12h = 43200s');
+      assertEqual(cm.timeouts.phase5, 3600, 'phase5 = 1h = 3600s');
     },
 
     'constructor accepts custom timeouts': () => {
@@ -265,15 +266,15 @@ export function runTests() {
 
       await cm.spawnContainer(job, 'phase1');
       const env = createOpts.Env;
-      assert(env.some(e => e === 'TIMEOUT_SECONDS=600'), 'phase1 timeout should be 600');
+      assert(env.some(e => e === 'TIMEOUT_SECONDS=43200'), 'phase1 timeout should be 43200');
 
       await cm.spawnContainer(job, 'phase2');
       const env2 = createOpts.Env;
-      assert(env2.some(e => e === 'TIMEOUT_SECONDS=3600'), 'phase2 timeout should be 3600');
+      assert(env2.some(e => e === 'TIMEOUT_SECONDS=43200'), 'phase2 timeout should be 43200');
 
-      await cm.spawnContainer(job, 'phase4');
-      const env4 = createOpts.Env;
-      assert(env4.some(e => e === 'TIMEOUT_SECONDS=7200'), 'phase4 timeout should be 7200');
+      await cm.spawnContainer(job, 'phase5');
+      const env5 = createOpts.Env;
+      assert(env5.some(e => e === 'TIMEOUT_SECONDS=3600'), 'phase5 timeout should be 3600');
     },
 
     'spawnContainer() sets memory limit': async () => {

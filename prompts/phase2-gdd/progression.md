@@ -325,6 +325,47 @@ Adapt to the game's actual unlock sequence, wave composition, and milestones.
 | Next 5 min | New unit type or ability about to unlock |
 | Session | Prestige for permanent power, new visual world |
 
+## Prestige Integration (IMPORTANT)
+
+Since the prestige and skill-tree agents no longer run separately, your progression design MUST include these elements:
+
+### Prestige Concept
+- Define when prestige becomes available (wave threshold)
+- Define the prestige currency formula (e.g., `floor(sqrt(lifetimePrimary / threshold))`)
+- Specify what resets vs. what persists (currencies reset, prestige upgrades persist)
+- Design 4-6 prestige upgrades that meaningfully accelerate Run 2 (not just +5% bonuses)
+- Include a visual transformation spec: after prestige, enemies get new color palettes via ProceduralSprite.generateColorVariant, Canvas background changes
+- Run 2 should reach Run 1's prestige point in 1/3 to 1/2 the time
+
+### Upgrade Tiers (replaces separate skill tree)
+Instead of a complex skill tree, design a tiered upgrade system with meaningful choices:
+- **Tier 1 upgrades**: Available from game start. Direct stat boosts (damage, speed, HP)
+- **Tier 2 upgrades**: Unlock at wave milestone. Introduce build diversity — 2-3 mutually exclusive paths that change how the player interacts with the Canvas (e.g., "splash damage" vs "piercing shots" vs "faster spawn")
+- **Tier 3 upgrades**: Unlock later. Synergy bonuses that reward specific playstyles
+- At least half of upgrades should produce VISIBLE changes on Canvas (faster animations, new projectile types, glow effects, area effects)
+- The player should NOT be able to buy everything in one run — force meaningful choices
+
+### CONFIG.prestige Spec
+Include a CONFIG.prestige section in your output:
+```javascript
+CONFIG.prestige = {
+  teaserWave: 15, // prestige button appears grayed
+  minWave: 20, // prestige becomes clickable
+  formula: 'floor(sqrt(lifetimePrimary / threshold))',
+  threshold: 10000,
+  resets: ['currencies', 'upgrades', 'wave', 'entities'],
+  persists: ['prestigeCurrency', 'prestigeUpgrades', 'achievements'],
+  visualTiers: [
+    { tier: 0, minPrestiges: 0, background: '#1a1a2e', enemyPalette: null },
+    { tier: 1, minPrestiges: 1, background: '#2e1a1a', enemyPalette: { hueShift: 30 } },
+    { tier: 2, minPrestiges: 3, background: '#1a2e1a', enemyPalette: { hueShift: 120 } },
+  ],
+  upgrades: {
+    // 4-6 prestige upgrades with cost, effect, and visual change
+  },
+};
+```
+
 ## Quality Criteria
 
 Before writing your output, verify:

@@ -12,6 +12,7 @@ const DEFAULT_TIMEOUTS = {
   phase2: 43200,  // 12 hours
   phase3: 43200,  // 12 hours
   phase4: 43200,  // 12 hours
+  phase5: 3600,   // 1 hour per repair attempt
 };
 
 const DEFAULT_MEMORY_LIMIT = 256 * 1024 * 1024; // 256MB

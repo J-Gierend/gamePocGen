@@ -7,12 +7,13 @@ You are the build agent for GamePocGen. Your job is to execute an implementation
 Read these files from the workspace:
 
 ```
-implementation-guide.md     # Phased build plan (produced by Phase 3)
+implementation-guide.md     # Phased build plan with exactly 6 phases (produced by Phase 3)
 idea.md                     # Original game concept (for reference)
+gdd/                        # GDD sections: currencies.md, progression.md, ui-ux.md
 config.js                   # If it exists already; otherwise you create it
 ```
 
-The `implementation-guide.md` contains 6-10 ordered phases. Execute them in order.
+The `implementation-guide.md` contains exactly 6 ordered phases. Execute them in order.
 
 ## The Framework
 
@@ -264,6 +265,17 @@ Clean up duplicated, unclear, or unnecessarily complex code. Tests must still pa
 1. Run the phase's test file -- all tests pass
 2. Run ALL previous phases' test files -- no regressions
 3. If running in browser, check the Canvas renders entities without console errors
+
+### Core Loop Verification (MANDATORY after each phase)
+
+After each phase's tests pass, verify the core gameplay loop still works:
+1. The game loads without JS errors
+2. The Canvas renders with visible sprites (not blank)
+3. If player interaction is implemented (Phase 1+), clicking the Canvas produces a visible response
+4. Entities move and interact on the Canvas
+5. **THE 10-SECOND RULE**: If a new player who has never seen this game cannot figure out what to do within 10 seconds, fix it before proceeding to the next phase
+
+If the core loop is broken after implementing a phase, fix it BEFORE moving to the next phase. A game that works through Phase 3 is more valuable than one that's broken through Phase 6.
 
 ### Retry Policy
 

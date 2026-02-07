@@ -714,6 +714,40 @@ CONFIG.colorPalette = {
 
 Adapt every value to the game's actual visual identity. Every color must be a hex value, every duration in milliseconds, every size in pixels.
 
+## Engagement Self-Audit (MANDATORY)
+
+Before finalizing your design, conduct this engagement audit. Since the psychology-review agent no longer runs separately, YOU must verify these principles:
+
+### Is This Actually A Game? (MOST CRITICAL)
+- Can you describe 30 seconds of gameplay without mentioning numbers, currencies, or upgrades?
+- Does the player interact with the Canvas directly (clicking, placing, directing) at least every 10 seconds?
+- If you removed all upgrade panels, is there still a recognizable game on the Canvas?
+- Would a bystander watching over the player's shoulder understand what's happening?
+- If the answer to any of these is "no", your design has a FATAL flaw. Fix it before proceeding.
+
+### Feedback Loop Completeness
+Every player action must have BOTH Canvas feedback AND UI feedback:
+| Action | Canvas Feedback (required) | UI Feedback (required) |
+|--------|---------------------------|----------------------|
+| Place structure | Spawn animation on Canvas | Cost deducted, currency animates |
+| Enemy dies | Death particles + floating reward text | Currency counter pulses up |
+| Buy upgrade | Entities visibly change (faster, stronger, glow) | Card flashes, cost deducted |
+| Wave complete | Screen flash, all enemies gone | Toast message, wave counter up |
+
+If any major action lacks Canvas feedback, the game feels disconnected. If any action lacks UI feedback, the player doesn't understand the consequence.
+
+### Reward Visibility Check
+At any moment, the player should see 2-3 things they're working toward:
+- Next affordable upgrade (cost visible, progress shown)
+- Next unlock threshold (progress bar or indicator)
+- Current production rate (numbers/sec visible in HUD)
+
+### Variable Reward Check
+Not all rewards should be identical "+X gold":
+- Wave completion rewards should vary (sometimes extra currency, sometimes unlock, sometimes new enemy type)
+- Milestones should give diverse rewards (new abilities, new sprites, bonus multipliers)
+- Include at least one surprise/discovery element per 5-minute segment
+
 ## Quality Criteria
 
 Before writing your output, verify:

@@ -41,6 +41,8 @@ const GENRE_SEEDS = [
   'underwater-exploration',
 ];
 
+import { runPlaywrightTest } from './services/gameTester.js';
+
 async function main() {
   // --- Database ---
   const pool = new Pool({
@@ -224,18 +226,101 @@ async function main() {
     }
 
     // Deploy
+    let deployResult;
     try {
       const workspaceDir = `${containerManager.workspacePath}/job-${job.id}`;
       const sourceDir = `${workspaceDir}/dist`;
-      const result = await deploymentManager.deployGame(job.id, job.game_name || `Game ${job.id}`, sourceDir, { workspaceDir });
-      await queueManager.updatePhaseOutput(job.id, 'deployment', result);
-      await queueManager.addLog(job.id, 'info', `Deployed to ${result.url}`);
+      deployResult = await deploymentManager.deployGame(job.id, job.game_name || `Game ${job.id}`, sourceDir, { workspaceDir });
+      await queueManager.updatePhaseOutput(job.id, 'deployment', deployResult);
+      await queueManager.addLog(job.id, 'info', `Deployed to ${deployResult.url}`);
 
       // Update gallery
       const games = await deploymentManager.listDeployedGames();
       await deploymentManager.updateGalleryData(games);
     } catch (err) {
       await queueManager.addLog(job.id, 'error', `Deploy error: ${err.message}`);
+      await queueManager.updateStatus(job.id, 'completed');
+      return;
+    }
+
+    // Phase 5: Repair loop (max 3 iterations)
+    const gameUrl = deployResult.url;
+    const MAX_REPAIR_ATTEMPTS = 3;
+    const PASS_SCORE = 6;
+    const FAIL_SCORE = 4;
+
+    for (let attempt = 1; attempt <= MAX_REPAIR_ATTEMPTS; attempt++) {
+      try {
+        await queueManager.addLog(job.id, 'info', `Repair loop iteration ${attempt}/${MAX_REPAIR_ATTEMPTS}: testing ${gameUrl}`);
+        const testResult = await runPlaywrightTest(gameUrl);
+        const score = testResult.score ?? 0;
+        await queueManager.addLog(job.id, 'info', `Test score: ${score}/10`);
+        await queueManager.updatePhaseOutput(job.id, `repair_${attempt}`, { score, defectCount: testResult.defects?.length ?? 0 });
+
+        if (score >= PASS_SCORE) {
+          await queueManager.addLog(job.id, 'info', `Score ${score} >= ${PASS_SCORE}, game passes quality gate`);
+          break;
+        }
+
+        if (attempt === MAX_REPAIR_ATTEMPTS) {
+          if (score < FAIL_SCORE) {
+            await queueManager.addLog(job.id, 'error', `Score ${score} < ${FAIL_SCORE} after ${MAX_REPAIR_ATTEMPTS} attempts, removing game`);
+            await deploymentManager.removeGame(job.id);
+            await queueManager.updateStatus(job.id, 'failed', { error: `Quality gate: score ${score}/10 after ${MAX_REPAIR_ATTEMPTS} repair attempts` });
+            // Update gallery after removal
+            const games = await deploymentManager.listDeployedGames();
+            await deploymentManager.updateGalleryData(games);
+            return;
+          }
+          await queueManager.addLog(job.id, 'info', `Score ${score} >= ${FAIL_SCORE}, keeping game despite not reaching ${PASS_SCORE}`);
+          break;
+        }
+
+        // Spawn Phase 5 repair container with defect report
+        await queueManager.addLog(job.id, 'info', `Spawning repair container (attempt ${attempt})`);
+        const defectReport = JSON.stringify(testResult.defects || []);
+
+        job.extraEnv = [
+          ...(provider === 'anthropic' ? [
+            'AUTH_MODE=subscription',
+            `CLAUDE_CODE_OAUTH_TOKEN=${process.env.CLAUDE_CODE_OAUTH_TOKEN || ''}`,
+            `CLAUDE_CODE_REFRESH_TOKEN=${process.env.CLAUDE_CODE_REFRESH_TOKEN || ''}`,
+            `CLAUDE_CODE_TOKEN_EXPIRES=${process.env.CLAUDE_CODE_TOKEN_EXPIRES || ''}`,
+            `MODEL=${job.config?.model || 'claude-opus-4-6'}`,
+          ] : []),
+          `GAME_URL=${gameUrl}`,
+          `DEFECT_REPORT=${defectReport}`,
+        ];
+
+        const { containerId } = await containerManager.spawnContainer(job, 'phase5');
+
+        // Poll container until done
+        let status;
+        do {
+          await new Promise(r => setTimeout(r, 5000));
+          status = await containerManager.getContainerStatus(containerId);
+        } while (status?.running);
+
+        const logs = await containerManager.getContainerLogs(containerId);
+        await queueManager.addLog(job.id, 'info', `phase5 repair logs: ${logs.slice(0, 500)}`);
+
+        if (status?.exitCode !== 0) {
+          await queueManager.addLog(job.id, 'error', `Repair container failed with exit code ${status?.exitCode}`);
+          continue; // Try next iteration with re-test
+        }
+
+        // Redeploy the fixed game
+        try {
+          const workspaceDir = `${containerManager.workspacePath}/job-${job.id}`;
+          const sourceDir = `${workspaceDir}/dist`;
+          await deploymentManager.deployGame(job.id, job.game_name || `Game ${job.id}`, sourceDir, { workspaceDir });
+          await queueManager.addLog(job.id, 'info', `Redeployed after repair attempt ${attempt}`);
+        } catch (redeployErr) {
+          await queueManager.addLog(job.id, 'error', `Redeploy error: ${redeployErr.message}`);
+        }
+      } catch (err) {
+        await queueManager.addLog(job.id, 'error', `Repair iteration ${attempt} error: ${err.message}`);
+      }
     }
 
     await queueManager.updateStatus(job.id, 'completed');
