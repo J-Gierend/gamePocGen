@@ -1,7 +1,7 @@
 FROM node:22-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    git curl ca-certificates tini \
+    git curl ca-certificates tini jq \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user

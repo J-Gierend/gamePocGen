@@ -53,17 +53,87 @@ if [ "$AUTH_MODE" = "subscription" ]; then
     # Write credentials file if CLAUDE_CODE_OAUTH_TOKEN is provided
     if [ -n "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]; then
         mkdir -p /home/claude/.claude
+        # expiresAt: epoch ms, default far-future if not provided
+        expires_at="${CLAUDE_CODE_TOKEN_EXPIRES:-4102444800000}"
         cat > /home/claude/.claude/.credentials.json <<CREDEOF
 {
-  "oauth": {
+  "claudeAiOauth": {
     "accessToken": "${CLAUDE_CODE_OAUTH_TOKEN}",
     "refreshToken": "${CLAUDE_CODE_REFRESH_TOKEN:-}",
-    "expiresAt": "${CLAUDE_CODE_TOKEN_EXPIRES:-2099-01-01T00:00:00.000Z}"
+    "expiresAt": ${expires_at},
+    "scopes": ["user:inference","user:mcp_servers","user:profile","user:sessions:claude_code"],
+    "subscriptionType": "max",
+    "rateLimitTier": "default_claude_max_20x"
   }
 }
 CREDEOF
-        echo "[auth] Credentials file written"
+        echo "[auth] Credentials file written (expires: ${expires_at})"
     fi
+
+    # Token refresh function - refreshes OAuth access token using refresh token
+    refresh_oauth_token() {
+        local creds_file="/home/claude/.claude/.credentials.json"
+        if [ ! -f "$creds_file" ]; then
+            echo "[auth] No credentials file, skipping refresh"
+            return 0
+        fi
+
+        # Check if we have jq; if not, always refresh (can't check expiry)
+        if ! command -v jq &>/dev/null; then
+            echo "[auth] jq not available, attempting refresh unconditionally"
+        else
+            local current_ms=$(date +%s%3N 2>/dev/null || python3 -c "import time; print(int(time.time()*1000))")
+            local expires_at=$(jq -r '.claudeAiOauth.expiresAt // 0' "$creds_file" 2>/dev/null || echo "0")
+            local buffer_ms=300000  # 5 min buffer
+
+            if [ "$((current_ms + buffer_ms))" -lt "$expires_at" ] 2>/dev/null; then
+                echo "[auth] Token still valid (expires in $(( (expires_at - current_ms) / 60000 )) min)"
+                return 0
+            fi
+            echo "[auth] Token expired or expiring soon, refreshing..."
+        fi
+
+        local refresh_token=$(jq -r '.claudeAiOauth.refreshToken // empty' "$creds_file" 2>/dev/null || echo "")
+        if [ -z "$refresh_token" ]; then
+            echo "[auth] No refresh token available, cannot refresh"
+            return 1
+        fi
+
+        local response=$(curl -s -X POST "https://console.anthropic.com/v1/oauth/token" \
+            -H "Content-Type: application/json" \
+            -d "{\"grant_type\":\"refresh_token\",\"refresh_token\":\"${refresh_token}\",\"client_id\":\"9d1c250a-e61b-44d9-88ed-5944d1962f5e\"}" \
+            2>/dev/null)
+
+        # Parse response
+        local new_access=$(echo "$response" | jq -r '.access_token // empty' 2>/dev/null || echo "")
+        local new_refresh=$(echo "$response" | jq -r '.refresh_token // empty' 2>/dev/null || echo "")
+        local expires_in=$(echo "$response" | jq -r '.expires_in // 0' 2>/dev/null || echo "0")
+
+        if [ -z "$new_access" ]; then
+            echo "[auth] Token refresh failed: $(echo "$response" | head -c 200)"
+            return 1
+        fi
+
+        # Calculate new expiry
+        local new_expires_at=$(( $(date +%s) * 1000 + expires_in * 1000 ))
+        local final_refresh="${new_refresh:-$refresh_token}"
+
+        # Update credentials file
+        cat > "$creds_file" <<REFRESHEOF
+{
+  "claudeAiOauth": {
+    "accessToken": "${new_access}",
+    "refreshToken": "${final_refresh}",
+    "expiresAt": ${new_expires_at},
+    "scopes": ["user:inference","user:mcp_servers","user:profile","user:sessions:claude_code"],
+    "subscriptionType": "max",
+    "rateLimitTier": "default_claude_max_20x"
+  }
+}
+REFRESHEOF
+        echo "[auth] Token refreshed successfully (expires in $(( expires_in / 60 )) min)"
+        return 0
+    }
 
     # Settings without API key overrides
     cat > /home/claude/.claude/settings.json <<EOF
@@ -123,6 +193,11 @@ cp -rn "$FRAMEWORK_DIR"/* "$WORKSPACE_DIR/" 2>/dev/null || true
 run_claude() {
     local prompt="$1"
     local label="$2"
+
+    # Refresh OAuth token before each run (subscription mode only)
+    if [ "$AUTH_MODE" = "subscription" ] && type refresh_oauth_token &>/dev/null; then
+        refresh_oauth_token || echo "[${label}] Warning: token refresh failed, proceeding anyway"
+    fi
 
     local model_flag=""
     if [ -n "${MODEL:-}" ]; then
