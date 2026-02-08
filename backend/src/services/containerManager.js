@@ -15,7 +15,7 @@ const DEFAULT_TIMEOUTS = {
   phase5: 3600,   // 1 hour per repair attempt
 };
 
-const DEFAULT_MEMORY_LIMIT = 256 * 1024 * 1024; // 256MB
+const DEFAULT_MEMORY_LIMIT = 2 * 1024 * 1024 * 1024; // 2GB - Claude Code needs headroom
 const DEFAULT_CPU_LIMIT = 0.5;
 const DEFAULT_WORKER_IMAGE = 'gamepocgen-worker';
 
@@ -91,6 +91,14 @@ export class ContainerManager {
       `WORKSPACE_DIR=${workspaceDir}`,
       ...(job.extraEnv || []),
     ];
+
+    // Remove any existing container with the same name (stale from previous run)
+    try {
+      const old = this.docker.getContainer(containerName);
+      await old.remove({ force: true });
+    } catch {
+      // Container doesn't exist, fine
+    }
 
     const container = await this.docker.createContainer({
       Image: this.workerImage,

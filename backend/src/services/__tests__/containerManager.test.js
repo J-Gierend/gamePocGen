@@ -88,7 +88,7 @@ export function runTests() {
       const docker = createMockDocker();
       const cm = new ContainerManager(docker);
       assertEqual(cm.workerImage, 'gamepocgen-worker', 'default worker image');
-      assertEqual(cm.memoryLimit, 256 * 1024 * 1024, 'default memory limit 256MB');
+      assertEqual(cm.memoryLimit, 2 * 1024 * 1024 * 1024, 'default memory limit 2GB');
       assertEqual(cm.cpuLimit, 0.5, 'default CPU limit');
     },
 
@@ -291,8 +291,8 @@ export function runTests() {
 
       assertEqual(
         createOpts.HostConfig.Memory,
-        256 * 1024 * 1024,
-        'Should set memory limit to 256MB'
+        2 * 1024 * 1024 * 1024,
+        'Should set memory limit to 2GB'
       );
     },
 

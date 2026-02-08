@@ -5,7 +5,9 @@ WORKDIR /app
 COPY backend/package.json ./
 RUN npm install --production
 
-# Install Playwright chromium for game testing in repair loop
+# Install Playwright for game testing in repair loop
+COPY scripts/package.json /app/scripts/package.json
+RUN cd /app/scripts && npm install
 RUN npx playwright install chromium --with-deps
 
 COPY backend/src/ ./src/
