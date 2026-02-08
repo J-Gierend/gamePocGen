@@ -243,12 +243,12 @@ async function main() {
       return;
     }
 
-    // Phase 5: Repair loop (max 3 iterations)
+    // Phase 5: Repair loop — keep iterating until quality target reached
     // Use internal Docker network URL for Playwright tests (avoids hairpin NAT)
     const gameUrl = deployResult.url;
     const testUrl = `http://gamedemo${job.id}`;
-    const MAX_REPAIR_ATTEMPTS = 3;
-    const PASS_SCORE = 6;
+    const MAX_REPAIR_ATTEMPTS = 10;
+    const PASS_SCORE = 8;
     const FAIL_SCORE = 4;
 
     for (let attempt = 1; attempt <= MAX_REPAIR_ATTEMPTS; attempt++) {
