@@ -243,21 +243,87 @@ async function main() {
       return;
     }
 
-    // Phase 5: Repair loop — keep iterating until quality target reached
+    // Phase 5: Repair loop — keep iterating until 10/10 or 100 attempts
     // Use internal Docker network URL for Playwright tests (avoids hairpin NAT)
     const gameUrl = deployResult.url;
     const testUrl = `http://gamedemo${job.id}`;
-    const MAX_REPAIR_ATTEMPTS = 10;
-    const PASS_SCORE = 8;
+    const MAX_REPAIR_ATTEMPTS = 100;
+    const PASS_SCORE = 10;
     const FAIL_SCORE = 4;
+
+    // Helper: write score badge + repair log into deployed game
+    const { writeFileSync, readFileSync } = await import('node:fs');
+    const repairLog = []; // Accumulates across all attempts
+    function updateScoreBadge(score, attempt) {
+      try {
+        const badgePath = `${containerManager.workspacePath}/job-${job.id}/../deployed/gamedemo${job.id}/html/score-badge.js`;
+        const altPath = `${deployResult.deployPath}/html/score-badge.js`;
+        const js = `(function(){var d=document.createElement('div');d.id='qa-badge';d.style.cssText='position:fixed;top:8px;right:8px;z-index:999999;background:${score>=8?'#22c55e':score>=4?'#eab308':'#ef4444'};color:#fff;padding:6px 14px;border-radius:20px;font:bold 14px/1 system-ui;box-shadow:0 2px 8px rgba(0,0,0,.3);pointer-events:none;';d.textContent='Score: ${score}/10 • Repair #${attempt}';var old=document.getElementById('qa-badge');if(old)old.remove();document.body.appendChild(d);})();`;
+        try { writeFileSync(altPath, js); } catch { writeFileSync(badgePath, js); }
+      } catch { /* non-critical */ }
+    }
+
+    // Helper: inject badge script tag into game's index.html (once)
+    function injectBadgeScript() {
+      try {
+        const htmlPath = `${deployResult.deployPath}/html/index.html`;
+        let html = readFileSync(htmlPath, 'utf8');
+        if (!html.includes('score-badge.js')) {
+          html = html.replace('</body>', '<script src="score-badge.js"></script></body>');
+          writeFileSync(htmlPath, html);
+        }
+      } catch { /* non-critical */ }
+    }
+
+    // Helper: write repair log (JSON + HTML) to deployed game
+    function updateRepairLog() {
+      try {
+        const htmlDir = `${deployResult.deployPath}/html`;
+        writeFileSync(`${htmlDir}/repair-log.json`, JSON.stringify(repairLog, null, 2));
+        // Human-readable HTML version
+        const rows = repairLog.map(e => `<tr style="border-bottom:1px solid #333">
+          <td style="padding:6px">${e.attempt}</td>
+          <td style="padding:6px;font-weight:bold;color:${e.score>=8?'#22c55e':e.score>=4?'#eab308':'#ef4444'}">${e.score}/10</td>
+          <td style="padding:6px">${e.defectCount}</td>
+          <td style="padding:6px;font-size:12px">${(e.defects||[]).map(d=>`<b>[${d.severity}]</b> ${d.description}`).join('<br>')}</td>
+          <td style="padding:6px;font-size:11px;color:#888">${e.timestamp}</td>
+        </tr>`).join('');
+        const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Repair Log - ${job.game_name}</title>
+<style>body{background:#111;color:#eee;font-family:system-ui;padding:20px;margin:0}
+table{border-collapse:collapse;width:100%}th{text-align:left;padding:8px;border-bottom:2px solid #555;color:#aaa}
+h1{margin:0 0 4px}h2{margin:0 0 16px;color:#888;font-weight:normal}</style></head>
+<body><h1>Repair Log: ${job.game_name}</h1>
+<h2>Job #${job.id} | ${repairLog.length} attempts | Latest: ${repairLog.length?repairLog[repairLog.length-1].score:0}/10</h2>
+<table><tr><th>#</th><th>Score</th><th>Defects</th><th>Issues</th><th>Time</th></tr>${rows}</table></body></html>`;
+        writeFileSync(`${htmlDir}/repair-log.html`, html);
+      } catch { /* non-critical */ }
+    }
+
+    // Inject badge script on first deploy
+    injectBadgeScript();
+    updateScoreBadge(0, 0);
 
     for (let attempt = 1; attempt <= MAX_REPAIR_ATTEMPTS; attempt++) {
       try {
         await queueManager.addLog(job.id, 'info', `Repair loop iteration ${attempt}/${MAX_REPAIR_ATTEMPTS}: testing ${testUrl}`);
         const testResult = await runPlaywrightTest(testUrl);
         const score = testResult.score ?? 0;
-        await queueManager.addLog(job.id, 'info', `Test score: ${score}/10`);
+        await queueManager.addLog(job.id, 'info', `Test score: ${score}/10 (attempt ${attempt})`);
         await queueManager.updatePhaseOutput(job.id, `repair_${attempt}`, { score, defectCount: testResult.defects?.length ?? 0 });
+
+        // Log this attempt for the repair history
+        repairLog.push({
+          attempt,
+          score,
+          defectCount: testResult.defects?.length ?? 0,
+          defects: (testResult.defects || []).slice(0, 10), // Cap at 10 for readability
+          checks: testResult.checks || {},
+          timestamp: new Date().toISOString(),
+        });
+
+        // Update live score badge + repair log on the deployed game
+        updateScoreBadge(score, attempt);
+        updateRepairLog();
 
         if (score >= PASS_SCORE) {
           await queueManager.addLog(job.id, 'info', `Score ${score} >= ${PASS_SCORE}, game passes quality gate`);
@@ -269,12 +335,11 @@ async function main() {
             await queueManager.addLog(job.id, 'error', `Score ${score} < ${FAIL_SCORE} after ${MAX_REPAIR_ATTEMPTS} attempts, removing game`);
             await deploymentManager.removeGame(job.id);
             await queueManager.updateStatus(job.id, 'failed', { error: `Quality gate: score ${score}/10 after ${MAX_REPAIR_ATTEMPTS} repair attempts` });
-            // Update gallery after removal
             const games = await deploymentManager.listDeployedGames();
             await deploymentManager.updateGalleryData(games);
             return;
           }
-          await queueManager.addLog(job.id, 'info', `Score ${score} >= ${FAIL_SCORE}, keeping game despite not reaching ${PASS_SCORE}`);
+          await queueManager.addLog(job.id, 'info', `Score ${score} >= ${FAIL_SCORE}, keeping game after ${MAX_REPAIR_ATTEMPTS} attempts`);
           break;
         }
 
@@ -311,11 +376,13 @@ async function main() {
           continue; // Try next iteration with re-test
         }
 
-        // Redeploy the fixed game
+        // Redeploy the fixed game after each repair
         try {
           const workspaceDir = `${containerManager.workspacePath}/job-${job.id}`;
           const sourceDir = `${workspaceDir}/dist`;
           await deploymentManager.deployGame(job.id, job.game_name || `Game ${job.id}`, sourceDir, { workspaceDir });
+          injectBadgeScript(); // Re-inject after redeploy
+          updateScoreBadge(score, attempt);
           await queueManager.addLog(job.id, 'info', `Redeployed after repair attempt ${attempt}`);
         } catch (redeployErr) {
           await queueManager.addLog(job.id, 'error', `Redeploy error: ${redeployErr.message}`);
