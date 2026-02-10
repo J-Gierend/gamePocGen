@@ -161,6 +161,40 @@ export function createHandlers({ queueManager, containerManager, deploymentManag
         res.status(500).json({ error: err.message });
       }
     },
+
+    /**
+     * GET /api/improvements - Get process improvement log and reports.
+     */
+    async getImprovements(req, res) {
+      try {
+        const { readFileSync, readdirSync, existsSync } = await import('node:fs');
+        const improvementsDir = `${process.env.WORKSPACE_PATH || '/app/workspaces'}/shared/improvements`;
+        if (!existsSync(improvementsDir)) {
+          return res.status(200).json({ log: { reports: [] }, reports: [] });
+        }
+
+        // Read the improvement log
+        const logPath = `${improvementsDir}/log.json`;
+        let log = { reports: [] };
+        if (existsSync(logPath)) {
+          try { log = JSON.parse(readFileSync(logPath, 'utf-8')); } catch { /* empty */ }
+        }
+
+        // Read individual report files
+        const reports = [];
+        const files = readdirSync(improvementsDir).filter(f => f.startsWith('report-') && f.endsWith('.md')).sort();
+        for (const file of files) {
+          try {
+            const content = readFileSync(`${improvementsDir}/${file}`, 'utf-8');
+            reports.push({ filename: file, content });
+          } catch { /* skip unreadable */ }
+        }
+
+        res.status(200).json({ log, reports });
+      } catch (err) {
+        res.status(500).json({ error: err.message });
+      }
+    },
   };
 }
 
@@ -190,6 +224,7 @@ export async function createRouter(services) {
   router.get('/stats', asyncHandler(handlers.getStats));
   router.get('/games', asyncHandler(handlers.listGames));
   router.delete('/games/:id', asyncHandler(handlers.removeGame));
+  router.get('/improvements', asyncHandler(handlers.getImprovements));
 
   return router;
 }

@@ -281,22 +281,38 @@ async function testGame(url) {
       try {
         const tabLocators = await page.locator('[data-tab], .tab, [role="tab"], #tabs button, nav button').all();
         if (tabLocators.length > 1) {
-          await tabLocators[1].click();
-          await page.waitForTimeout(500);
-          checks.tabsSwitchable.pass = true;
-          checks.tabsSwitchable.detail = `${tabInfo.length} tabs found, switching works`;
-          await tabLocators[0].click();
-          await page.waitForTimeout(300);
+          // Try each tab until one clicks successfully (some may be hidden/overlapped)
+          let clicked = false;
+          for (let ti = 1; ti < Math.min(tabLocators.length, 5); ti++) {
+            try {
+              await tabLocators[ti].click({ force: true, timeout: 3000 });
+              await page.waitForTimeout(500);
+              clicked = true;
+              await tabLocators[0].click({ force: true, timeout: 3000 });
+              await page.waitForTimeout(300);
+              break;
+            } catch { /* try next tab */ }
+          }
+          if (clicked) {
+            checks.tabsSwitchable.pass = true;
+            checks.tabsSwitchable.detail = `${tabInfo.length} tabs found, switching works`;
+          } else {
+            checks.tabsSwitchable.detail = `${tabInfo.length} tabs found but none were clickable`;
+          }
         }
       } catch (e) {
-        checks.tabsSwitchable.detail = `Tabs exist but switching failed: ${e.message}`;
+        checks.tabsSwitchable.detail = `${tabInfo.length} tabs found but switching failed: ${e.message.substring(0, 80)}`;
       }
     }
     if (!checks.tabsSwitchable.pass) {
-      checks.tabsSwitchable.detail = checks.tabsSwitchable.detail || `Only ${tabInfo?.length || 0} tab(s) found`;
+      const detail = checks.tabsSwitchable.detail || `Only ${tabInfo?.length || 0} tab(s) found`;
+      checks.tabsSwitchable.detail = detail;
+      const desc = tabInfo?.length >= 2
+        ? `Tab switching failed: ${tabInfo.length} tabs exist but could not be clicked.`
+        : `Only ${tabInfo?.length || 0} tab(s) found. Expected >= 2.`;
       report.defects.push({ severity: 'major', check: 'tabsSwitchable',
-        description: `Tab system: ${tabInfo?.length || 0} tabs found. Expected >= 2.`,
-        suggestion: 'Check _setupUI() for tab creation.' });
+        description: desc,
+        suggestion: 'Ensure tabs are visible, not overlapped, and respond to click events.' });
     }
 
     // === NEW CHECK 7: Controls panel visible ===

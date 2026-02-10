@@ -567,6 +567,196 @@
             margin-bottom: 0.5rem;
         }
 
+        /* Process Improvement Timeline */
+        .improvements-section {
+            margin-top: 3rem;
+            padding-top: 2rem;
+            border-top: 1px solid var(--border);
+        }
+
+        .improvements-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 1.25rem;
+        }
+
+        .improvements-header h2 {
+            font-size: 1.25rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .improvements-header .imp-badge {
+            font-size: 0.65rem;
+            padding: 2px 8px;
+            border-radius: 10px;
+            background: rgba(99, 102, 241, 0.15);
+            color: var(--accent-hover);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .improvements-empty {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            padding: 1.5rem;
+            text-align: center;
+            background: var(--bg-card);
+            border-radius: var(--radius);
+            border: 1px dashed var(--border);
+        }
+
+        .improvement-item {
+            display: flex;
+            gap: 1rem;
+            padding: 0 0 1.5rem;
+            position: relative;
+        }
+
+        .improvement-item:not(:last-child) .imp-marker::after {
+            content: '';
+            position: absolute;
+            left: 7px;
+            top: 18px;
+            bottom: 0;
+            width: 2px;
+            background: var(--border);
+        }
+
+        .imp-marker {
+            flex-shrink: 0;
+            position: relative;
+            width: 16px;
+            padding-top: 4px;
+        }
+
+        .imp-dot {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: var(--border);
+            border: 2px solid var(--bg-primary);
+        }
+
+        .imp-dot.pulse {
+            background: var(--accent);
+            box-shadow: 0 0 8px rgba(99, 102, 241, 0.5);
+            animation: phase-pulse 2s ease-in-out infinite;
+        }
+
+        .improvement-item.latest .imp-dot {
+            background: var(--accent);
+        }
+
+        .imp-content {
+            flex: 1;
+            background: var(--bg-card);
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            padding: 0.875rem 1rem;
+        }
+
+        .improvement-item.latest .imp-content {
+            border-color: rgba(99, 102, 241, 0.3);
+        }
+
+        .imp-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .imp-title {
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: var(--text-primary);
+        }
+
+        .imp-date {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+
+        .imp-stats {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .imp-stat {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+        }
+
+        .imp-stat strong {
+            color: var(--text-primary);
+        }
+
+        .imp-section {
+            margin-top: 0.5rem;
+        }
+
+        .imp-label {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+        }
+
+        .imp-section ul {
+            margin: 0.25rem 0 0 1rem;
+            padding: 0;
+        }
+
+        .imp-section li {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            line-height: 1.4;
+            margin-bottom: 2px;
+        }
+
+        .imp-expand {
+            margin-top: 0.5rem;
+            background: none;
+            border: 1px solid var(--border);
+            color: var(--accent-hover);
+            font-size: 0.7rem;
+            padding: 3px 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .imp-expand:hover {
+            background: rgba(99, 102, 241, 0.1);
+        }
+
+        .imp-full-report {
+            margin-top: 0.5rem;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .imp-full-report.hidden {
+            display: none;
+        }
+
+        .imp-full-report pre {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            white-space: pre-wrap;
+            word-break: break-word;
+            background: var(--bg-primary);
+            padding: 0.75rem;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            line-height: 1.5;
+        }
+
         /* Responsive */
         @media (max-width: 1400px) {
             .games-grid {
@@ -633,9 +823,20 @@
             </div>
 
             <div id="gamesGrid" class="games-grid" style="display: none;"></div>
+
+            <!-- Process Improvement Timeline -->
+            <section class="improvements-section">
+                <div class="improvements-header">
+                    <h2>Process Improvement</h2>
+                    <span class="imp-badge">Auto-Learning</span>
+                </div>
+                <div id="improvementsTimeline">
+                    <div class="improvements-empty">No process improvement reports yet. The system will auto-analyze when repair loops plateau.</div>
+                </div>
+            </section>
         </main>
     </div>
 
-    <script src="gallery.js?v=7"></script>
+    <script src="gallery.js?v=8"></script>
 </body>
 </html>

@@ -382,8 +382,36 @@ Analyze why repairs are stuck and write a new strategy to ${WORKSPACE_DIR}/repai
         EXIT_CODE=$?
         ;;
 
+    process-improvement)
+        PROMPT_FILE="${PROMPTS_DIR}/process-improvement-agent.md"
+        if [ ! -f "$PROMPT_FILE" ]; then
+            write_status "failed" "Missing prompt: ${PROMPT_FILE}"
+            exit 1
+        fi
+
+        mkdir -p "${WORKSPACE_DIR}/improvements"
+
+        PROMPT="$(cat "$PROMPT_FILE")
+
+Job ID: ${JOB_ID}
+Workspace: ${WORKSPACE_DIR}
+Timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+Cross-job data (score progressions, defects, strategy reviews):
+${DEFECT_REPORT:-No cross-job data provided}
+
+Read previous improvement reports from: ${WORKSPACE_DIR}/improvements/
+Read the test suite from: ${WORKSPACE_DIR}/scripts/test-game.js
+Read phase prompts from: ${WORKSPACE_DIR}/prompts/
+
+Write your report and update the improvement log."
+
+        run_claude "$PROMPT" "process-improvement"
+        EXIT_CODE=$?
+        ;;
+
     *)
-        echo "Unknown PHASE: ${PHASE}. Must be phase1, phase2, phase3, phase4, or phase5."
+        echo "Unknown PHASE: ${PHASE}. Must be phase1, phase2, phase3, phase4, phase5, or process-improvement."
         write_status "failed" "Unknown phase: ${PHASE}"
         exit 1
         ;;

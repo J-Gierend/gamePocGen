@@ -454,6 +454,11 @@ h1{margin:0 0 4px}h2{margin:0 0 16px;color:#888;font-weight:normal}</style></hea
           // Continue to normal repair — it will now read repair-strategy.md
         }
 
+        // Also check if we should run global process improvement
+        if (typeof globalThis._maybeRunProcessImprovement === 'function') {
+          globalThis._maybeRunProcessImprovement(job.id).catch(() => {});
+        }
+
         // Spawn Phase 5 repair container with defect report
         await queueManager.addLog(job.id, 'info', `Spawning repair container (attempt ${attempt})`);
         const defectReport = JSON.stringify(testResult.defects || []);
@@ -488,6 +493,196 @@ h1{margin:0 0 4px}h2{margin:0 0 16px;color:#888;font-weight:normal}</style></hea
 
     await queueManager.updateStatus(job.id, 'completed');
   }
+
+  // --- Process Improvement Agent (global, cross-job) ---
+  let lastProcessImprovementRun = 0;
+  const PROCESS_IMPROVEMENT_COOLDOWN = 60 * 60 * 1000; // 1 hour
+
+  async function maybeRunProcessImprovement(triggerJobId) {
+    const now = Date.now();
+    if (now - lastProcessImprovementRun < PROCESS_IMPROVEMENT_COOLDOWN) return;
+    lastProcessImprovementRun = now;
+
+    try {
+      console.log(`[ProcessImprovement] Triggered by job ${triggerJobId}, gathering cross-job data...`);
+
+      // Gather data from ALL recent jobs
+      const allJobs = await queueManager.getJobs({ limit: 50 });
+      const crossJobData = [];
+
+      for (const j of allJobs) {
+        const po = j.phase_outputs || {};
+        const scores = [];
+        for (let i = 1; i <= 200; i++) {
+          const k = `repair_${i}`;
+          if (po[k]) scores.push({ attempt: i, score: po[k].score, defects: po[k].defects || [] });
+        }
+        if (scores.length === 0) continue;
+
+        const strategyReviews = Object.entries(po)
+          .filter(([k]) => k.includes('strategy'))
+          .map(([k, v]) => ({ key: k, ...v }));
+
+        crossJobData.push({
+          jobId: j.id,
+          gameName: j.game_name,
+          status: j.status,
+          scores: scores.map(s => s.score),
+          latestScore: po.latest_score,
+          defects: scores[scores.length - 1]?.defects || [],
+          strategyReviews,
+          totalAttempts: scores.length,
+        });
+      }
+
+      if (crossJobData.length === 0) return;
+
+      // Build human-readable summary for the agent
+      const lines = [`# Cross-Job Analysis Data (${new Date().toISOString()})`, ''];
+      for (const jd of crossJobData) {
+        lines.push(`## Job ${jd.jobId}: ${jd.gameName} (${jd.status})`);
+        lines.push(`Score progression: ${jd.scores.join(' → ')}`);
+        lines.push(`Latest: ${jd.latestScore?.score}/10 (attempt ${jd.latestScore?.attempt})`);
+        lines.push(`Strategy reviews: ${jd.strategyReviews.length}`);
+        if (jd.defects.length > 0) {
+          lines.push('Current defects:');
+          for (const d of jd.defects) lines.push(`  - ${typeof d === 'string' ? d : d}`);
+        }
+        lines.push('');
+      }
+
+      // Identify recurring defects across jobs
+      const globalDefects = {};
+      for (const jd of crossJobData) {
+        for (const d of jd.defects) {
+          const key = (typeof d === 'string' ? d : JSON.stringify(d)).substring(0, 80);
+          if (!globalDefects[key]) globalDefects[key] = { count: 0, jobs: [] };
+          globalDefects[key].count++;
+          globalDefects[key].jobs.push(jd.jobId);
+        }
+      }
+      lines.push('## Cross-Job Recurring Defects');
+      for (const [defect, info] of Object.entries(globalDefects).sort((a, b) => b[1].count - a[1].count)) {
+        lines.push(`- [${info.count} jobs: ${info.jobs.join(',')}] ${defect}`);
+      }
+
+      const crossJobReport = lines.join('\n');
+
+      // Ensure shared workspace with improvements dir, prompts, and test scripts
+      const { mkdirSync, copyFileSync, existsSync, readdirSync } = await import('node:fs');
+      const sharedDir = `${containerManager.workspacePath}/shared`;
+      const improvementsDir = `${sharedDir}/improvements`;
+      mkdirSync(improvementsDir, { recursive: true });
+
+      // Copy test scripts and prompts into shared workspace for the agent to read
+      const scriptsDir = `${sharedDir}/scripts`;
+      const promptsDir = `${sharedDir}/prompts`;
+      mkdirSync(scriptsDir, { recursive: true });
+      mkdirSync(promptsDir, { recursive: true });
+
+      // Copy test-game.js from the worker image's location
+      // The agent reads from /workspace/scripts/test-game.js (host: sharedDir/scripts/)
+      const hostScripts = `${containerManager.hostWorkspacePath}/shared/scripts`;
+      const hostPrompts = `${containerManager.hostWorkspacePath}/shared/prompts`;
+
+      // Copy from the project root (mounted into backend)
+      const projectRoot = '/app';
+      if (existsSync(`${projectRoot}/scripts/test-game.js`)) {
+        copyFileSync(`${projectRoot}/scripts/test-game.js`, `${scriptsDir}/test-game.js`);
+      }
+      if (existsSync(`${projectRoot}/prompts`)) {
+        for (const f of readdirSync(`${projectRoot}/prompts`)) {
+          if (f.endsWith('.md')) {
+            copyFileSync(`${projectRoot}/prompts/${f}`, `${promptsDir}/${f}`);
+          }
+        }
+        // Copy phase2 subdir
+        if (existsSync(`${projectRoot}/prompts/phase2-gdd`)) {
+          mkdirSync(`${promptsDir}/phase2-gdd`, { recursive: true });
+          for (const f of readdirSync(`${projectRoot}/prompts/phase2-gdd`)) {
+            copyFileSync(`${projectRoot}/prompts/phase2-gdd/${f}`, `${promptsDir}/phase2-gdd/${f}`);
+          }
+        }
+      }
+
+      console.log(`[ProcessImprovement] Spawning agent with ${crossJobData.length} jobs' data...`);
+
+      // Spawn using a dummy job object with shared workspace
+      const dummyJob = {
+        id: 0,
+        game_name: 'process-improvement',
+        extraEnv: [
+          `DEFECT_REPORT=${crossJobReport}`,
+        ],
+      };
+
+      // Spawn container with shared workspace
+      const hostSharedDir = `${containerManager.hostWorkspacePath}/shared`;
+      const containerId = await new Promise((resolve, reject) => {
+        const docker = containerManager.docker;
+        docker.createContainer({
+          Image: process.env.WORKER_IMAGE || 'gamepocgen-worker',
+          name: `gamepocgen-process-improvement-${Date.now()}`,
+          Env: [
+            'PHASE=process-improvement',
+            'JOB_ID=0',
+            'GAME_NAME=process-improvement',
+            `ZAI_API_KEY=${process.env.ZAI_API_KEY || ''}`,
+            `ZAI_BASE_URL=${process.env.ZAI_BASE_URL || ''}`,
+            'WORKSPACE_DIR=/workspace',
+            'TIMEOUT_SECONDS=3600',
+            `DEFECT_REPORT=${crossJobReport}`,
+          ],
+          HostConfig: {
+            Memory: 2 * 1024 * 1024 * 1024,
+            NanoCpus: 1e9,
+            Binds: [`${hostSharedDir}:/workspace`],
+            AutoRemove: true,
+          },
+          NetworkingMode: 'traefik',
+        }).then(c => c.start().then(() => resolve(c.id))).catch(reject);
+      });
+
+      // Wait for completion (non-blocking — run in background)
+      (async () => {
+        try {
+          let status;
+          do {
+            await new Promise(r => setTimeout(r, 10000));
+            try {
+              const c = containerManager.docker.getContainer(containerId);
+              const info = await c.inspect();
+              status = { running: info.State.Running, exitCode: info.State.ExitCode };
+            } catch {
+              status = { running: false, exitCode: -1 };
+            }
+          } while (status?.running);
+
+          console.log(`[ProcessImprovement] Agent finished (exit=${status?.exitCode})`);
+
+          // Store the result in a global phase_output-like structure
+          // Read the log.json from improvements dir
+          const logPath = `${improvementsDir}/log.json`;
+          if (existsSync(logPath)) {
+            const { readFileSync } = await import('node:fs');
+            try {
+              const log = JSON.parse(readFileSync(logPath, 'utf-8'));
+              console.log(`[ProcessImprovement] ${log.reports?.length || 0} reports in log`);
+            } catch { /* ignore */ }
+          }
+        } catch (err) {
+          console.error(`[ProcessImprovement] Error: ${err.message}`);
+        }
+      })();
+
+    } catch (err) {
+      console.error(`[ProcessImprovement] Failed to run: ${err.message}`);
+    }
+  }
+
+  // Expose the trigger for the repair loop
+  // Called from plateau detection inside processJob
+  globalThis._maybeRunProcessImprovement = maybeRunProcessImprovement;
 
   setInterval(pollQueue, POLL_INTERVAL);
 

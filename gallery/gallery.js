@@ -564,6 +564,67 @@
         showGrid(jobs);
     }
 
+    // --- Process Improvement Timeline ---
+    let lastImprovementsJson = '';
+
+    async function loadImprovements() {
+        try {
+            const res = await fetch('/api/improvements');
+            if (!res.ok) return;
+            const data = await res.json();
+            const json = JSON.stringify(data);
+            if (json === lastImprovementsJson) return;
+            lastImprovementsJson = json;
+            renderImprovements(data);
+        } catch { /* non-critical */ }
+    }
+
+    function renderImprovements(data) {
+        const container = document.getElementById('improvementsTimeline');
+        if (!container) return;
+
+        const reports = (data.log?.reports || []).slice().reverse(); // newest first
+        const fullReports = data.reports || [];
+
+        if (reports.length === 0) {
+            container.innerHTML = '<div class="improvements-empty">No process improvement reports yet. The system will auto-analyze when repair loops plateau.</div>';
+            return;
+        }
+
+        const items = reports.map((r, idx) => {
+            const date = r.timestamp ? new Date(r.timestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '?';
+            const findings = (r.findings || []).slice(0, 3).map(f => `<li>${escapeHtml(f)}</li>`).join('');
+            const recs = (r.recommendations || []).slice(0, 3).map(r2 => `<li>${escapeHtml(r2)}</li>`).join('');
+            const avgScore = r.avgScore ? r.avgScore.toFixed(1) : '?';
+            const jobCount = r.jobsAnalyzed?.length || 0;
+            const isLatest = idx === 0;
+
+            // Find matching full report for expandable detail
+            const fullReport = fullReports.find(fr => fr.filename && fr.filename.includes(r.timestamp?.split('T')[0]));
+            const detailId = `imp-detail-${r.id || idx}`;
+
+            return `
+            <div class="improvement-item${isLatest ? ' latest' : ''}">
+                <div class="imp-marker"><div class="imp-dot${isLatest ? ' pulse' : ''}"></div></div>
+                <div class="imp-content">
+                    <div class="imp-header">
+                        <span class="imp-title">Report #${r.id || idx + 1}</span>
+                        <span class="imp-date">${date}</span>
+                    </div>
+                    <div class="imp-stats">
+                        <span class="imp-stat">${jobCount} jobs analyzed</span>
+                        <span class="imp-stat">Avg score: <strong>${avgScore}/10</strong></span>
+                    </div>
+                    ${findings ? `<div class="imp-section"><span class="imp-label">Findings</span><ul>${findings}</ul></div>` : ''}
+                    ${recs ? `<div class="imp-section"><span class="imp-label">Recommendations</span><ul>${recs}</ul></div>` : ''}
+                    ${fullReport ? `<button class="imp-expand" onclick="this.nextElementSibling.classList.toggle('hidden');this.textContent=this.nextElementSibling.classList.contains('hidden')?'Show full report':'Hide report'">Show full report</button><div id="${detailId}" class="imp-full-report hidden"><pre>${escapeHtml(fullReport.content)}</pre></div>` : ''}
+                </div>
+            </div>`;
+        }).join('');
+
+        container.innerHTML = items;
+    }
+
     // --- Polling ---
     async function loadJobs() {
         try {
@@ -594,7 +655,8 @@
     function startPolling() {
         showLoading();
         loadJobs();
-        pollTimer = setInterval(loadJobs, CONFIG.pollInterval);
+        loadImprovements();
+        pollTimer = setInterval(() => { loadJobs(); loadImprovements(); }, CONFIG.pollInterval);
     }
 
     // --- Init ---
