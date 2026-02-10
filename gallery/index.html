@@ -385,6 +385,69 @@
             color: var(--text-muted);
         }
 
+        .score-meta-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 4px;
+        }
+
+        .repair-log-link {
+            font-size: 0.6rem;
+            color: var(--accent-hover);
+            text-decoration: none;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+        }
+
+        .repair-log-link:hover {
+            opacity: 1;
+            text-decoration: underline;
+        }
+
+        /* Sparkline */
+        .sparkline-container {
+            margin: 4px 0;
+        }
+
+        .sparkline {
+            width: 100%;
+            height: 24px;
+            display: block;
+        }
+
+        /* Defect List */
+        .defect-list {
+            margin-top: 6px;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .defect-item {
+            font-size: 0.6rem;
+            color: var(--text-secondary);
+            line-height: 1.3;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            padding: 2px 0;
+        }
+
+        .defect-sev {
+            font-weight: 700;
+            font-size: 0.55rem;
+            display: inline-block;
+            width: 12px;
+            text-align: center;
+        }
+
+        .defect-more {
+            font-size: 0.55rem;
+            color: var(--text-muted);
+            padding: 1px 0;
+        }
+
         /* Card Footer */
         .card-footer {
             display: flex;
@@ -573,6 +636,6 @@
         </main>
     </div>
 
-    <script src="gallery.js?v=6"></script>
+    <script src="gallery.js?v=7"></script>
 </body>
 </html>

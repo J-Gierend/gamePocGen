@@ -1,6 +1,6 @@
 /**
  * GamePocGen Gallery
- * Shows all jobs with real-time phase progress, repair scores, and pixel art icons.
+ * Shows all jobs with real-time phase progress, repair scores, and unique procedural thumbnails.
  * Polls /api/jobs every 5s for live updates.
  */
 
@@ -14,7 +14,6 @@
         pollInterval: 5000,
     };
 
-    // Phase definitions for progress tracking
     const PHASES = [
         { key: 'phase_1', label: 'Idea' },
         { key: 'phase_2', label: 'Design' },
@@ -24,237 +23,207 @@
     ];
 
     const STATUS_COLORS = {
-        queued:    '#64748b',
-        running:   '#3b82f6',
-        phase_1:   '#f59e0b',
-        phase_2:   '#f59e0b',
-        phase_3:   '#d97706',
-        phase_4:   '#8b5cf6',
-        phase_5:   '#6366f1',
-        completed: '#22c55e',
-        failed:    '#ef4444',
+        queued: '#64748b', running: '#3b82f6',
+        phase_1: '#f59e0b', phase_2: '#f59e0b', phase_3: '#d97706',
+        phase_4: '#8b5cf6', phase_5: '#6366f1',
+        completed: '#22c55e', failed: '#ef4444',
     };
 
     const STATUS_LABELS = {
-        queued:    'Queued',
-        running:   'Starting',
-        phase_1:   'Ideation',
-        phase_2:   'Design',
-        phase_3:   'Planning',
-        phase_4:   'Building',
-        phase_5:   'Testing',
-        completed: 'Complete',
-        failed:    'Failed',
+        queued: 'Queued', running: 'Starting',
+        phase_1: 'Ideation', phase_2: 'Design', phase_3: 'Planning',
+        phase_4: 'Building', phase_5: 'Testing',
+        completed: 'Complete', failed: 'Failed',
     };
 
-    // Pixel art icon definitions (16x16 grids, 0=transparent, numbers=palette index)
-    const ICONS = {
-        pickaxe: {
-            grid: [
-                [0,0,0,0,0,0,0,0,0,0,0,3,3,3,0,0],
-                [0,0,0,0,0,0,0,0,0,0,3,2,2,3,3,0],
-                [0,0,0,0,0,0,0,0,0,3,2,1,2,2,3,0],
-                [0,0,0,0,0,0,0,0,0,3,2,2,2,3,0,0],
-                [0,0,0,0,0,0,0,0,3,3,2,2,3,0,0,0],
-                [0,0,0,0,0,0,0,3,0,3,3,3,0,0,0,0],
-                [0,0,0,0,0,0,3,0,0,0,0,0,0,0,0,0],
-                [0,0,0,0,0,3,4,0,0,0,0,0,0,0,0,0],
-                [0,0,0,0,3,4,4,0,0,0,0,0,0,0,0,0],
-                [0,0,0,3,4,4,0,0,0,0,0,0,0,0,0,0],
-                [0,0,3,4,4,0,0,0,0,0,0,0,0,0,0,0],
-                [0,3,4,4,0,0,0,0,0,0,0,0,0,0,0,0],
-                [3,4,4,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                [3,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                [3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-            ],
-            palette: { 1: '#e0e0e0', 2: '#a0a0a0', 3: '#606060', 4: '#8B4513' }
-        },
-        crystal: {
-            grid: [
-                [0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0],
-                [0,0,0,0,0,0,1,2,2,1,0,0,0,0,0,0],
-                [0,0,0,0,0,1,2,3,3,2,1,0,0,0,0,0],
-                [0,0,0,0,1,2,3,4,4,3,2,1,0,0,0,0],
-                [0,0,0,1,2,3,4,4,4,4,3,2,1,0,0,0],
-                [0,0,1,2,3,4,4,5,5,4,4,3,2,1,0,0],
-                [0,0,1,2,3,4,5,5,5,5,4,3,2,1,0,0],
-                [0,0,1,2,3,4,5,5,5,5,4,3,2,1,0,0],
-                [0,0,1,2,3,4,4,5,5,4,4,3,2,1,0,0],
-                [0,0,0,1,2,3,4,4,4,4,3,2,1,0,0,0],
-                [0,0,0,1,2,3,3,4,4,3,3,2,1,0,0,0],
-                [0,0,0,0,1,2,3,3,3,3,2,1,0,0,0,0],
-                [0,0,0,0,1,2,2,3,3,2,2,1,0,0,0,0],
-                [0,0,0,0,0,1,2,2,2,2,1,0,0,0,0,0],
-                [0,0,0,0,0,0,1,1,1,1,0,0,0,0,0,0],
-                [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-            ],
-            palette: { 1: '#1e3a5f', 2: '#2563eb', 3: '#3b82f6', 4: '#60a5fa', 5: '#bfdbfe' }
-        },
-        tower: {
-            grid: [
-                [0,0,0,0,0,0,3,3,3,3,0,0,0,0,0,0],
-                [0,0,0,0,0,3,2,1,1,2,3,0,0,0,0,0],
-                [0,0,0,0,0,3,1,4,4,1,3,0,0,0,0,0],
-                [0,0,0,0,0,3,2,1,1,2,3,0,0,0,0,0],
-                [0,0,0,0,3,3,3,3,3,3,3,3,0,0,0,0],
-                [0,0,0,0,3,2,2,1,1,2,2,3,0,0,0,0],
-                [0,0,0,0,3,2,1,1,1,1,2,3,0,0,0,0],
-                [0,0,0,0,3,2,1,4,4,1,2,3,0,0,0,0],
-                [0,0,0,0,3,2,1,4,4,1,2,3,0,0,0,0],
-                [0,0,0,0,3,2,1,1,1,1,2,3,0,0,0,0],
-                [0,0,0,3,3,3,3,3,3,3,3,3,3,0,0,0],
-                [0,0,0,3,2,2,1,1,1,1,2,2,3,0,0,0],
-                [0,0,0,3,2,1,1,1,1,1,1,2,3,0,0,0],
-                [0,0,0,3,2,1,1,4,4,1,1,2,3,0,0,0],
-                [0,0,3,3,3,3,3,3,3,3,3,3,3,3,0,0],
-                [0,0,3,3,3,3,3,3,3,3,3,3,3,3,0,0],
-            ],
-            palette: { 1: '#a0a0a0', 2: '#707070', 3: '#505050', 4: '#2a1a0a' }
-        },
-        goblin: {
-            grid: [
-                [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                [0,0,0,0,3,3,0,0,0,0,3,3,0,0,0,0],
-                [0,0,0,3,2,2,3,3,3,3,2,2,3,0,0,0],
-                [0,0,3,2,2,2,2,2,2,2,2,2,2,3,0,0],
-                [0,0,3,2,1,1,2,2,2,1,1,2,2,3,0,0],
-                [0,0,3,2,4,1,2,2,2,4,1,2,2,3,0,0],
-                [0,0,3,2,2,2,2,3,2,2,2,2,2,3,0,0],
-                [0,0,0,3,2,2,5,5,5,2,2,3,0,0,0,0],
-                [0,0,0,3,2,2,2,2,2,2,2,3,0,0,0,0],
-                [0,0,0,0,3,3,2,2,2,3,3,0,0,0,0,0],
-                [0,0,0,0,0,3,2,2,2,3,0,0,0,0,0,0],
-                [0,0,0,0,3,2,2,2,2,2,3,0,0,0,0,0],
-                [0,0,0,3,2,2,2,2,2,2,2,3,0,0,0,0],
-                [0,0,0,3,2,2,0,0,0,2,2,3,0,0,0,0],
-                [0,0,0,3,3,0,0,0,0,0,3,3,0,0,0,0],
-                [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-            ],
-            palette: { 1: '#a8d8a0', 2: '#4a8c3f', 3: '#2d5a27', 4: '#ff3333', 5: '#f5f5dc' }
-        },
-        shield: {
-            grid: [
-                [0,0,0,0,1,1,1,1,1,1,1,1,0,0,0,0],
-                [0,0,0,1,2,2,2,3,3,2,2,2,1,0,0,0],
-                [0,0,1,2,2,2,3,4,4,3,2,2,2,1,0,0],
-                [0,1,2,2,2,3,4,4,4,4,3,2,2,2,1,0],
-                [0,1,2,2,3,4,4,5,5,4,4,3,2,2,1,0],
-                [0,1,2,2,3,4,5,5,5,5,4,3,2,2,1,0],
-                [0,1,2,2,3,4,5,5,5,5,4,3,2,2,1,0],
-                [0,1,2,2,3,4,4,5,5,4,4,3,2,2,1,0],
-                [0,1,2,2,3,4,4,4,4,4,4,3,2,2,1,0],
-                [0,1,2,2,2,3,4,4,4,4,3,2,2,2,1,0],
-                [0,0,1,2,2,3,3,4,4,3,3,2,2,1,0,0],
-                [0,0,1,2,2,2,3,3,3,3,2,2,2,1,0,0],
-                [0,0,0,1,2,2,2,3,3,2,2,2,1,0,0,0],
-                [0,0,0,0,1,2,2,2,2,2,2,1,0,0,0,0],
-                [0,0,0,0,0,1,1,2,2,1,1,0,0,0,0,0],
-                [0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0],
-            ],
-            palette: { 1: '#4a3520', 2: '#8B4513', 3: '#c0392b', 4: '#e74c3c', 5: '#f1c40f' }
-        },
-        sword: {
-            grid: [
-                [0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0],
-                [0,0,0,0,0,0,0,0,0,0,0,0,1,2,1,0],
-                [0,0,0,0,0,0,0,0,0,0,0,1,2,1,0,0],
-                [0,0,0,0,0,0,0,0,0,0,1,2,1,0,0,0],
-                [0,0,0,0,0,0,0,0,0,1,2,1,0,0,0,0],
-                [0,0,0,0,0,0,0,0,1,2,1,0,0,0,0,0],
-                [0,0,0,0,0,0,0,1,2,1,0,0,0,0,0,0],
-                [0,0,0,0,0,0,1,2,1,0,0,0,0,0,0,0],
-                [0,0,0,0,0,1,2,1,0,0,0,0,0,0,0,0],
-                [0,0,0,0,1,2,1,0,0,0,0,0,0,0,0,0],
-                [0,0,0,3,4,1,0,0,0,0,0,0,0,0,0,0],
-                [0,0,3,4,3,4,0,0,0,0,0,0,0,0,0,0],
-                [0,0,0,3,5,3,0,0,0,0,0,0,0,0,0,0],
-                [0,0,0,0,5,0,0,0,0,0,0,0,0,0,0,0],
-                [0,0,0,0,5,0,0,0,0,0,0,0,0,0,0,0],
-                [0,0,0,0,3,0,0,0,0,0,0,0,0,0,0,0],
-            ],
-            palette: { 1: '#c0c0c0', 2: '#e8e8e8', 3: '#8B4513', 4: '#DAA520', 5: '#654321' }
-        },
-    };
-
-    const ICON_THEMES = [
-        { keywords: [['goblin', 'mine']],          icons: ['goblin', 'pickaxe'], bg: '#1a2e1a', accent: '#4a8c3f' },
-        { keywords: [['crystal', 'mine']],          icons: ['pickaxe', 'crystal'],bg: '#2e1a0f', accent: '#d97706' },
-        { keywords: [['crystal', 'cavern']],        icons: ['crystal', 'sword'],  bg: '#1a0f2e', accent: '#8b5cf6' },
-        { keywords: [['crystal', 'defense']],       icons: ['crystal', 'shield'], bg: '#0f1a2e', accent: '#3b82f6' },
-        { keywords: [['goblin']],                   icons: ['goblin', 'sword'],   bg: '#1a2e1a', accent: '#4a8c3f' },
-        { keywords: [['crystal'], ['gem']],         icons: ['crystal', 'tower'],  bg: '#0f1a2e', accent: '#3b82f6' },
-        { keywords: [['mine'], ['dig'], ['drill']], icons: ['pickaxe', 'crystal'],bg: '#2e1a0f', accent: '#d97706' },
-        { keywords: [['tower'], ['turret']],        icons: ['tower', 'shield'],   bg: '#1a1a2e', accent: '#6366f1' },
-        { keywords: [['defense'], ['defend']],      icons: ['shield', 'sword'],   bg: '#2e0f1a', accent: '#e11d48' },
-        { keywords: [['cavern'], ['cave'], ['dungeon']], icons: ['crystal', 'sword'], bg: '#1a0f2e', accent: '#8b5cf6' },
-        { keywords: [['battle'], ['fight'], ['war']],    icons: ['sword', 'shield'],  bg: '#2e1a1a', accent: '#dc2626' },
-    ];
-
-    function getIconTheme(title) {
-        const lower = (title || '').toLowerCase();
-        for (const theme of ICON_THEMES) {
-            for (const kwGroup of theme.keywords) {
-                if (kwGroup.every(kw => lower.includes(kw))) return theme;
-            }
-        }
-        return { icons: ['crystal', 'tower'], bg: '#1a1a2e', accent: '#6366f1' };
+    // --- Procedural thumbnail generator (seeded by job ID) ---
+    function seededRandom(seed) {
+        let s = seed;
+        return function() {
+            s = (s * 16807 + 0) % 2147483647;
+            return (s - 1) / 2147483646;
+        };
     }
 
-    function renderPixelIcon(canvas, title, gameId) {
-        const theme = getIconTheme(title);
+    function hslToHex(h, s, l) {
+        s /= 100; l /= 100;
+        const a = s * Math.min(l, 1 - l);
+        const f = (n) => {
+            const k = (n + h / 30) % 12;
+            const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+            return Math.round(255 * color).toString(16).padStart(2, '0');
+        };
+        return '#' + f(0) + f(8) + f(4);
+    }
+
+    function renderProceduralThumbnail(canvas, jobId, gameName) {
         const ctx = canvas.getContext('2d');
         const W = canvas.width;
         const H = canvas.height;
+        const rng = seededRandom(jobId * 7919 + 131);
 
-        ctx.fillStyle = theme.bg;
+        // Unique hue per game
+        const baseHue = Math.floor(rng() * 360);
+        const bgColor = hslToHex(baseHue, 30, 8);
+        const accentHue = (baseHue + 120 + Math.floor(rng() * 60)) % 360;
+
+        // Background
+        ctx.fillStyle = bgColor;
         ctx.fillRect(0, 0, W, H);
 
-        ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+        // Grid pattern (subtle)
+        const gridSize = 12 + Math.floor(rng() * 12);
+        ctx.strokeStyle = `hsla(${baseHue}, 20%, 20%, 0.15)`;
         ctx.lineWidth = 1;
-        for (let x = 0; x < W; x += 16) {
+        for (let x = 0; x < W; x += gridSize) {
             ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
         }
-        for (let y = 0; y < H; y += 16) {
+        for (let y = 0; y < H; y += gridSize) {
             ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
         }
 
-        const iconNames = theme.icons;
-        const pixelSize = Math.floor(Math.min(W, H) / 24);
+        // Style variation
+        const style = Math.floor(rng() * 5);
 
-        for (let idx = 0; idx < iconNames.length; idx++) {
-            const iconDef = ICONS[iconNames[idx]];
-            if (!iconDef) continue;
-
-            const grid = iconDef.grid;
-            const palette = iconDef.palette;
-            const gridH = grid.length;
-            const gridW = grid[0].length;
-
-            const totalW = iconNames.length * gridW * pixelSize + (iconNames.length - 1) * pixelSize * 2;
-            const startX = (W - totalW) / 2 + idx * (gridW * pixelSize + pixelSize * 2);
-            const startY = (H - gridH * pixelSize) / 2;
-
-            for (let row = 0; row < gridH; row++) {
-                for (let col = 0; col < gridW; col++) {
-                    const val = grid[row][col];
-                    if (val === 0) continue;
-                    ctx.fillStyle = palette[val] || '#fff';
-                    ctx.fillRect(
-                        Math.floor(startX + col * pixelSize),
-                        Math.floor(startY + row * pixelSize),
-                        pixelSize,
-                        pixelSize
-                    );
+        if (style === 0) {
+            // Terrain: layered mountains
+            for (let layer = 0; layer < 4; layer++) {
+                const y0 = H * (0.3 + layer * 0.18);
+                const lightness = 12 + layer * 5;
+                ctx.fillStyle = hslToHex(baseHue, 25 - layer * 3, lightness);
+                ctx.beginPath();
+                ctx.moveTo(0, H);
+                for (let x = 0; x <= W; x += 8) {
+                    const noise = Math.sin(x * 0.02 + layer * 2 + rng() * 0.5) * 40 +
+                                  Math.sin(x * 0.005 + rng() * 10) * 20;
+                    ctx.lineTo(x, y0 + noise);
+                }
+                ctx.lineTo(W, H);
+                ctx.fill();
+            }
+            // Stars
+            for (let i = 0; i < 30; i++) {
+                const sx = rng() * W;
+                const sy = rng() * H * 0.4;
+                const size = 1 + rng() * 2;
+                ctx.fillStyle = `hsla(${(baseHue + 60) % 360}, 60%, ${70 + rng() * 30}%, ${0.3 + rng() * 0.7})`;
+                ctx.fillRect(sx, sy, size, size);
+            }
+        } else if (style === 1) {
+            // Dungeon grid: rooms and corridors
+            const cellW = Math.floor(W / 8);
+            const cellH = Math.floor(H / 5);
+            for (let cy = 0; cy < 5; cy++) {
+                for (let cx = 0; cx < 8; cx++) {
+                    if (rng() > 0.45) {
+                        const x = cx * cellW + 2;
+                        const y = cy * cellH + 2;
+                        const w = cellW - 4;
+                        const h = cellH - 4;
+                        const l = 15 + rng() * 10;
+                        ctx.fillStyle = hslToHex(baseHue, 20, l);
+                        ctx.fillRect(x, y, w, h);
+                        // Door
+                        if (rng() > 0.5 && cx < 7) {
+                            ctx.fillStyle = hslToHex(accentHue, 50, 30);
+                            ctx.fillRect(x + w, y + h / 3, 4, h / 3);
+                        }
+                    }
                 }
             }
+            // Accent glow
+            const gx = W * (0.3 + rng() * 0.4);
+            const gy = H * (0.3 + rng() * 0.4);
+            const grad = ctx.createRadialGradient(gx, gy, 0, gx, gy, 80);
+            grad.addColorStop(0, `hsla(${accentHue}, 80%, 50%, 0.25)`);
+            grad.addColorStop(1, 'transparent');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, W, H);
+        } else if (style === 2) {
+            // Crystal field
+            for (let i = 0; i < 12; i++) {
+                const cx = rng() * W;
+                const cy = H * 0.3 + rng() * H * 0.6;
+                const h = 20 + rng() * 60;
+                const w = 6 + rng() * 14;
+                const hue = (accentHue + rng() * 40 - 20) % 360;
+                ctx.fillStyle = hslToHex(hue, 60, 30 + rng() * 20);
+                ctx.beginPath();
+                ctx.moveTo(cx, cy);
+                ctx.lineTo(cx - w / 2, cy + h);
+                ctx.lineTo(cx + w / 2, cy + h);
+                ctx.fill();
+                // Highlight
+                ctx.fillStyle = hslToHex(hue, 70, 55 + rng() * 15);
+                ctx.beginPath();
+                ctx.moveTo(cx, cy);
+                ctx.lineTo(cx - w / 4, cy + h * 0.6);
+                ctx.lineTo(cx + w / 6, cy + h * 0.4);
+                ctx.fill();
+            }
+            // Ground
+            ctx.fillStyle = hslToHex(baseHue, 15, 10);
+            ctx.fillRect(0, H * 0.85, W, H * 0.15);
+        } else if (style === 3) {
+            // Circuit board / tech pattern
+            ctx.strokeStyle = hslToHex(accentHue, 50, 25);
+            ctx.lineWidth = 2;
+            for (let i = 0; i < 15; i++) {
+                const x1 = Math.floor(rng() * W / 20) * 20;
+                const y1 = Math.floor(rng() * H / 20) * 20;
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                let cx = x1, cy = y1;
+                for (let s = 0; s < 5; s++) {
+                    if (rng() > 0.5) cx += (rng() > 0.5 ? 1 : -1) * 20 * (1 + Math.floor(rng() * 3));
+                    else cy += (rng() > 0.5 ? 1 : -1) * 20 * (1 + Math.floor(rng() * 3));
+                    ctx.lineTo(cx, cy);
+                }
+                ctx.stroke();
+                // Node
+                ctx.fillStyle = hslToHex(accentHue, 70, 45);
+                ctx.fillRect(cx - 3, cy - 3, 6, 6);
+            }
+            // Center glow
+            const grad = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, W / 3);
+            grad.addColorStop(0, `hsla(${accentHue}, 60%, 40%, 0.15)`);
+            grad.addColorStop(1, 'transparent');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, W, H);
+        } else {
+            // Particle nebula
+            for (let i = 0; i < 200; i++) {
+                const px = rng() * W;
+                const py = rng() * H;
+                const size = 1 + rng() * 4;
+                const hue = (baseHue + rng() * 60 - 30) % 360;
+                const dist = Math.hypot(px - W / 2, py - H / 2) / (W / 2);
+                const alpha = Math.max(0, 0.6 - dist * 0.5) * rng();
+                ctx.fillStyle = `hsla(${hue}, 70%, ${40 + rng() * 30}%, ${alpha})`;
+                ctx.beginPath();
+                ctx.arc(px, py, size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            // Bright center
+            const grad = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, W / 4);
+            grad.addColorStop(0, `hsla(${accentHue}, 80%, 60%, 0.3)`);
+            grad.addColorStop(1, 'transparent');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, W, H);
         }
 
-        const gradient = ctx.createLinearGradient(0, H - 40, 0, H);
-        gradient.addColorStop(0, 'transparent');
-        gradient.addColorStop(1, theme.accent + '40');
-        ctx.fillStyle = gradient;
-        ctx.fillRect(0, H - 40, W, 40);
+        // Bottom gradient fade
+        const bottomGrad = ctx.createLinearGradient(0, H - 50, 0, H);
+        bottomGrad.addColorStop(0, 'transparent');
+        bottomGrad.addColorStop(1, bgColor);
+        ctx.fillStyle = bottomGrad;
+        ctx.fillRect(0, H - 50, W, 50);
+
+        // Job ID watermark
+        ctx.fillStyle = `hsla(${baseHue}, 20%, 40%, 0.3)`;
+        ctx.font = 'bold 48px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(`#${jobId}`, W / 2, H / 2 + 16);
     }
 
     // --- DOM ---
@@ -355,10 +324,8 @@
     // --- Job Data Helpers ---
     function getLatestRepairScore(job) {
         if (!job.phase_outputs) return null;
-        // Use top-level latest_score if available (faster, no iteration)
         const ls = job.phase_outputs.latest_score;
         if (ls) return { attempt: ls.attempt, score: ls.score ?? 0, defectCount: ls.defectCount ?? 0 };
-        // Fallback: scan repair_N keys
         let latest = null;
         let maxAttempt = 0;
         for (const [key, val] of Object.entries(job.phase_outputs)) {
@@ -374,6 +341,36 @@
         return latest;
     }
 
+    function getLatestDefects(job) {
+        if (!job.phase_outputs) return [];
+        // Find the highest repair_N with defects array
+        let maxAttempt = 0;
+        let defects = [];
+        for (const [key, val] of Object.entries(job.phase_outputs)) {
+            const match = key.match(/^repair_(\d+)$/);
+            if (match && val.defects) {
+                const attempt = parseInt(match[1], 10);
+                if (attempt > maxAttempt) {
+                    maxAttempt = attempt;
+                    defects = val.defects;
+                }
+            }
+        }
+        return defects;
+    }
+
+    function getScoreHistory(job) {
+        if (!job.phase_outputs) return [];
+        const history = [];
+        for (const [key, val] of Object.entries(job.phase_outputs)) {
+            const match = key.match(/^repair_(\d+)$/);
+            if (match) {
+                history.push({ attempt: parseInt(match[1], 10), score: val.score ?? 0 });
+            }
+        }
+        return history.sort((a, b) => a.attempt - b.attempt);
+    }
+
     function getPhaseIndex(status) {
         const idx = PHASES.findIndex(p => p.key === status);
         if (idx >= 0) return idx;
@@ -387,6 +384,51 @@
         return '#ef4444';
     }
 
+    // --- Score sparkline (mini chart of repair progress) ---
+    function renderSparkline(container, history) {
+        if (!history.length) return;
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('viewBox', '0 0 100 24');
+        svg.setAttribute('class', 'sparkline');
+
+        const maxScore = 10;
+        const points = history.map((h, i) => {
+            const x = history.length === 1 ? 50 : (i / (history.length - 1)) * 96 + 2;
+            const y = 22 - (h.score / maxScore) * 20;
+            return `${x},${y}`;
+        });
+
+        // Area fill
+        const area = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+        const lastScore = history[history.length - 1].score;
+        const color = scoreColor(lastScore);
+        area.setAttribute('points', `2,22 ${points.join(' ')} 98,22`);
+        area.setAttribute('fill', color);
+        area.setAttribute('opacity', '0.15');
+        svg.appendChild(area);
+
+        // Line
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+        line.setAttribute('points', points.join(' '));
+        line.setAttribute('fill', 'none');
+        line.setAttribute('stroke', color);
+        line.setAttribute('stroke-width', '1.5');
+        line.setAttribute('stroke-linecap', 'round');
+        line.setAttribute('stroke-linejoin', 'round');
+        svg.appendChild(line);
+
+        // Current score dot
+        const lastPt = points[points.length - 1].split(',');
+        const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        dot.setAttribute('cx', lastPt[0]);
+        dot.setAttribute('cy', lastPt[1]);
+        dot.setAttribute('r', '2.5');
+        dot.setAttribute('fill', color);
+        svg.appendChild(dot);
+
+        container.appendChild(svg);
+    }
+
     // --- Card Rendering ---
     function createJobCard(job) {
         const card = document.createElement('article');
@@ -398,6 +440,8 @@
         const deployment = job.phase_outputs?.deployment;
         const gameUrl = deployment?.url;
         const repairInfo = getLatestRepairScore(job);
+        const defects = getLatestDefects(job);
+        const scoreHistory = getScoreHistory(job);
         const phaseIdx = getPhaseIndex(job.status);
         const isActive = !['completed', 'failed', 'queued'].includes(job.status);
 
@@ -417,11 +461,32 @@
             return `<div class="${cls}" title="${p.label}"><span class="step-num">${i + 1}</span><span class="step-label">${p.label}</span></div>`;
         }).join('<div class="phase-connector"></div>');
 
-        // Score section
+        // Score section with sparkline + defect list
         let scoreHtml = '';
         if (repairInfo) {
             const pct = (repairInfo.score / 10) * 100;
             const color = scoreColor(repairInfo.score);
+
+            // Defect pills
+            let defectHtml = '';
+            if (defects.length > 0) {
+                const defectItems = defects.slice(0, 4).map(d => {
+                    const text = typeof d === 'string' ? d : (d.description || '');
+                    const severity = text.match(/^\[(critical|major|minor)\]/)?.[1] || 'major';
+                    const label = text.replace(/^\[(critical|major|minor)\]\s*/, '').substring(0, 60);
+                    const sevColor = severity === 'critical' ? '#ef4444' : severity === 'major' ? '#f59e0b' : '#64748b';
+                    return `<div class="defect-item" title="${escapeHtml(text)}"><span class="defect-sev" style="color:${sevColor}">${severity[0].toUpperCase()}</span> ${escapeHtml(label)}</div>`;
+                }).join('');
+                const moreCount = defects.length > 4 ? `<div class="defect-more">+${defects.length - 4} more</div>` : '';
+                defectHtml = `<div class="defect-list">${defectItems}${moreCount}</div>`;
+            }
+
+            // Repair log link
+            let logLinkHtml = '';
+            if (gameUrl) {
+                logLinkHtml = `<a href="${escapeHtml(gameUrl)}/repair-log.html" class="repair-log-link" target="_blank" rel="noopener">View repair log</a>`;
+            }
+
             scoreHtml = `
                 <div class="score-section">
                     <div class="score-header">
@@ -429,7 +494,12 @@
                         <span class="score-value" style="color:${color}">${repairInfo.score}/10</span>
                     </div>
                     <div class="score-bar"><div class="score-fill" style="width:${pct}%;background:${color}"></div></div>
-                    <span class="score-meta">Repair #${repairInfo.attempt}${repairInfo.defectCount ? ' \u00b7 ' + repairInfo.defectCount + ' defect' + (repairInfo.defectCount !== 1 ? 's' : '') : ''}</span>
+                    <div class="score-meta-row">
+                        <span class="score-meta">Repair #${repairInfo.attempt}${repairInfo.defectCount ? ' \u00b7 ' + repairInfo.defectCount + ' defect' + (repairInfo.defectCount !== 1 ? 's' : '') : ''}</span>
+                        ${logLinkHtml}
+                    </div>
+                    <div class="sparkline-container"></div>
+                    ${defectHtml}
                 </div>`;
         }
 
@@ -460,8 +530,15 @@
                 </div>
             </div>`;
 
+        // Render unique thumbnail
         const canvas = card.querySelector('canvas');
-        if (canvas) renderPixelIcon(canvas, job.game_name, job.id);
+        if (canvas) renderProceduralThumbnail(canvas, job.id, job.game_name);
+
+        // Render sparkline
+        if (scoreHistory.length > 1) {
+            const sparkContainer = card.querySelector('.sparkline-container');
+            if (sparkContainer) renderSparkline(sparkContainer, scoreHistory);
+        }
 
         return card;
     }
@@ -505,7 +582,7 @@
             renderJobs(jobs);
         } catch (error) {
             console.error('Failed to load jobs:', error);
-            if (lastJobsJson) return; // Keep showing last known state on transient errors
+            if (lastJobsJson) return;
             if (error.name === 'TypeError' && error.message.includes('fetch')) {
                 renderJobs([]);
             } else {
