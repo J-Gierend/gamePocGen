@@ -2,7 +2,7 @@
 
 ```mermaid
 graph TD
-    subgraph "docker/.env (secrets)"
+    subgraph "docker/.env secrets"
         PG_PASS["POSTGRES_PASSWORD\nPostgreSQL password\nRequired no default"]
         ZAI_KEY["ZAI_API_KEY\nClaude API key via z.ai\nRequired no default"]
         ZAI_URL["ZAI_BASE_URL\nz.ai API endpoint\nDefault: https://api.z.ai/api/anthropic"]
@@ -10,44 +10,65 @@ graph TD
 
     subgraph "docker-compose.yml env"
         DB_URL["DATABASE_URL\npostgresql://gamepocgen:$PG_PASS@postgres:5432/gamepocgen"]
-        PORT["PORT\nExpress listen port\nDefault: 3000"]
         MAX_CON["MAX_CONCURRENT\nParallel job limit\nDefault: 5"]
-        POLL_INT["POLL_INTERVAL\nQueue check frequency ms\nDefault: 5000"]
-        WS_PATH["WORKSPACE_PATH\nContainer workspace dir\nDefault: /app/workspaces"]
-        HOST_WS["HOST_WORKSPACE_PATH\nHost bind mount path\nDefault: WORKSPACE_PATH"]
-        DEPLOY["DEPLOY_DIR\nGame deploy directory\nDefault: /root/apps"]
-        HOST_DD["HOST_DEPLOY_DIR\nHost deploy path\nDefault: DEPLOY_DIR"]
-        GAL_PATH["GALLERY_DATA_PATH\ngames.json location\nDefault: /root/apps/gallery/games.json"]
-        DOMAIN["DOMAIN\nBase domain for games\nDefault: namjo-games.com"]
-        W_IMG["WORKER_IMAGE\nDocker image name\nDefault: gamepocgen-worker"]
+        WS_PATH["WORKSPACE_PATH\n/data/workspaces\ncode default: /app/workspaces"]
+        HOST_WS["HOST_WORKSPACE_PATH\n/root/apps/gamepocgen/docker/workspaces"]
+        DEPLOY["DEPLOY_DIR\n/data/deployed\ncode default: /root/apps"]
+        HOST_DD["HOST_DEPLOY_DIR\n/root/apps/gamepocgen/docker/deployed"]
+        GAL_PATH["GALLERY_DATA_PATH\n/data/deployed/gallery/games.json"]
+        DOMAIN["DOMAIN\nnamjo-games.com"]
+        W_IMG["WORKER_IMAGE\ngamepocgen-worker"]
+        OAUTH["CLAUDE_CODE_OAUTH_TOKEN\nOAuth access token\nOptional empty default"]
+        REFRESH["CLAUDE_CODE_REFRESH_TOKEN\nOAuth refresh token\nOptional empty default"]
+        EXPIRES["CLAUDE_CODE_TOKEN_EXPIRES\nToken expiry epoch ms\nOptional empty default"]
     end
 
-    subgraph "Worker container env (set by containerManager)"
-        W_PHASE["PHASE\nphase1|phase2|phase3|phase4\nRequired"]
+    subgraph "backend/src/index.js defaults"
+        PORT["PORT\nExpress listen port\nDefault: 3000"]
+        POLL_INT["POLL_INTERVAL\nQueue check frequency ms\nDefault: 5000"]
+    end
+
+    subgraph "Worker container env set by containerManager + processJob"
+        W_PHASE["PHASE\nphase1-phase5\nRequired"]
         W_JOB["JOB_ID\nJob identifier\nRequired"]
         W_NAME["GAME_NAME\nGenerated game title\nRequired"]
-        W_ZAI["ZAI_API_KEY\nForwarded from backend\nRequired"]
+        W_ZAI["ZAI_API_KEY\nForwarded from backend\nRequired in apikey mode"]
         W_ZURL["ZAI_BASE_URL\nForwarded from backend"]
-        W_DIR["WORKSPACE_DIR\n/workspace\nDefault"]
-        W_TIME["TIMEOUT_SECONDS\nPhase timeout\nDefault: 3600"]
+        W_DIR["WORKSPACE_DIR\n/workspace"]
+        W_TIME["TIMEOUT_SECONDS\nphase1-4: 43200 12h\nphase5: 3600 1h"]
+        W_AUTH["AUTH_MODE\napikey or subscription\nDefault: apikey"]
+        W_OAUTH["CLAUDE_CODE_OAUTH_TOKEN\nForwarded for subscription mode"]
+        W_REFRESH["CLAUDE_CODE_REFRESH_TOKEN\nForwarded for subscription mode"]
+        W_TOKEXP["CLAUDE_CODE_TOKEN_EXPIRES\nForwarded for subscription mode"]
+        W_MODEL["MODEL\nLLM model override\nDefault: claude-opus-4-6"]
+        W_GENRE["GENRE_SEED\nGenre hint for phase1\n16 built-in genres"]
+        W_EXISTING["EXISTING_GAME_NAMES\nComma-separated deployed titles\nFor diversity"]
+        W_GAMEURL["GAME_URL\nDeployed game URL\nphase5 only"]
+        W_DEFECT["DEFECT_REPORT\nJSON defect list\nphase5 only"]
     end
 
     PG_PASS -->|"interpolated"| DB_URL
-    DB_URL --> QM["QueueManager\nnew Pool()"]
+    DB_URL --> QM["QueueManager\nnew Pool"]
     ZAI_KEY --> W_ZAI
     ZAI_URL --> W_ZURL
-    PORT --> EXPRESS["Express app.listen()"]
-    MAX_CON --> POLLER["pollQueue() concurrency gate"]
+    PORT --> EXPRESS["Express app.listen"]
+    MAX_CON --> POLLER["pollQueue concurrency gate"]
     POLL_INT --> POLLER
     WS_PATH --> CM2["ContainerManager"]
     HOST_WS --> CM2
     DEPLOY --> DM2["DeploymentManager"]
     HOST_DD --> DM2
+    GAL_PATH --> DM2
     DOMAIN --> DM2
     W_IMG --> CM2
+    OAUTH --> W_OAUTH
+    REFRESH --> W_REFRESH
+    EXPIRES --> W_TOKEXP
     W_PHASE --> ENTRY["entrypoint.sh phase routing"]
-    W_ZAI -->|"translated to\nANTHROPIC_AUTH_TOKEN"| CLAUDE["Claude Code CLI"]
-    W_ZURL -->|"translated to\nANTHROPIC_BASE_URL"| CLAUDE
+    W_AUTH --> ENTRY
+    W_ZAI -->|"apikey mode:\nANTHROPIC_AUTH_TOKEN"| CLAUDE["Claude Code CLI"]
+    W_ZURL -->|"apikey mode:\nANTHROPIC_BASE_URL"| CLAUDE
+    W_OAUTH -->|"subscription mode:\n.credentials.json"| CLAUDE
 ```
 
 # Config Files
@@ -55,18 +76,18 @@ graph TD
 ```mermaid
 graph TD
     subgraph "Configuration Files"
-        PKG["backend/package.json 18 lines\ntype: module (ESM)\ndeps: express pg dockerode cors\nscripts: start test:all"]
-        DC["docker/docker-compose.yml 61 lines\n2 services: backend postgres\n2 volumes: workspaces pgdata\nnetwork: traefik external"]
-        DDC["docs/docker-compose.yml 20 lines\n1 service: nginx\n3 volume mounts :ro\nnetwork: traefik external"]
-        DBK["Dockerfile.backend 13 lines\nFROM node:22-slim\nWORKDIR /app\nnpm ci --omit=dev\nCMD node src/index.js"]
-        ENT["docker/entrypoint.sh 221 lines\nPhase routing logic\nClaude Code settings.json\nStatus JSON writing\ntimeout handling"]
-        ENV[".env.example 4 lines\nPOSTGRES_PASSWORD\nZAI_API_KEY\nZAI_BASE_URL"]
+        PKG["backend/package.json 17 lines\ntype: module ESM\ndeps: express pg dockerode cors\nscripts: start test test:routes test:all"]
+        DC["docker/docker-compose.yml 63 lines\n2 services: backend postgres\npostgres:15-alpine with healthcheck\n2 networks: traefik internal\n1 volume: pgdata"]
+        DDC["docs/docker-compose.yml 20 lines\n1 service: nginx:alpine\n3 volume mounts :ro\nnetwork: traefik external"]
+        DBK["Dockerfile.backend 18 lines\nFROM node:22-slim\nnpm install --production\nPlaywright chromium install\nCOPY scripts/ for game testing\nCMD node src/index.js"]
+        ENT["docker/entrypoint.sh 368 lines\n5-phase router phase1-phase5\nOAuth token refresh\nDual auth: apikey + subscription\nClaude Code settings.json\nStatus JSON writing"]
+        ENV[".env.example 3 lines\nPOSTGRES_PASSWORD\nZAI_API_KEY\nZAI_BASE_URL"]
     end
 
     PKG -->|"defines deps for"| DBK
     DC -->|"references"| DBK
     DC -->|"loads"| ENV
-    DC -->|"mounts"| ENT
+    DC -->|"mounts workspaces + deployed"| ENT
 ```
 
 # Hardcoded Configuration
@@ -74,11 +95,16 @@ graph TD
 ```mermaid
 graph LR
     subgraph "Hardcoded Values"
-        PW["Password: gamepoc2024\ndocs/index.html line 1090\ngallery/gallery.js line 11\nsessionStorage key: gamepocgen_auth"]
-        SLOTS["Game slots: 0-9\nsubdomain = gamedemo{jobId % 10}\nmax 10 concurrent games"]
+        PW["Password: gamepoc2024\ndocs/index.html line 1090\ngallery/gallery.js line 10\nsessionStorage key: gamepocgen_auth"]
+        SLOTS["Game slots: gamedemo{gameId}\nsubdomain = gamedemo + gameId directly\nno modulo, no max limit"]
         TICK["GameLoop tickRate: 20/sec\ndefault fixed timestep"]
         SUFFIXES["BigNum suffixes:\nK M B T Qa Qi Sx Sp Oc No Dc\nthen scientific notation"]
-        AGENTS["Phase 2 agents order:\ncurrencies progression prestige\nskill-tree ui-ux psychology-review"]
-        RES["Worker resource limits:\nMemory: 2GB\nCPU: 1 core\nTimeout: 3600s"]
+        AGENTS["Phase 2 agents order:\ncurrencies progression ui-ux\n3 sequential agents"]
+        RES["Worker resource limits:\nMemory: 2GB\nCPU: 0.5 cores\nphase1-4 timeout: 43200s 12h\nphase5 timeout: 3600s 1h"]
+        REPAIR["Repair loop:\nMAX_REPAIR_ATTEMPTS: 100\nPASS_SCORE: 10/10\nFAIL_SCORE: 4/10 remove threshold"]
+        GENRES["16 genre seeds:\ndungeon-crawler space-combat\nfishing-and-gathering factory-automation\nmonster-tamer lane-battle\ntower-defense wave-survival\nexploration-and-mapping racing-and-dodging\nfarming-and-ecosystem puzzle-combat\npirate-ship-battles spell-crafting-arena\ntrain-network underwater-exploration"]
+        PROMPTS["11 prompt templates\n4599 lines total\nphase1: 1 + phase2: 6\nphase3: 1 + phase4: 1\nphase5: 2 repair + review"]
+        BASEPORT["Game container base port: 8080\nport = 8080 + gameId"]
+        OAUTH_CLIENT["OAuth client_id:\n9d1c250a-e61b-44d9-88ed-5944d1962f5e\nconsole.anthropic.com"]
     end
 ```

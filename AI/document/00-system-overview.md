@@ -4,25 +4,26 @@
 graph TB
     subgraph "Frontend [nginx :80/:443]"
         DOCS["Docs Site\nindex.html 1125 lines\ngamepocgen.namjo-games.com"]
-        GALLERY["Gallery\ngallery.js 279 lines\n/gallery/ path"]
+        GALLERY["Gallery\ngallery.js 418 lines\n/gallery/ path"]
     end
 
     subgraph "Backend [Express :3010]"
-        API["REST API\napi.js 151 lines\n8 endpoints"]
-        POLLER["Job Poller\nindex.js 148 lines\n5s interval"]
+        API["REST API\napi.js 195 lines\n8 endpoints"]
+        POLLER["Job Poller\nindex.js 411 lines\n5s interval"]
         QM["QueueManager\n255 lines\nPostgreSQL queue"]
-        CM["ContainerManager\n200 lines\nDocker lifecycle"]
-        DM["DeploymentManager\n255 lines\nnginx + Traefik"]
+        CM["ContainerManager\n210 lines\nDocker lifecycle"]
+        DM["DeploymentManager\n526 lines\nnginx + Traefik"]
+        GT["gameTester.js\n48 lines\nPlaywright quality"]
     end
 
     subgraph "Data [PostgreSQL :5432]"
-        DB[("jobs table\nJSONB phase_outputs\nJSONB logs")]
+        DB[("postgres:15-alpine\njobs + job_logs tables\nJSONB phase_outputs")]
     end
 
     subgraph "Worker Pipeline [gamepocgen-worker]"
-        ENTRY["entrypoint.sh 221 lines\n4-phase router"]
+        ENTRY["entrypoint.sh 368 lines\n5-phase router"]
         CLAUDE["Claude Code CLI\nz.ai API"]
-        PROMPTS["9 prompt templates\n2540 lines total"]
+        PROMPTS["11 prompt templates\n4599 lines total"]
     end
 
     subgraph "Game Framework [vanilla JS]"
@@ -30,7 +31,7 @@ graph TB
         MECH["Mechanics: Currency\nGenerator Multiplier\nPrestige Unlockable"]
         UI["UI: ResourceBar\nUpgradeButton ProgressBar\nTabSystem SkillTree"]
         SPRITES["Sprites: Renderer\nData ProceduralSprite"]
-        CSS["game.css 637 lines\nDark theme"]
+        CSS["game.css 636 lines\nDark theme"]
     end
 
     subgraph "Game Containers [nginx:alpine]"
@@ -42,6 +43,7 @@ graph TB
     QM -->|"pg Pool"| DB
     POLLER -->|"getNextJob()"| QM
     POLLER -->|"spawnContainer()"| CM
+    POLLER -->|"testGame()"| GT
     CM -->|"Dockerode API"| ENTRY
     ENTRY -->|"claude -p prompt"| CLAUDE
     CLAUDE -->|"reads"| PROMPTS
@@ -56,32 +58,32 @@ graph TB
 ```mermaid
 graph TD
     subgraph "Core [zero dependencies]"
-        GL["GameLoop\n214 lines"]
-        EB["EventBus\n93 lines"]
-        BN["BigNum\n325 lines"]
-        SM["SaveManager\n247 lines"]
+        GL["GameLoop\n213 lines"]
+        EB["EventBus\n92 lines"]
+        BN["BigNum\n324 lines"]
+        SM["SaveManager\n246 lines"]
     end
 
     subgraph "Mechanics [depends on BigNum]"
-        CM2["CurrencyManager\n187 lines"]
-        GM["GeneratorManager\n189 lines"]
-        MM["MultiplierManager\n113 lines"]
-        PM["PrestigeManager\n154 lines"]
-        UM["UnlockManager\n110 lines"]
+        CM2["CurrencyManager\n186 lines"]
+        GM["GeneratorManager\n188 lines"]
+        MM["MultiplierManager\n112 lines"]
+        PM["PrestigeManager\n153 lines"]
+        UM["UnlockManager\n109 lines"]
     end
 
     subgraph "UI [depends on BigNum + CSS]"
-        RB["ResourceBar 133"]
-        UB["UpgradeButton 192"]
-        PB["ProgressBar 141"]
-        TS["TabSystem 152"]
-        SK["SkillTree 223"]
+        RB["ResourceBar 132"]
+        UB["UpgradeButton 191"]
+        PB["ProgressBar 140"]
+        TS["TabSystem 151"]
+        SK["SkillTree 222"]
     end
 
     subgraph "Sprites [CommonJS + Canvas]"
-        SR["SpriteRenderer 151"]
+        SR["SpriteRenderer 150"]
         SD["SpriteData 80"]
-        PS["ProceduralSprite 159"]
+        PS["ProceduralSprite 158"]
     end
 
     BN --> CM2

@@ -6,25 +6,26 @@
 graph TB
     subgraph "Frontend [nginx :80/:443]"
         DOCS["Docs Site\nindex.html 1125 lines\ngamepocgen.namjo-games.com"]
-        GALLERY["Gallery\ngallery.js 279 lines\n/gallery/ path"]
+        GALLERY["Gallery\ngallery.js 418 lines\n/gallery/ path"]
     end
 
     subgraph "Backend [Express :3010]"
-        API["REST API\napi.js 151 lines\n8 endpoints"]
-        POLLER["Job Poller\nindex.js 148 lines\n5s interval"]
+        API["REST API\napi.js 195 lines\n8 endpoints"]
+        POLLER["Job Poller\nindex.js 411 lines\n5s interval"]
         QM["QueueManager\n255 lines\nPostgreSQL queue"]
-        CM["ContainerManager\n200 lines\nDocker lifecycle"]
-        DM["DeploymentManager\n255 lines\nnginx + Traefik"]
+        CM["ContainerManager\n210 lines\nDocker lifecycle"]
+        DM["DeploymentManager\n526 lines\nnginx + Traefik"]
+        GT["gameTester.js\n48 lines\nPlaywright quality"]
     end
 
     subgraph "Data [PostgreSQL :5432]"
-        DB[("jobs table\nJSONB phase_outputs\nJSONB logs")]
+        DB[("postgres:15-alpine\njobs + job_logs tables\nJSONB phase_outputs")]
     end
 
     subgraph "Worker Pipeline [gamepocgen-worker]"
-        ENTRY["entrypoint.sh 221 lines\n4-phase router"]
+        ENTRY["entrypoint.sh 368 lines\n5-phase router"]
         CLAUDE["Claude Code CLI\nz.ai API"]
-        PROMPTS["9 prompt templates\n2540 lines total"]
+        PROMPTS["11 prompt templates\n4599 lines total"]
     end
 
     subgraph "Game Framework [vanilla JS]"
@@ -32,7 +33,7 @@ graph TB
         MECH["Mechanics: Currency\nGenerator Multiplier\nPrestige Unlockable"]
         UI["UI: ResourceBar\nUpgradeButton ProgressBar\nTabSystem SkillTree"]
         SPRITES["Sprites: Renderer\nData ProceduralSprite"]
-        CSS["game.css 637 lines\nDark theme"]
+        CSS["game.css 636 lines\nDark theme"]
     end
 
     subgraph "Game Containers [nginx:alpine]"
@@ -44,6 +45,7 @@ graph TB
     QM -->|"pg Pool"| DB
     POLLER -->|"getNextJob()"| QM
     POLLER -->|"spawnContainer()"| CM
+    POLLER -->|"testGame()"| GT
     CM -->|"Dockerode API"| ENTRY
     ENTRY -->|"claude -p prompt"| CLAUDE
     CLAUDE -->|"reads"| PROMPTS
@@ -58,32 +60,32 @@ graph TB
 ```mermaid
 graph TD
     subgraph "Core [zero dependencies]"
-        GL["GameLoop\n214 lines"]
-        EB["EventBus\n93 lines"]
-        BN["BigNum\n325 lines"]
-        SM["SaveManager\n247 lines"]
+        GL["GameLoop\n213 lines"]
+        EB["EventBus\n92 lines"]
+        BN["BigNum\n324 lines"]
+        SM["SaveManager\n246 lines"]
     end
 
     subgraph "Mechanics [depends on BigNum]"
-        CM2["CurrencyManager\n187 lines"]
-        GM["GeneratorManager\n189 lines"]
-        MM["MultiplierManager\n113 lines"]
-        PM["PrestigeManager\n154 lines"]
-        UM["UnlockManager\n110 lines"]
+        CM2["CurrencyManager\n186 lines"]
+        GM["GeneratorManager\n188 lines"]
+        MM["MultiplierManager\n112 lines"]
+        PM["PrestigeManager\n153 lines"]
+        UM["UnlockManager\n109 lines"]
     end
 
     subgraph "UI [depends on BigNum + CSS]"
-        RB["ResourceBar 133"]
-        UB["UpgradeButton 192"]
-        PB["ProgressBar 141"]
-        TS["TabSystem 152"]
-        SK["SkillTree 223"]
+        RB["ResourceBar 132"]
+        UB["UpgradeButton 191"]
+        PB["ProgressBar 140"]
+        TS["TabSystem 151"]
+        SK["SkillTree 222"]
     end
 
     subgraph "Sprites [CommonJS + Canvas]"
-        SR["SpriteRenderer 151"]
+        SR["SpriteRenderer 150"]
         SD["SpriteData 80"]
-        PS["ProceduralSprite 159"]
+        PS["ProceduralSprite 158"]
     end
 
     BN --> CM2
@@ -109,17 +111,17 @@ graph TB
         subgraph "LXC 102 webservices 192.168.138.11"
             TRAEFIK["Traefik\n:80 → redirect\n:443 TLS termination\nLet's Encrypt auto-SSL\nDocker provider auto-discovery"]
 
-            subgraph "Backend Stack docker/docker-compose.yml"
-                BACK["gamepocgen-backend\nNode 22 slim :3010→:3000\nDockerfile.backend 13 lines\nExpress + job poller"]
-                PG["postgres:16-alpine\n:5432\nvol: pgdata"]
+            subgraph "Backend Stack docker/docker-compose.yml 63 lines"
+                BACK["gamepocgen-backend\nNode 22 slim :3010→:3000\nDockerfile.backend 18 lines\nExpress + job poller + Playwright"]
+                PG["postgres:15-alpine\n:5432\nvol: pgdata\nhealthcheck: pg_isready"]
             end
 
-            subgraph "Docs Stack docs/docker-compose.yml"
+            subgraph "Docs Stack docs/docker-compose.yml 19 lines"
                 NGINX_DOCS["nginx:alpine\nDocs + Gallery\nvol: index.html gallery/\npriority=1"]
             end
 
             subgraph "Worker Containers ephemeral"
-                WORKER["gamepocgen-worker\nNode 22 + Claude Code CLI\nMem: 2GB CPU: 1\nTimeout: 3600s"]
+                WORKER["gamepocgen-worker\ndocker/Dockerfile 28 lines\nNode 22 + Claude Code CLI\nMem: 2GB CPU: 0.5\nTimeout: 43200s phases1-4\n3600s phase5"]
             end
 
             subgraph "Game Containers persistent"
@@ -134,7 +136,7 @@ graph TB
     TRAEFIK -->|"Host: gamepocgen...\nPathPrefix: /api /health\npriority=10"| BACK
     TRAEFIK -->|"Host: gamepocgen...\npriority=1 catch-all"| NGINX_DOCS
     TRAEFIK -->|"Host: gamedemoN..."| GAME
-    BACK -->|"pg Pool TCP :5432"| PG
+    BACK -->|"pg Pool TCP :5432\nvia internal network"| PG
     BACK -->|"Dockerode via socket"| DOCKER_SOCK
     DOCKER_SOCK -->|"create+start"| WORKER
     DOCKER_SOCK -->|"create+start"| GAME
@@ -144,18 +146,18 @@ graph TB
 
 ```mermaid
 graph TD
-    subgraph "docker/docker-compose.yml"
-        B_SVC["backend service\nbuild: ..\nports: 3010:3000\nvolumes:\n  docker.sock\n  workspaces vol\nenv: DATABASE_URL\n  ZAI_API_KEY ZAI_BASE_URL\n  HOST_WORKSPACE_PATH\n  HOST_DEPLOY_DIR\n  WORKER_IMAGE\nlabels: traefik priority=10\nnetworks: traefik"]
+    subgraph "docker/docker-compose.yml 63 lines"
+        B_SVC["backend service\nbuild: context ../ dockerfile Dockerfile.backend\nports: 3010:3000\nvolumes:\n  /var/run/docker.sock\n  ./workspaces:/data/workspaces\n  ./deployed:/data/deployed\nenv: DATABASE_URL ZAI_API_KEY ZAI_BASE_URL\n  CLAUDE_CODE_OAUTH_TOKEN\n  CLAUDE_CODE_REFRESH_TOKEN\n  CLAUDE_CODE_TOKEN_EXPIRES\n  MAX_CONCURRENT WORKSPACE_PATH\n  HOST_WORKSPACE_PATH DEPLOY_DIR\n  HOST_DEPLOY_DIR GALLERY_DATA_PATH\n  DOMAIN WORKER_IMAGE\ndepends_on: postgres condition service_healthy\nlabels: traefik priority=10\nnetworks: traefik + internal\nrestart: unless-stopped"]
 
-        P_SVC["postgres service\nimage: postgres:16-alpine\nvolumes: pgdata\nenv: POSTGRES_USER\n  POSTGRES_PASSWORD\n  POSTGRES_DB\nnetworks: traefik"]
+        P_SVC["postgres service\nimage: postgres:15-alpine\nvolumes: pgdata\nenv: POSTGRES_DB POSTGRES_USER\n  POSTGRES_PASSWORD\nhealthcheck: pg_isready -U gamepocgen\n  interval 5s timeout 5s retries 5\nnetworks: internal ONLY\nrestart: unless-stopped"]
     end
 
-    subgraph "docs/docker-compose.yml"
-        D_SVC["web service\nimage: nginx:alpine\nvolumes:\n  index.html :ro\n  gallery/index.html :ro\n  gallery/gallery.js :ro\nlabels: traefik priority=1\nnetworks: traefik"]
+    subgraph "docs/docker-compose.yml 19 lines"
+        D_SVC["web service\nimage: nginx:alpine\nvolumes:\n  ./index.html :ro\n  ../gallery/index.html :ro\n  ../gallery/gallery.js :ro\nlabels: traefik priority=1\nnetworks: traefik\nrestart: unless-stopped"]
     end
 
-    subgraph "Dynamic (created by DeploymentManager)"
-        G_SVC["gamedemoN container\nimage: nginx:alpine\nvolumes: deploy dir\nlabels:\n  Host gamedemoN.namjo-games.com\n  tls certresolver=letsencrypt\nnetworks: traefik"]
+    subgraph "Dynamic created by DeploymentManager"
+        G_SVC["gamedemoN container\nimage: nginx:alpine\nvolumes: hostDeployDir/gamedemoN/html :ro\nlabels:\n  Host gamedemoN.namjo-games.com\n  tls certresolver=letsencrypt\nnetworks: traefik\nrestart: unless-stopped"]
     end
 ```
 
@@ -165,8 +167,7 @@ graph TD
 graph TD
     subgraph "/root/apps/"
         T_DIR["traefik/\ndocker-compose.yml\ntraefik.yml\nacme.json\ndynamic/"]
-        G_DIR["gamepocgen/\n├── docker/\n│   ├── docker-compose.yml\n│   ├── .env\n│   └── entrypoint.sh\n├── docs/\n│   ├── docker-compose.yml\n│   └── index.html\n├── gallery/\n│   ├── index.html\n│   └── gallery.js\n├── framework/\n├── prompts/\n└── workspaces/\n    └── job-N/"]
-        DEMO["gamedemo0/\n└── index.html\ngamedemo1/\n└── index.html\n..."]
+        G_DIR["gamepocgen/\n├── Dockerfile.backend 18 lines\n├── docker/\n│   ├── Dockerfile 28 lines worker\n│   ├── docker-compose.yml 63 lines\n│   ├── .env\n│   ├── entrypoint.sh 368 lines\n│   ├── workspaces/\n│   │   └── job-N/\n│   └── deployed/\n│       ├── gamedemoN/\n│       │   ├── html/\n│       │   ├── metadata.json\n│       │   └── docker-compose.yml\n│       └── gallery/games.json\n├── docs/\n│   ├── docker-compose.yml 19 lines\n│   └── index.html\n├── gallery/\n│   ├── index.html\n│   └── gallery.js\n├── framework/\n├── prompts/\n├── scripts/\n├── backend/\n└── AI/"]
     end
 ```
 
@@ -174,13 +175,17 @@ graph TD
 
 ```mermaid
 graph LR
-    subgraph "traefik network (external bridge)"
+    subgraph "traefik network external bridge"
         TF["Traefik"]
         BE["Backend :3010"]
-        PG2["PostgreSQL :5432"]
         DOC["Docs nginx"]
         GD0["gamedemo0 nginx"]
         GD1["gamedemo1 nginx"]
+    end
+
+    subgraph "internal network bridge"
+        BE2["Backend :3010"]
+        PG2["PostgreSQL :5432"]
     end
 
     subgraph "default bridge"
@@ -191,7 +196,7 @@ graph LR
     TF --- DOC
     TF --- GD0
     TF --- GD1
-    BE --- PG2
+    BE2 --- PG2
 ```
 
 # Build and Deploy Commands
@@ -199,7 +204,7 @@ graph LR
 ```mermaid
 flowchart TD
     subgraph "Build Worker Image"
-        BW1["cd /root/apps/gamepocgen"] --> BW2["docker build -t gamepocgen-worker\n-f Dockerfile.worker ."]
+        BW1["cd /root/apps/gamepocgen"] --> BW2["docker build -t gamepocgen-worker\n-f docker/Dockerfile ."]
     end
 
     subgraph "Build + Start Backend"
@@ -213,6 +218,7 @@ flowchart TD
     subgraph "Monitor"
         M1["docker compose logs -f backend"]
         M2["docker ps --filter name=gamedemo"]
+        M3["docker ps --filter name=gamepocgen-worker"]
     end
 ```
 
@@ -224,13 +230,13 @@ Detailed subsystem documentation lives in `AI/document/`. Read these on-demand w
 
 | File | Covers |
 |------|--------|
-| `AI/document/01-file-map.md` | Backend source files, test files, framework files, infrastructure files |
-| `AI/document/02-user-flows.md` | Game generation submission, job polling, gallery auth, deployment flows |
-| `AI/document/03-api-surface.md` | All REST API endpoints, request/response shapes, error codes |
-| `AI/document/04-data-models.md` | Database schema, JSONB structures for phase_outputs and logs |
-| `AI/document/05-data-pipelines.md` | 4-phase generation pipeline, workspace file accumulation, bind mount paths |
-| `AI/document/06-state-lifecycle.md` | Job status transitions, worker container lifecycle, game container lifecycle |
-| `AI/document/08-config.md` | Environment variables, config files, hardcoded values |
-| `AI/document/09-boot-sequence.md` | Backend boot, docs/gallery boot, worker container boot, polling loop |
-| `AI/document/10-error-handling.md` | API error flow, job processing errors, deployment errors, gallery errors |
-| `AI/document/11-security.md` | Security boundaries, auth flow, XSS prevention, container isolation, secrets |
+| `AI/document/01-file-map.md` | Every file's purpose, line count, and dependency graph |
+| `AI/document/02-user-flows.md` | Job submission, polling, 5-phase execution, Phase 5 repair loop, gallery auth, deployment |
+| `AI/document/03-api-surface.md` | All REST API endpoints, request/response shapes, error codes, comparison mode |
+| `AI/document/04-data-models.md` | Database schema (jobs + job_logs tables), JSONB structures, SQL operations |
+| `AI/document/05-data-pipelines.md` | 5-phase generation pipeline, workspace accumulation, bind mount paths, env translation |
+| `AI/document/06-state-lifecycle.md` | Job status transitions (queued/running/phase_1-5/completed/failed), container lifecycles |
+| `AI/document/08-config.md` | Environment variables, config files, hardcoded values, container resource limits |
+| `AI/document/09-boot-sequence.md` | Backend boot, worker boot (apikey vs OAuth), polling loop, Phase 5 repair loop |
+| `AI/document/10-error-handling.md` | API errors, job processing errors, Phase 5 repair errors, gallery error states |
+| `AI/document/11-security.md` | Security boundaries, OAuth flow, container isolation, secret management |

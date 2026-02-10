@@ -2,26 +2,58 @@
 
 ```mermaid
 stateDiagram-v2
-    [*] --> pending: POST /api/generate\nINSERT status=pending
+    [*] --> queued: POST /api/generate\nINSERT status=queued
 
-    pending --> processing: getNextJob()\nFOR UPDATE SKIP LOCKED\nUPDATE status=processing
+    queued --> running: getNextJob()\nFOR UPDATE SKIP LOCKED\nUPDATE status=running
 
-    processing --> phase_1: updateStatus(id, phase_1)\nspawnContainer(job, phase1)
+    running --> phase_1: updateStatus(id, phase_1)\nspawnContainer(job, phase1)
 
     phase_1 --> phase_2: exitCode=0\nupdateStatus(id, phase_2)
     phase_1 --> failed: exitCode!=0\nor container error
 
-    phase_2 --> phase_3: exitCode=0\n6 sub-agents complete
+    phase_2 --> phase_3: exitCode=0\n3 sub-agents complete
     phase_2 --> failed: any sub-agent fails
 
-    phase_3 --> phase_4: exitCode=0\nimplementation-guide.md written
+    phase_3 --> phase_4: exitCode=0\nimplementation-plan.json written
     phase_3 --> failed: exitCode!=0
 
-    phase_4 --> completed: exitCode=0\ndist/ created\ndeployGame() succeeds
+    phase_4 --> deployed: exitCode=0\ndist/ created\ndeployGame() succeeds
     phase_4 --> failed: exitCode!=0\nor deploy error
+
+    deployed --> phase_5: Playwright test\nscore < 10/10
+
+    phase_5 --> phase_5: repair + redeploy\nscore < 10 and attempt < 100
+    phase_5 --> completed: score >= 10/10\nor attempt=100 and score >= 4
+    phase_5 --> failed: attempt=100\nand score < 4\ngame removed
+
+    deployed --> completed: score >= 10/10\non first test
 
     completed --> [*]
     failed --> [*]
+```
+
+# Valid Status Values
+
+```mermaid
+flowchart LR
+    subgraph "VALID_STATUSES queueManager.js"
+        S1["queued"]
+        S2["running"]
+        S3["phase_1"]
+        S4["phase_2"]
+        S5["phase_3"]
+        S6["phase_4"]
+        S7["phase_5"]
+        S8["completed"]
+        S9["failed"]
+    end
+
+    S1 --> S2 --> S3 --> S4 --> S5 --> S6 --> S7 --> S8
+    S3 --> S9
+    S4 --> S9
+    S5 --> S9
+    S6 --> S9
+    S7 --> S9
 ```
 
 # Worker Container Lifecycle
@@ -33,19 +65,36 @@ stateDiagram-v2
     Created --> Running: container.start()\nentrypoint.sh begins
 
     state Running {
-        [*] --> ValidatingEnv: check PHASE JOB_ID\nGAME_NAME ZAI_API_KEY
-        ValidatingEnv --> WritingConfig: export ANTHROPIC_AUTH_TOKEN\nwrite settings.json
-        WritingConfig --> ExecutingPhase: claude -p prompt
+        [*] --> ValidatingEnv: check PHASE JOB_ID GAME_NAME\ncheck ZAI_API_KEY (apikey mode only)
+        ValidatingEnv --> ConfiguringAuth: apikey: export ANTHROPIC_AUTH_TOKEN\nsubscription: write .credentials.json
+        ConfiguringAuth --> WritingSettings: write settings.json\nwrite .claude.json
+        WritingSettings --> CopyingFramework: cp framework/* workspace/
+        CopyingFramework --> ExecutingPhase: claude -p --dangerously-skip-permissions
         ExecutingPhase --> WritingStatus: write status JSON
     }
 
     Running --> Exited_0: Success\nall outputs written
-    Running --> Exited_N: Error\nnon-zero exit code
+    Running --> Exited_1: Error\nnon-zero exit code
+    Running --> Timeout: exit code 124\ntimeout --signal=TERM exceeded
 
     Exited_0 --> LogsCollected: getContainerLogs()
-    Exited_N --> LogsCollected: getContainerLogs()
+    Exited_1 --> LogsCollected: getContainerLogs()
+    Timeout --> LogsCollected: getContainerLogs()
 
     LogsCollected --> [*]: Container left for cleanup
+```
+
+# Worker Status File States
+
+```mermaid
+stateDiagram-v2
+    [*] --> running: write_status running\nStarting phase
+
+    running --> running: write_status running\nPhase 2: agent_name (sub-agent progress)
+
+    running --> completed: exit code 0\nwrite_status completed Success
+    running --> failed: exit code != 0\nwrite_status failed Exit code N
+    running --> timeout: exit code 124\nwrite_status timeout Timed out after Ns
 ```
 
 # Game Container Lifecycle
@@ -59,9 +108,15 @@ stateDiagram-v2
 
     RemoveOld --> CopyFiles: container.stop()\ncontainer.remove()
 
-    CopyFiles --> CreateNginx: mkdir + copy dist/*\nto deploy dir
+    CopyFiles --> WriteMetadata: mkdir + copy dist/*\nto deployed/gamedemoN/html/
 
-    CreateNginx --> Running: createContainer(nginx:alpine)\nwith Traefik labels\ncontainer.start()
+    WriteMetadata --> GenerateGuide: extractMetadata()\nwrite metadata.json
+
+    GenerateGuide --> WriteCompose: generateGuideHtml()\ninjectGuideButton()
+
+    WriteCompose --> ConnectNetwork: write docker-compose.yml\ncreateContainer(nginx:alpine)
+
+    ConnectNetwork --> Running: connect traefik network\ncontainer.start()
 
     Running --> [*]: Serves game at\ngamedemoN.namjo-games.com
 
@@ -70,6 +125,38 @@ stateDiagram-v2
         TraefikDiscovery --> SSLProvisioned: Let's Encrypt cert
         SSLProvisioned --> ServingTraffic: HTTPS ready
     }
+```
+
+# Phase 5 Repair Iteration Lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> InjectBadge: injectBadgeScript()\nupdateScoreBadge(0, 0)
+
+    InjectBadge --> PlaywrightTest: runPlaywrightTest(internal URL)
+
+    PlaywrightTest --> UpdateBadge: updateScoreBadge(score, attempt)\nupdateRepairLog()
+
+    UpdateBadge --> Passed: score >= 10
+
+    UpdateBadge --> MaxAttemptKeep: attempt=100\nscore >= 4
+
+    UpdateBadge --> MaxAttemptFail: attempt=100\nscore < 4
+
+    UpdateBadge --> SpawnRepair: score < 10\nattempt < 100
+
+    SpawnRepair --> PollContainer: spawnContainer(job, phase5)\npoll every 5s
+
+    PollContainer --> Redeploy: exitCode=0\ndeployGame() + re-inject badge
+
+    PollContainer --> NextTest: exitCode!=0\nskip redeploy, re-test
+
+    Redeploy --> PlaywrightTest
+    NextTest --> PlaywrightTest
+
+    Passed --> [*]: status: completed
+    MaxAttemptKeep --> [*]: status: completed
+    MaxAttemptFail --> [*]: removeGame()\nstatus: failed
 ```
 
 # Gallery Auth State
@@ -90,7 +177,40 @@ stateDiagram-v2
 
     Authenticated --> Loading: showLoading()\nfetch /api/games
 
-    Loading --> GamesDisplayed: games.length > 0\nrender card grid
-    Loading --> EmptyState: games.length === 0
-    Loading --> ErrorState: fetch failed or 500
+    Loading --> GamesDisplayed: response.ok\ngames.length > 0\nrender card grid
+    Loading --> EmptyState: games.length === 0\nor 404 response\nor TypeError with fetch
+    Loading --> ErrorState: non-TypeError exception\nshows Unable to connect to the game server
+```
+
+# Entrypoint Auth Mode Branching
+
+```mermaid
+stateDiagram-v2
+    [*] --> CheckAuthMode: AUTH_MODE env var
+
+    CheckAuthMode --> ApiKeyMode: AUTH_MODE=apikey (default)
+    CheckAuthMode --> SubscriptionMode: AUTH_MODE=subscription
+
+    state ApiKeyMode {
+        [*] --> ValidateApiKey: require ZAI_API_KEY
+        ValidateApiKey --> ExportTokens: export ANTHROPIC_AUTH_TOKEN\nexport ANTHROPIC_BASE_URL
+        ExportTokens --> WriteApiSettings: settings.json with API env vars
+        WriteApiSettings --> RemoveCredentials: rm .credentials.json
+    }
+
+    state SubscriptionMode {
+        [*] --> CheckOAuthToken: CLAUDE_CODE_OAUTH_TOKEN set?
+        CheckOAuthToken --> WriteCredentials: write .credentials.json\naccessToken + refreshToken + expiresAt
+        CheckOAuthToken --> SkipCredentials: no token provided
+        WriteCredentials --> WriteSubSettings: settings.json without API env vars
+        SkipCredentials --> WriteSubSettings
+    }
+
+    ApiKeyMode --> PhaseRouting: proceed to phase execution
+    SubscriptionMode --> PhaseRouting
+
+    state PhaseRouting {
+        [*] --> RefreshToken: subscription mode only\nrefresh_oauth_token()
+        RefreshToken --> RunClaude: claude -p --dangerously-skip-permissions
+    }
 ```
