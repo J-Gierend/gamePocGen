@@ -244,6 +244,9 @@ async function main() {
     }
 
     // Phase 5: Repair loop — keep iterating until 10/10 or 100 attempts
+    await queueManager.updateStatus(job.id, 'phase_5');
+    await queueManager.addLog(job.id, 'info', 'Starting Phase 5 repair loop');
+
     // Use internal Docker network URL for Playwright tests (avoids hairpin NAT)
     const gameUrl = deployResult.url;
     const testUrl = `http://gamedemo${job.id}`;
