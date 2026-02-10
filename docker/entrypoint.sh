@@ -328,6 +328,19 @@ Build the complete playable game in: ${WORKSPACE_DIR}/dist/"
             exit 1
         fi
 
+        # Check for strategy file from a previous review
+        STRATEGY_CONTEXT=""
+        if [ -f "${WORKSPACE_DIR}/repair-strategy.md" ]; then
+            STRATEGY_CONTEXT="
+
+=== REPAIR STRATEGY (from automated review) ===
+A strategy review identified why previous repairs failed. READ THIS FIRST and follow its guidance:
+
+$(cat "${WORKSPACE_DIR}/repair-strategy.md")
+
+=== END REPAIR STRATEGY ==="
+        fi
+
         PROMPT="$(cat "$PROMPT_FILE")
 
 Game name: ${GAME_NAME}
@@ -337,11 +350,35 @@ Game URL: ${GAME_URL:-}
 
 Defect report:
 ${DEFECT_REPORT:-No defect report provided}
+${STRATEGY_CONTEXT}
 
 Fix the defects listed above. The game source files are in ${WORKSPACE_DIR}/dist/
 After fixing, rebuild the game in place in ${WORKSPACE_DIR}/dist/"
 
         run_claude "$PROMPT" "phase5-repair"
+        EXIT_CODE=$?
+        ;;
+
+    phase5-strategy)
+        PROMPT_FILE="${PROMPTS_DIR}/phase5-strategy-review.md"
+        if [ ! -f "$PROMPT_FILE" ]; then
+            write_status "failed" "Missing prompt: ${PROMPT_FILE}"
+            exit 1
+        fi
+
+        PROMPT="$(cat "$PROMPT_FILE")
+
+Game name: ${GAME_NAME}
+Job ID: ${JOB_ID}
+Workspace: ${WORKSPACE_DIR}
+Game URL: ${GAME_URL:-}
+
+Repair History (score progression and recurring defects):
+${DEFECT_REPORT:-No history provided}
+
+Analyze why repairs are stuck and write a new strategy to ${WORKSPACE_DIR}/repair-strategy.md"
+
+        run_claude "$PROMPT" "phase5-strategy"
         EXIT_CODE=$?
         ;;
 

@@ -307,6 +307,70 @@ h1{margin:0 0 4px}h2{margin:0 0 16px;color:#888;font-weight:normal}</style></hea
     updateScoreBadge(0, 0);
     let consecutiveTimeouts = 0;
     const MAX_CONSECUTIVE_TIMEOUTS = 5;
+    const PLATEAU_WINDOW = 5; // Check last N attempts for improvement
+    const PLATEAU_THRESHOLD = 0.5; // Minimum score delta to count as "improving"
+    let lastStrategyReviewAtAttempt = 0; // Don't review more than once every 5 attempts
+
+    // Helper: detect if repair loop is plateaued
+    function isPlateaued(attempt) {
+      if (repairLog.length < PLATEAU_WINDOW) return false;
+      if (attempt - lastStrategyReviewAtAttempt < PLATEAU_WINDOW) return false;
+      const recent = repairLog.slice(-PLATEAU_WINDOW);
+      const minScore = Math.min(...recent.map(r => r.score));
+      const maxScore = Math.max(...recent.map(r => r.score));
+      return (maxScore - minScore) < PLATEAU_THRESHOLD;
+    }
+
+    // Helper: build repair history summary for strategy review
+    function buildRepairHistory() {
+      const lines = ['## Score Progression'];
+      for (const entry of repairLog) {
+        lines.push(`Attempt ${entry.attempt}: ${entry.score}/10 (${entry.defectCount} defects)`);
+        if (entry.defects) {
+          for (const d of entry.defects.slice(0, 3)) {
+            const desc = typeof d === 'string' ? d : `[${d.severity}] ${d.description}`;
+            lines.push(`  - ${desc}`);
+          }
+        }
+      }
+      // Identify recurring defects
+      const defectCounts = {};
+      for (const entry of repairLog) {
+        for (const d of entry.defects || []) {
+          const key = typeof d === 'string' ? d : (d.description || '').substring(0, 60);
+          defectCounts[key] = (defectCounts[key] || 0) + 1;
+        }
+      }
+      lines.push('\n## Recurring Defects (appeared in multiple attempts)');
+      for (const [defect, count] of Object.entries(defectCounts).sort((a, b) => b[1] - a[1])) {
+        if (count >= 2) lines.push(`- [${count}x] ${defect}`);
+      }
+      return lines.join('\n');
+    }
+
+    // Helper: build auth env vars
+    function getAuthEnv() {
+      return provider === 'anthropic' ? [
+        'AUTH_MODE=subscription',
+        `CLAUDE_CODE_OAUTH_TOKEN=${process.env.CLAUDE_CODE_OAUTH_TOKEN || ''}`,
+        `CLAUDE_CODE_REFRESH_TOKEN=${process.env.CLAUDE_CODE_REFRESH_TOKEN || ''}`,
+        `CLAUDE_CODE_TOKEN_EXPIRES=${process.env.CLAUDE_CODE_TOKEN_EXPIRES || ''}`,
+        `MODEL=${job.config?.model || 'claude-opus-4-6'}`,
+      ] : [];
+    }
+
+    // Helper: spawn container and wait for completion
+    async function spawnAndWait(phase, extraEnv) {
+      job.extraEnv = [...getAuthEnv(), ...extraEnv];
+      const { containerId } = await containerManager.spawnContainer(job, phase);
+      let status;
+      do {
+        await new Promise(r => setTimeout(r, 5000));
+        status = await containerManager.getContainerStatus(containerId);
+      } while (status?.running);
+      const logs = await containerManager.getContainerLogs(containerId);
+      return { status, logs };
+    }
 
     for (let attempt = 1; attempt <= MAX_REPAIR_ATTEMPTS; attempt++) {
       try {
@@ -336,20 +400,17 @@ h1{margin:0 0 4px}h2{margin:0 0 16px;color:#888;font-weight:normal}</style></hea
           defects: defectSummaries,
           timestamp: new Date().toISOString(),
         });
-        // Keep latest score/attempt at top level for easy gallery access
         await queueManager.updatePhaseOutput(job.id, 'latest_score', { score, attempt, defectCount: testResult.defects?.length ?? 0 });
 
-        // Log this attempt for the repair history
         repairLog.push({
           attempt,
           score,
           defectCount: testResult.defects?.length ?? 0,
-          defects: (testResult.defects || []).slice(0, 10), // Cap at 10 for readability
+          defects: (testResult.defects || []).slice(0, 10),
           checks: testResult.checks || {},
           timestamp: new Date().toISOString(),
         });
 
-        // Update live score badge + repair log on the deployed game
         updateScoreBadge(score, attempt);
         updateRepairLog();
 
@@ -371,45 +432,50 @@ h1{margin:0 0 4px}h2{margin:0 0 16px;color:#888;font-weight:normal}</style></hea
           break;
         }
 
+        // --- PLATEAU DETECTION: trigger strategy review when stuck ---
+        if (isPlateaued(attempt)) {
+          await queueManager.addLog(job.id, 'info', `PLATEAU DETECTED at attempt ${attempt} (score ~${score} for last ${PLATEAU_WINDOW} attempts). Spawning strategy review...`);
+          lastStrategyReviewAtAttempt = attempt;
+
+          const history = buildRepairHistory();
+          const { status: reviewStatus, logs: reviewLogs } = await spawnAndWait('phase5-strategy', [
+            `GAME_URL=${gameUrl}`,
+            `DEFECT_REPORT=${history}`,
+          ]);
+
+          await queueManager.addLog(job.id, 'info', `Strategy review ${reviewStatus?.exitCode === 0 ? 'completed' : 'failed'}: ${reviewLogs.slice(0, 300)}`);
+          await queueManager.updatePhaseOutput(job.id, `strategy_review_${attempt}`, {
+            triggeredAt: attempt,
+            score,
+            exitCode: reviewStatus?.exitCode,
+            timestamp: new Date().toISOString(),
+          });
+
+          // Continue to normal repair — it will now read repair-strategy.md
+        }
+
         // Spawn Phase 5 repair container with defect report
         await queueManager.addLog(job.id, 'info', `Spawning repair container (attempt ${attempt})`);
         const defectReport = JSON.stringify(testResult.defects || []);
 
-        job.extraEnv = [
-          ...(provider === 'anthropic' ? [
-            'AUTH_MODE=subscription',
-            `CLAUDE_CODE_OAUTH_TOKEN=${process.env.CLAUDE_CODE_OAUTH_TOKEN || ''}`,
-            `CLAUDE_CODE_REFRESH_TOKEN=${process.env.CLAUDE_CODE_REFRESH_TOKEN || ''}`,
-            `CLAUDE_CODE_TOKEN_EXPIRES=${process.env.CLAUDE_CODE_TOKEN_EXPIRES || ''}`,
-            `MODEL=${job.config?.model || 'claude-opus-4-6'}`,
-          ] : []),
+        const { status: repairStatus, logs: repairLogs } = await spawnAndWait('phase5', [
           `GAME_URL=${gameUrl}`,
           `DEFECT_REPORT=${defectReport}`,
-        ];
+        ]);
 
-        const { containerId } = await containerManager.spawnContainer(job, 'phase5');
+        await queueManager.addLog(job.id, 'info', `phase5 repair logs: ${repairLogs.slice(0, 500)}`);
 
-        // Poll container until done
-        let status;
-        do {
-          await new Promise(r => setTimeout(r, 5000));
-          status = await containerManager.getContainerStatus(containerId);
-        } while (status?.running);
-
-        const logs = await containerManager.getContainerLogs(containerId);
-        await queueManager.addLog(job.id, 'info', `phase5 repair logs: ${logs.slice(0, 500)}`);
-
-        if (status?.exitCode !== 0) {
-          await queueManager.addLog(job.id, 'error', `Repair container failed with exit code ${status?.exitCode}`);
-          continue; // Try next iteration with re-test
+        if (repairStatus?.exitCode !== 0) {
+          await queueManager.addLog(job.id, 'error', `Repair container failed with exit code ${repairStatus?.exitCode}`);
+          continue;
         }
 
-        // Redeploy the fixed game after each repair
+        // Redeploy the fixed game
         try {
           const workspaceDir = `${containerManager.workspacePath}/job-${job.id}`;
           const sourceDir = `${workspaceDir}/dist`;
           await deploymentManager.deployGame(job.id, job.game_name || `Game ${job.id}`, sourceDir, { workspaceDir });
-          injectBadgeScript(); // Re-inject after redeploy
+          injectBadgeScript();
           updateScoreBadge(score, attempt);
           await queueManager.addLog(job.id, 'info', `Redeployed after repair attempt ${attempt}`);
         } catch (redeployErr) {
