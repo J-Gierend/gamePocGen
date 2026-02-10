@@ -605,24 +605,20 @@ h1{margin:0 0 4px}h2{margin:0 0 16px;color:#888;font-weight:normal}</style></hea
         }
       }
 
-      console.log(`[ProcessImprovement] Spawning agent with ${crossJobData.length} jobs' data...`);
+      // Write cross-job data to a file (env vars have size limits)
+      const { writeFileSync: writeSync } = await import('node:fs');
+      writeSync(`${sharedDir}/cross-job-data.md`, crossJobReport);
 
-      // Spawn using a dummy job object with shared workspace
-      const dummyJob = {
-        id: 0,
-        game_name: 'process-improvement',
-        extraEnv: [
-          `DEFECT_REPORT=${crossJobReport}`,
-        ],
-      };
+      console.log(`[ProcessImprovement] Spawning agent with ${crossJobData.length} jobs' data...`);
 
       // Spawn container with shared workspace
       const hostSharedDir = `${containerManager.hostWorkspacePath}/shared`;
+      const containerName = `gamepocgen-process-improvement-${Date.now()}`;
       const containerId = await new Promise((resolve, reject) => {
         const docker = containerManager.docker;
         docker.createContainer({
           Image: process.env.WORKER_IMAGE || 'gamepocgen-worker',
-          name: `gamepocgen-process-improvement-${Date.now()}`,
+          name: containerName,
           Env: [
             'PHASE=process-improvement',
             'JOB_ID=0',
@@ -631,13 +627,12 @@ h1{margin:0 0 4px}h2{margin:0 0 16px;color:#888;font-weight:normal}</style></hea
             `ZAI_BASE_URL=${process.env.ZAI_BASE_URL || ''}`,
             'WORKSPACE_DIR=/workspace',
             'TIMEOUT_SECONDS=3600',
-            `DEFECT_REPORT=${crossJobReport}`,
+            'DEFECT_REPORT=See /workspace/cross-job-data.md for full cross-job analysis data.',
           ],
           HostConfig: {
             Memory: 2 * 1024 * 1024 * 1024,
             NanoCpus: 1e9,
             Binds: [`${hostSharedDir}:/workspace`],
-            AutoRemove: true,
           },
           NetworkingMode: 'traefik',
         }).then(c => c.start().then(() => resolve(c.id))).catch(reject);
@@ -654,14 +649,29 @@ h1{margin:0 0 4px}h2{margin:0 0 16px;color:#888;font-weight:normal}</style></hea
               const info = await c.inspect();
               status = { running: info.State.Running, exitCode: info.State.ExitCode };
             } catch {
-              status = { running: false, exitCode: -1 };
+              // Container might be gone, give it one more try
+              await new Promise(r => setTimeout(r, 2000));
+              try {
+                const c = containerManager.docker.getContainer(containerId);
+                const info = await c.inspect();
+                status = { running: info.State.Running, exitCode: info.State.ExitCode };
+              } catch {
+                status = { running: false, exitCode: -1 };
+              }
             }
           } while (status?.running);
 
+          // Get logs before cleanup
+          try {
+            const c = containerManager.docker.getContainer(containerId);
+            const logStream = await c.logs({ stdout: true, stderr: true, tail: 20 });
+            console.log(`[ProcessImprovement] Agent logs: ${logStream.toString().slice(0, 500)}`);
+            await c.remove();
+          } catch { /* container might already be removed */ }
+
           console.log(`[ProcessImprovement] Agent finished (exit=${status?.exitCode})`);
 
-          // Store the result in a global phase_output-like structure
-          // Read the log.json from improvements dir
+          // Check if reports were written
           const logPath = `${improvementsDir}/log.json`;
           if (existsSync(logPath)) {
             const { readFileSync } = await import('node:fs');

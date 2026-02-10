@@ -391,6 +391,12 @@ Analyze why repairs are stuck and write a new strategy to ${WORKSPACE_DIR}/repai
 
         mkdir -p "${WORKSPACE_DIR}/improvements"
 
+        # Read cross-job data from file (too large for env vars)
+        CROSS_JOB_DATA=""
+        if [ -f "${WORKSPACE_DIR}/cross-job-data.md" ]; then
+            CROSS_JOB_DATA="$(cat "${WORKSPACE_DIR}/cross-job-data.md")"
+        fi
+
         PROMPT="$(cat "$PROMPT_FILE")
 
 Job ID: ${JOB_ID}
@@ -398,7 +404,7 @@ Workspace: ${WORKSPACE_DIR}
 Timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)
 
 Cross-job data (score progressions, defects, strategy reviews):
-${DEFECT_REPORT:-No cross-job data provided}
+${CROSS_JOB_DATA:-No cross-job data provided}
 
 Read previous improvement reports from: ${WORKSPACE_DIR}/improvements/
 Read the test suite from: ${WORKSPACE_DIR}/scripts/test-game.js
