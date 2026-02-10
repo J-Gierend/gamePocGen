@@ -1,6 +1,7 @@
 /**
  * GamePocGen Gallery
- * Handles password protection, dynamic game listing, and pixel art icon generation
+ * Shows all jobs with real-time phase progress, repair scores, and pixel art icons.
+ * Polls /api/jobs every 5s for live updates.
  */
 
 (function() {
@@ -9,7 +10,41 @@
     const CONFIG = {
         password: 'gamepoc2024',
         sessionKey: 'gamepocgen_auth',
-        apiEndpoint: '/api/games'
+        apiEndpoint: '/api/jobs',
+        pollInterval: 5000,
+    };
+
+    // Phase definitions for progress tracking
+    const PHASES = [
+        { key: 'phase_1', label: 'Idea' },
+        { key: 'phase_2', label: 'Design' },
+        { key: 'phase_3', label: 'Plan' },
+        { key: 'phase_4', label: 'Build' },
+        { key: 'phase_5', label: 'QA' },
+    ];
+
+    const STATUS_COLORS = {
+        queued:    '#64748b',
+        running:   '#3b82f6',
+        phase_1:   '#f59e0b',
+        phase_2:   '#f59e0b',
+        phase_3:   '#d97706',
+        phase_4:   '#8b5cf6',
+        phase_5:   '#6366f1',
+        completed: '#22c55e',
+        failed:    '#ef4444',
+    };
+
+    const STATUS_LABELS = {
+        queued:    'Queued',
+        running:   'Starting',
+        phase_1:   'Ideation',
+        phase_2:   'Design',
+        phase_3:   'Planning',
+        phase_4:   'Building',
+        phase_5:   'Testing',
+        completed: 'Complete',
+        failed:    'Failed',
     };
 
     // Pixel art icon definitions (16x16 grids, 0=transparent, numbers=palette index)
@@ -142,8 +177,6 @@
         },
     };
 
-    // Map game title keywords to icon combos + background colors
-    // More specific compound matches come first, then single-keyword fallbacks
     const ICON_THEMES = [
         { keywords: [['goblin', 'mine']],          icons: ['goblin', 'pickaxe'], bg: '#1a2e1a', accent: '#4a8c3f' },
         { keywords: [['crystal', 'mine']],          icons: ['pickaxe', 'crystal'],bg: '#2e1a0f', accent: '#d97706' },
@@ -158,37 +191,25 @@
         { keywords: [['battle'], ['fight'], ['war']],    icons: ['sword', 'shield'],  bg: '#2e1a1a', accent: '#dc2626' },
     ];
 
-    /**
-     * Pick icon theme based on game title. Compound keyword matches checked first.
-     */
     function getIconTheme(title) {
         const lower = (title || '').toLowerCase();
         for (const theme of ICON_THEMES) {
-            // Each entry in keywords is an array of words that ALL must match
             for (const kwGroup of theme.keywords) {
-                if (kwGroup.every(kw => lower.includes(kw))) {
-                    return theme;
-                }
+                if (kwGroup.every(kw => lower.includes(kw))) return theme;
             }
         }
-        // Default fallback
         return { icons: ['crystal', 'tower'], bg: '#1a1a2e', accent: '#6366f1' };
     }
 
-    /**
-     * Render a pixel art icon onto a canvas
-     */
     function renderPixelIcon(canvas, title, gameId) {
         const theme = getIconTheme(title);
         const ctx = canvas.getContext('2d');
         const W = canvas.width;
         const H = canvas.height;
 
-        // Background gradient
         ctx.fillStyle = theme.bg;
         ctx.fillRect(0, 0, W, H);
 
-        // Subtle grid pattern
         ctx.strokeStyle = 'rgba(255,255,255,0.03)';
         ctx.lineWidth = 1;
         for (let x = 0; x < W; x += 16) {
@@ -198,7 +219,6 @@
             ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
         }
 
-        // Draw two icons side by side
         const iconNames = theme.icons;
         const pixelSize = Math.floor(Math.min(W, H) / 24);
 
@@ -211,7 +231,6 @@
             const gridH = grid.length;
             const gridW = grid[0].length;
 
-            // Position: center both icons, offset horizontally
             const totalW = iconNames.length * gridW * pixelSize + (iconNames.length - 1) * pixelSize * 2;
             const startX = (W - totalW) / 2 + idx * (gridW * pixelSize + pixelSize * 2);
             const startY = (H - gridH * pixelSize) / 2;
@@ -231,7 +250,6 @@
             }
         }
 
-        // Accent glow at bottom
         const gradient = ctx.createLinearGradient(0, H - 40, 0, H);
         gradient.addColorStop(0, 'transparent');
         gradient.addColorStop(1, theme.accent + '40');
@@ -239,7 +257,7 @@
         ctx.fillRect(0, H - 40, W, 40);
     }
 
-    // DOM Elements
+    // --- DOM ---
     const elements = {
         passwordScreen: document.getElementById('passwordScreen'),
         passwordInput: document.getElementById('passwordInput'),
@@ -251,23 +269,20 @@
         errorMessage: document.getElementById('errorMessage'),
         emptyState: document.getElementById('emptyState'),
         gamesGrid: document.getElementById('gamesGrid'),
-        gameCount: document.getElementById('gameCount')
+        gameCount: document.getElementById('gameCount'),
     };
 
+    let pollTimer = null;
+    let lastJobsJson = '';
+
+    // --- Auth ---
     function isAuthenticated() {
         return sessionStorage.getItem(CONFIG.sessionKey) === 'true';
     }
 
     function setAuthenticated(value) {
-        if (value) {
-            sessionStorage.setItem(CONFIG.sessionKey, 'true');
-        } else {
-            sessionStorage.removeItem(CONFIG.sessionKey);
-        }
-    }
-
-    function validatePassword(input) {
-        return input === CONFIG.password;
+        if (value) sessionStorage.setItem(CONFIG.sessionKey, 'true');
+        else sessionStorage.removeItem(CONFIG.sessionKey);
     }
 
     function showPasswordError() {
@@ -279,7 +294,7 @@
 
     function handlePasswordSubmit() {
         const password = elements.passwordInput.value.trim();
-        if (validatePassword(password)) {
+        if (password === CONFIG.password) {
             setAuthenticated(true);
             showGallery();
         } else {
@@ -287,10 +302,11 @@
         }
     }
 
+    // --- Display States ---
     function showGallery() {
         elements.passwordScreen.classList.add('hidden');
         elements.galleryContainer.classList.add('visible');
-        loadGames();
+        startPolling();
     }
 
     function showLoading() {
@@ -316,12 +332,17 @@
         elements.gameCount.textContent = '';
     }
 
-    function showGames(games) {
+    function showGrid(jobs) {
         elements.loadingState.style.display = 'none';
         elements.errorState.style.display = 'none';
         elements.emptyState.style.display = 'none';
         elements.gamesGrid.style.display = 'grid';
-        elements.gameCount.textContent = `${games.length} game${games.length !== 1 ? 's' : ''}`;
+
+        const active = jobs.filter(j => !['completed', 'failed'].includes(j.status)).length;
+        const total = jobs.length;
+        elements.gameCount.textContent = active
+            ? `${active} generating / ${total} total`
+            : `${total} game${total !== 1 ? 's' : ''}`;
     }
 
     function escapeHtml(text) {
@@ -331,83 +352,179 @@
         return div.innerHTML;
     }
 
-    function createGameCard(game) {
+    // --- Job Data Helpers ---
+    function getLatestRepairScore(job) {
+        if (!job.phase_outputs) return null;
+        let latest = null;
+        let maxAttempt = 0;
+        for (const [key, val] of Object.entries(job.phase_outputs)) {
+            const match = key.match(/^repair_(\d+)$/);
+            if (match) {
+                const attempt = parseInt(match[1], 10);
+                if (attempt > maxAttempt) {
+                    maxAttempt = attempt;
+                    latest = { attempt, score: val.score ?? 0, defectCount: val.defectCount ?? 0 };
+                }
+            }
+        }
+        return latest;
+    }
+
+    function getPhaseIndex(status) {
+        const idx = PHASES.findIndex(p => p.key === status);
+        if (idx >= 0) return idx;
+        if (status === 'completed') return PHASES.length;
+        return -1;
+    }
+
+    function scoreColor(score) {
+        if (score >= 8) return '#22c55e';
+        if (score >= 4) return '#eab308';
+        return '#ef4444';
+    }
+
+    // --- Card Rendering ---
+    function createJobCard(job) {
         const card = document.createElement('article');
         card.className = 'game-card';
+        card.dataset.jobId = job.id;
 
-        const gameUrl = game.url || `https://gamedemo${game.gameId || game.id || ''}.namjo-games.com`;
-        const dateStr = game.createdAt
-            ? new Date(game.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-            : 'Recently added';
+        const statusColor = STATUS_COLORS[job.status] || '#64748b';
+        const statusLabel = STATUS_LABELS[job.status] || job.status;
+        const deployment = job.phase_outputs?.deployment;
+        const gameUrl = deployment?.url;
+        const repairInfo = getLatestRepairScore(job);
+        const phaseIdx = getPhaseIndex(job.status);
+        const isActive = !['completed', 'failed', 'queued'].includes(job.status);
+
+        const dateStr = job.created_at
+            ? new Date(job.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+            : '';
+
+        // Phase progress steps
+        const phaseDots = PHASES.map((p, i) => {
+            let cls = 'phase-step';
+            if (job.status === 'completed') cls += ' done';
+            else if (job.status === 'failed' && i <= Math.max(0, phaseIdx)) cls += ' done';
+            else if (job.status === 'failed') cls += ' pending';
+            else if (p.key === job.status) cls += ' active';
+            else if (i < phaseIdx) cls += ' done';
+            else cls += ' pending';
+            return `<div class="${cls}" title="${p.label}"><span class="step-num">${i + 1}</span><span class="step-label">${p.label}</span></div>`;
+        }).join('<div class="phase-connector"></div>');
+
+        // Score section
+        let scoreHtml = '';
+        if (repairInfo) {
+            const pct = (repairInfo.score / 10) * 100;
+            const color = scoreColor(repairInfo.score);
+            scoreHtml = `
+                <div class="score-section">
+                    <div class="score-header">
+                        <span class="score-label">Quality</span>
+                        <span class="score-value" style="color:${color}">${repairInfo.score}/10</span>
+                    </div>
+                    <div class="score-bar"><div class="score-fill" style="width:${pct}%;background:${color}"></div></div>
+                    <span class="score-meta">Repair #${repairInfo.attempt}${repairInfo.defectCount ? ' \u00b7 ' + repairInfo.defectCount + ' defect' + (repairInfo.defectCount !== 1 ? 's' : '') : ''}</span>
+                </div>`;
+        }
+
+        // Action area
+        let actionHtml = '';
+        if (gameUrl && (job.status === 'completed' || job.status === 'phase_5')) {
+            actionHtml = `<a href="${escapeHtml(gameUrl)}" class="play-button" target="_blank" rel="noopener">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>Play</a>`;
+        } else if (job.status === 'failed') {
+            const errMsg = job.error ? job.error.substring(0, 60) : 'Generation failed';
+            actionHtml = `<span class="fail-label" title="${escapeHtml(job.error || '')}">${escapeHtml(errMsg)}</span>`;
+        } else if (isActive) {
+            actionHtml = `<span class="generating-label"><span class="pulse-dot"></span>${escapeHtml(statusLabel)}...</span>`;
+        }
 
         card.innerHTML = `
             <div class="game-thumbnail">
                 <canvas width="480" height="270"></canvas>
+                <div class="status-badge" style="background:${statusColor}">${statusLabel}</div>
             </div>
             <div class="game-info">
-                <h3 class="game-title">${escapeHtml(game.title || 'Untitled Game')}</h3>
-                ${game.description ? `<p class="game-description">${escapeHtml(game.description)}</p>` : ''}
-                <p class="game-meta">${escapeHtml(dateStr)}</p>
-                <a href="${escapeHtml(gameUrl)}" class="play-button" target="_blank" rel="noopener">
-                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-                    Play Now
-                </a>
-            </div>
-        `;
+                <h3 class="game-title">${escapeHtml(job.game_name || 'Generating...')}</h3>
+                <div class="phase-progress">${phaseDots}</div>
+                ${scoreHtml}
+                <div class="card-footer">
+                    ${actionHtml}
+                    <span class="game-meta">#${job.id} \u00b7 ${escapeHtml(dateStr)}</span>
+                </div>
+            </div>`;
 
-        // Render pixel art icon on the canvas
         const canvas = card.querySelector('canvas');
-        if (canvas) {
-            renderPixelIcon(canvas, game.title, game.gameId || game.id);
-        }
+        if (canvas) renderPixelIcon(canvas, job.game_name, job.id);
 
         return card;
     }
 
-    function renderGames(games) {
-        elements.gamesGrid.innerHTML = '';
-        if (!games || games.length === 0) { showEmpty(); return; }
-        // Sort by date descending (newest first)
-        games.sort((a, b) => {
-            const da = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-            const db = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-            return db - da;
+    function sortJobs(jobs) {
+        const priority = {
+            phase_5: 0, phase_4: 1, phase_3: 2, phase_2: 3, phase_1: 4,
+            running: 5, queued: 6, completed: 7, failed: 8,
+        };
+        return jobs.sort((a, b) => {
+            const pa = priority[a.status] ?? 99;
+            const pb = priority[b.status] ?? 99;
+            if (pa !== pb) return pa - pb;
+            return new Date(b.created_at) - new Date(a.created_at);
         });
-        games.forEach(game => { elements.gamesGrid.appendChild(createGameCard(game)); });
-        showGames(games);
     }
 
-    async function loadGames() {
-        showLoading();
+    function renderJobs(jobs) {
+        elements.gamesGrid.innerHTML = '';
+        if (!jobs || jobs.length === 0) { showEmpty(); return; }
+        sortJobs(jobs);
+        jobs.forEach(job => elements.gamesGrid.appendChild(createJobCard(job)));
+        showGrid(jobs);
+    }
+
+    // --- Polling ---
+    async function loadJobs() {
         try {
             const response = await fetch(CONFIG.apiEndpoint);
             if (!response.ok) {
-                if (response.status === 404) { renderGames([]); return; }
+                if (response.status === 404) { renderJobs([]); return; }
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
             const data = await response.json();
-            const games = Array.isArray(data) ? data : (data.games || []);
-            renderGames(games);
+            const jobs = data.jobs || [];
+
+            const newJson = JSON.stringify(jobs);
+            if (newJson === lastJobsJson) return;
+            lastJobsJson = newJson;
+
+            renderJobs(jobs);
         } catch (error) {
-            console.error('Failed to load games:', error);
+            console.error('Failed to load jobs:', error);
+            if (lastJobsJson) return; // Keep showing last known state on transient errors
             if (error.name === 'TypeError' && error.message.includes('fetch')) {
-                renderGames([]);
+                renderJobs([]);
             } else {
                 showError('Unable to connect to the game server.');
             }
         }
     }
 
-    function initEventListeners() {
+    function startPolling() {
+        showLoading();
+        loadJobs();
+        pollTimer = setInterval(loadJobs, CONFIG.pollInterval);
+    }
+
+    // --- Init ---
+    function init() {
         elements.passwordSubmit.addEventListener('click', handlePasswordSubmit);
         elements.passwordInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') handlePasswordSubmit();
         });
-    }
 
-    function init() {
-        initEventListeners();
-        if (isAuthenticated()) { showGallery(); } else { elements.passwordInput.focus(); }
+        if (isAuthenticated()) showGallery();
+        else elements.passwordInput.focus();
     }
 
     if (document.readyState === 'loading') {
