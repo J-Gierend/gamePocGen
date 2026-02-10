@@ -305,14 +305,39 @@ h1{margin:0 0 4px}h2{margin:0 0 16px;color:#888;font-weight:normal}</style></hea
     // Inject badge script on first deploy
     injectBadgeScript();
     updateScoreBadge(0, 0);
+    let consecutiveTimeouts = 0;
+    const MAX_CONSECUTIVE_TIMEOUTS = 5;
 
     for (let attempt = 1; attempt <= MAX_REPAIR_ATTEMPTS; attempt++) {
       try {
         await queueManager.addLog(job.id, 'info', `Repair loop iteration ${attempt}/${MAX_REPAIR_ATTEMPTS}: testing ${testUrl}`);
         const testResult = await runPlaywrightTest(testUrl);
         const score = testResult.score ?? 0;
+
+        // Detect infrastructure failures (ETIMEDOUT, etc.) and bail early
+        const isInfraFailure = score === 0 && testResult.defects?.length === 1 &&
+          testResult.defects[0]?.description?.includes('ETIMEDOUT');
+        if (isInfraFailure) {
+          consecutiveTimeouts++;
+          if (consecutiveTimeouts >= MAX_CONSECUTIVE_TIMEOUTS) {
+            await queueManager.addLog(job.id, 'error', `${MAX_CONSECUTIVE_TIMEOUTS} consecutive test timeouts — bailing out (game may be unreachable or hanging)`);
+            await queueManager.updateStatus(job.id, 'failed', { error: `Infrastructure failure: ${MAX_CONSECUTIVE_TIMEOUTS} consecutive ETIMEDOUT` });
+            return;
+          }
+        } else {
+          consecutiveTimeouts = 0;
+        }
+
         await queueManager.addLog(job.id, 'info', `Test score: ${score}/10 (attempt ${attempt})`);
-        await queueManager.updatePhaseOutput(job.id, `repair_${attempt}`, { score, defectCount: testResult.defects?.length ?? 0 });
+        const defectSummaries = (testResult.defects || []).slice(0, 5).map(d => `[${d.severity}] ${d.description?.substring(0, 80)}`);
+        await queueManager.updatePhaseOutput(job.id, `repair_${attempt}`, {
+          score,
+          defectCount: testResult.defects?.length ?? 0,
+          defects: defectSummaries,
+          timestamp: new Date().toISOString(),
+        });
+        // Keep latest score/attempt at top level for easy gallery access
+        await queueManager.updatePhaseOutput(job.id, 'latest_score', { score, attempt, defectCount: testResult.defects?.length ?? 0 });
 
         // Log this attempt for the repair history
         repairLog.push({

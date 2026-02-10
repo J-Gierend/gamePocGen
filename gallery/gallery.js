@@ -355,6 +355,10 @@
     // --- Job Data Helpers ---
     function getLatestRepairScore(job) {
         if (!job.phase_outputs) return null;
+        // Use top-level latest_score if available (faster, no iteration)
+        const ls = job.phase_outputs.latest_score;
+        if (ls) return { attempt: ls.attempt, score: ls.score ?? 0, defectCount: ls.defectCount ?? 0 };
+        // Fallback: scan repair_N keys
         let latest = null;
         let maxAttempt = 0;
         for (const [key, val] of Object.entries(job.phase_outputs)) {

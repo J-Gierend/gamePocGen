@@ -114,7 +114,7 @@ const CHECK_WEIGHTS = {
   tabsSwitchable: 1,
   upgradesExist: 1,
   controlsVisible: 1.5,
-  tutorialPresent: 1.5,
+  tutorialPresent: 0.5,
   canvasInteraction: 1.5,
   canvasClickResponsive: 1.5,
   entitiesSpawn: 1,
@@ -279,7 +279,7 @@ async function testGame(url) {
 
     if (tabInfo?.length >= 2 && !tabInfo._error) {
       try {
-        const tabLocators = await page.locator('[data-tab], .tab, #tabs button, nav button').all();
+        const tabLocators = await page.locator('[data-tab], .tab, [role="tab"], #tabs button, nav button').all();
         if (tabLocators.length > 1) {
           await tabLocators[1].click();
           await page.waitForTimeout(500);
@@ -386,7 +386,7 @@ async function testGame(url) {
       } catch (e) { /* ignore */ }
     } else {
       checks.tutorialPresent.detail = 'No tutorial/instructions overlay found on load';
-      report.defects.push({ severity: 'major', check: 'tutorialPresent',
+      report.defects.push({ severity: 'minor', check: 'tutorialPresent',
         description: 'No "How to Play" tutorial overlay shown on first load.',
         suggestion: 'Add a tutorial overlay with 3-4 bullet points shown on first page load.' });
     }

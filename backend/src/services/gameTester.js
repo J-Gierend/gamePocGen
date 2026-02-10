@@ -14,7 +14,7 @@
  * @returns {Promise<{score: number, defects: Array, checks: Object}>}
  */
 export async function runPlaywrightTest(url, options = {}) {
-  const timeout = options.timeout || 120000;
+  const timeout = options.timeout || 180000;
   const scriptPath = options.scriptPath || '/app/scripts/test-game.js';
   let execSyncFn = options.execSync;
 
