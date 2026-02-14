@@ -625,6 +625,8 @@ h1{margin:0 0 4px}h2{margin:0 0 16px;color:#888;font-weight:normal}</style></hea
             'GAME_NAME=process-improvement',
             `ZAI_API_KEY=${process.env.ZAI_API_KEY || ''}`,
             `ZAI_BASE_URL=${process.env.ZAI_BASE_URL || ''}`,
+            'MODEL=claude-opus-4-6',
+            'CLAUDE_CODE_EFFORT_LEVEL=high',
             'WORKSPACE_DIR=/workspace',
             'TIMEOUT_SECONDS=3600',
             'DEFECT_REPORT=See /workspace/cross-job-data.md for full cross-job analysis data.',

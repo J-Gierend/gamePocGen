@@ -223,6 +223,42 @@ export function runTests() {
       assert(env.some(e => e.startsWith('WORKSPACE_DIR=')), 'Should include WORKSPACE_DIR');
     },
 
+    'spawnContainer() passes MODEL env var': async () => {
+      let createOpts = null;
+      const docker = createMockDocker({
+        createContainer: async (opts) => {
+          createOpts = opts;
+          return createMockContainer();
+        },
+      });
+      const cm = new ContainerManager(docker);
+      const job = { id: 1, game_name: 'Test', config: {} };
+      await cm.spawnContainer(job, 'phase1');
+      const env = createOpts.Env;
+      assert(
+        env.some(e => e === 'MODEL=claude-opus-4-6'),
+        'Should pass MODEL=claude-opus-4-6'
+      );
+    },
+
+    'spawnContainer() passes CLAUDE_CODE_EFFORT_LEVEL env var': async () => {
+      let createOpts = null;
+      const docker = createMockDocker({
+        createContainer: async (opts) => {
+          createOpts = opts;
+          return createMockContainer();
+        },
+      });
+      const cm = new ContainerManager(docker);
+      const job = { id: 1, game_name: 'Test', config: {} };
+      await cm.spawnContainer(job, 'phase1');
+      const env = createOpts.Env;
+      assert(
+        env.some(e => e === 'CLAUDE_CODE_EFFORT_LEVEL=high'),
+        'Should pass CLAUDE_CODE_EFFORT_LEVEL=high'
+      );
+    },
+
     'spawnContainer() passes ZAI_API_KEY from environment': async () => {
       let createOpts = null;
       const docker = createMockDocker({

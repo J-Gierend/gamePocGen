@@ -87,6 +87,8 @@ export class ContainerManager {
       `GAME_NAME=${job.game_name}`,
       `ZAI_API_KEY=${process.env.ZAI_API_KEY || ''}`,
       `ZAI_BASE_URL=${process.env.ZAI_BASE_URL || 'https://api.z.ai/api/anthropic'}`,
+      `MODEL=claude-opus-4-6`,
+      `CLAUDE_CODE_EFFORT_LEVEL=high`,
       `TIMEOUT_SECONDS=${timeout}`,
       `WORKSPACE_DIR=${workspaceDir}`,
       ...(job.extraEnv || []),

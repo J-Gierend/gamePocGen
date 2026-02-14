@@ -139,7 +139,8 @@ REFRESHEOF
     cat > /home/claude/.claude/settings.json <<EOF
 {
   "env": {
-    "API_TIMEOUT_MS": "3600000"
+    "API_TIMEOUT_MS": "3600000",
+    "CLAUDE_CODE_EFFORT_LEVEL": "${CLAUDE_CODE_EFFORT_LEVEL:-high}"
   },
   "permissions": {
     "allow": ["Bash", "Read", "Write", "Edit", "Glob", "Grep", "Task", "WebFetch(domain:*)", "WebSearch"],
@@ -158,7 +159,8 @@ else
   "env": {
     "ANTHROPIC_AUTH_TOKEN": "${ZAI_API_KEY}",
     "ANTHROPIC_BASE_URL": "${ZAI_BASE_URL:-https://api.z.ai/api/anthropic}",
-    "API_TIMEOUT_MS": "3600000"
+    "API_TIMEOUT_MS": "3600000",
+    "CLAUDE_CODE_EFFORT_LEVEL": "${CLAUDE_CODE_EFFORT_LEVEL:-high}"
   },
   "permissions": {
     "allow": ["Bash", "Read", "Write", "Edit", "Glob", "Grep", "Task", "WebFetch(domain:*)", "WebSearch"],
