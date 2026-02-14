@@ -106,7 +106,15 @@ ${STRATEGY_CONTEXT}
 CRITICAL: All game source files are in ${WORKSPACE}/dist/ — edit files ONLY in that directory.
 Do NOT edit files in the workspace root. Only ${WORKSPACE}/dist/ files are deployed.
 Fix the defects listed above by modifying files in ${WORKSPACE}/dist/
-After fixing, ensure all changes are saved in ${WORKSPACE}/dist/"
+After fixing, ensure all changes are saved in ${WORKSPACE}/dist/
+
+COMMON FIX CHECKLIST:
+1. If 'No CONFIG object on window': Add window.CONFIG = CONFIG; inside the <script type=module> in index.html
+2. If 'Unexpected token/identifier': Read the exact error, find the file, fix the syntax error at that line
+3. If 'Failed to load resource': A file is missing — check all import/src paths resolve to existing files
+4. If 'Canvas blank': Check SpriteRenderer initialization and render loop
+5. All paths must be relative WITHOUT 'framework/' prefix: use core/, sprites/, mechanics/, ui/, css/
+6. ES module imports MUST start with './' — use './core/index.js' not 'core/index.js'"
 
     # Remove the repair prompt file so we don't re-trigger
     rm -f "${WORKSPACE}/repair-prompt.txt"

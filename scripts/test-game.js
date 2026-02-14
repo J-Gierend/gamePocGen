@@ -164,9 +164,18 @@ async function testGame(url) {
 
   const jsErrors = [];
   page.on('console', msg => {
-    if (msg.type() === 'error') jsErrors.push(msg.text());
+    if (msg.type() === 'error') {
+      const text = msg.text();
+      // Include the full URL for 404 errors so Claude knows which file is missing
+      jsErrors.push(text.length > 500 ? text.substring(0, 500) : text);
+    }
   });
-  page.on('pageerror', err => jsErrors.push(`PageError: ${err.message}`));
+  page.on('pageerror', err => {
+    // Include stack trace for better error localization
+    const stack = err.stack || '';
+    const location = stack.match(/at\s+.*?(\S+\.js:\d+:\d+)/)?.[1] || '';
+    jsErrors.push(`PageError: ${err.message}${location ? ` (at ${location})` : ''}`);
+  });
 
   try {
     // === LOAD ===
@@ -180,12 +189,12 @@ async function testGame(url) {
       checks.noJsErrors.pass = true;
       checks.noJsErrors.detail = 'No JavaScript errors on load';
     } else {
-      checks.noJsErrors.detail = `${report.consoleErrors.length} JS error(s): ${report.consoleErrors[0]?.substring(0, 120)}`;
+      checks.noJsErrors.detail = `${report.consoleErrors.length} JS error(s): ${report.consoleErrors[0]?.substring(0, 200)}`;
       report.defects.push({
         severity: 'critical',
         check: 'noJsErrors',
-        description: `JavaScript errors on page load: ${report.consoleErrors.map(e => e.substring(0, 150)).join('; ')}`,
-        suggestion: 'Fix the JS errors first — the game may not initialize correctly.',
+        description: `JavaScript errors on page load:\n${report.consoleErrors.map(e => `  - ${e.substring(0, 500)}`).join('\n')}`,
+        suggestion: 'Fix the JS errors first — the game may not initialize correctly. Check the file and line indicated in the error.',
       });
     }
 
