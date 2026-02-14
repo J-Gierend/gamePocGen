@@ -251,6 +251,23 @@ fi
 # Copy framework files into workspace
 cp -rn "$FRAMEWORK_DIR"/* "$WORKSPACE_DIR/" 2>/dev/null || true
 
+# Write CLAUDE.md to workspace to prevent Claude from modifying harness files
+cat > "${WORKSPACE_DIR}/CLAUDE.md" <<'CLAUDEMD'
+# Workspace Rules
+
+CRITICAL: Do NOT modify these files — they are managed by the harness system:
+- harness-state.json
+- next-prompt.md
+- exit-worker.marker
+- phase4-complete.marker
+- job-complete.marker
+- job-failed.marker
+- repair-prompt.txt
+
+Build all game output files in the `dist/` subdirectory.
+The main game entry point MUST be `dist/index.html`.
+CLAUDEMD
+
 cd "$WORKSPACE_DIR"
 
 # --- Initialize harness state ---

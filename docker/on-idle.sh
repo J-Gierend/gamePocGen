@@ -114,7 +114,22 @@ After fixing, rebuild the game in place in ${WORKSPACE}/dist/"
 fi
 
 # Phase 4 complete: game built, wait for backend
-if [[ -f "${WORKSPACE}/dist/index.html" && ! -f "${WORKSPACE}/phase4-complete.marker" ]]; then
+# Check both dist/index.html and root index.html (Claude sometimes puts it in root)
+GAME_INDEX=""
+if [[ -f "${WORKSPACE}/dist/index.html" ]]; then
+    GAME_INDEX="${WORKSPACE}/dist/index.html"
+elif [[ -f "${WORKSPACE}/index.html" ]]; then
+    # Move game files to dist/ for consistency
+    mkdir -p "${WORKSPACE}/dist"
+    cp "${WORKSPACE}/index.html" "${WORKSPACE}/dist/"
+    # Copy JS/CSS files that are likely game files (not framework/prompts)
+    for f in "${WORKSPACE}"/*.js "${WORKSPACE}"/*.css; do
+        [[ -f "$f" ]] && cp "$f" "${WORKSPACE}/dist/" 2>/dev/null
+    done
+    GAME_INDEX="${WORKSPACE}/dist/index.html"
+fi
+
+if [[ -n "$GAME_INDEX" && ! -f "${WORKSPACE}/phase4-complete.marker" ]]; then
     touch "${WORKSPACE}/phase4-complete.marker"
     write_state "phase4" "idle"
     # Return nothing — stay idle until backend writes repair-prompt.txt
