@@ -127,6 +127,14 @@ Common root causes and fixes:
 - Check if multiplier stacks are connected to generators/entities
 - Common mistake: upgrade button works but callback only updates display, not game state
 
+**Game requires scrolling (viewport overflow):**
+- The game MUST fit entirely within the viewport — no scrolling ever
+- Fix: `html, body { height: 100vh; max-height: 100vh; overflow: hidden; }`
+- Fix: `#game-root { height: 100vh; max-height: 100vh; overflow: hidden; display: flex; flex-direction: column; }`
+- Fix: Canvas uses `flex: 1` to fill available space, never a fixed height that overflows
+- Fix: Bottom panel uses `max-height: 35vh` or similar constraint
+- Common mistake: fixed pixel heights on elements that add up to more than viewport height
+
 ### Step 4: Fix Major Defects
 
 Same process as Critical, but for Major defects.

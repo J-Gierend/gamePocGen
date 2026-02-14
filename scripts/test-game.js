@@ -5,7 +5,7 @@
  * Tests a deployed game for completeness, functionality, and interactivity.
  * Produces a structured report with a weighted score and specific defect list.
  *
- * Scoring rubric (14 checks, weighted to 10-point scale):
+ * Scoring rubric (15 checks, weighted to 10-point scale):
  *
  * Core (1 pt each):
  *  1. noJsErrors         - Page loads without JS errors
@@ -15,19 +15,23 @@
  *  5. tabsSwitchable     - Tabs present and switchable
  *  6. upgradesExist      - Upgrades tab has purchasable items
  *
+ * Layout (1.5 pts):
+ *  7. fitsViewport       - Game fits on screen without scrolling
+ *
  * Interactivity (1.5 pts each - weighted higher):
- *  7. controlsVisible    - On-screen controls/hotkeys panel visible
- *  8. tutorialPresent    - "How to play" instructions shown on load
- *  9. canvasInteraction  - Canvas clicks produce NEW entities/state changes
- * 10. canvasClickResponsive - 5 clicks at different positions, 3+ produce distinct results
+ *  8. controlsVisible    - On-screen controls/hotkeys panel visible
+ *  9. tutorialPresent    - "How to play" instructions shown on load
+ * 10. canvasInteraction  - Canvas clicks produce NEW entities/state changes
+ * 11. canvasClickResponsive - 5 clicks at different positions, 3+ produce distinct results
  *
  * Gameplay (1 pt each):
- * 11. entitiesSpawn      - Enemies/entities spawn and move
- * 12. currenciesChange   - Currencies change during gameplay
- * 13. wavesAdvance       - Waves advance over time
- * 14. gameplayLoop       - Player actions (not just timers) drive state changes
+ * 12. entitiesSpawn      - Enemies/entities spawn and move
+ * 13. currenciesChange   - Currencies change during gameplay
+ * 14. wavesAdvance       - Waves advance over time
+ * 15. gameplayLoop       - Player actions (not just timers) drive state changes
  *
  * No-controls penalty: games without visible controls panel cap at 4/10 max
+ * Scrolling penalty: games requiring scrolling cap at 5/10 max
  *
  * Usage:
  *   node test-game.js <url> [--screenshots ./shots] [--json report.json]
@@ -113,6 +117,7 @@ const CHECK_WEIGHTS = {
   hudCurrencies: 1,
   tabsSwitchable: 1,
   upgradesExist: 1,
+  fitsViewport: 1.5,
   controlsVisible: 1.5,
   tutorialPresent: 0.5,
   canvasInteraction: 1.5,
@@ -175,6 +180,37 @@ async function testGame(url) {
         check: 'noJsErrors',
         description: `JavaScript errors on page load: ${report.consoleErrors.map(e => e.substring(0, 150)).join('; ')}`,
         suggestion: 'Fix the JS errors first — the game may not initialize correctly.',
+      });
+    }
+
+    // Check: Game fits viewport (no scrolling)
+    const viewportInfo = await safeEval(page, () => {
+      const scrollHeight = document.documentElement.scrollHeight;
+      const clientHeight = window.innerHeight;
+      const scrollWidth = document.documentElement.scrollWidth;
+      const clientWidth = window.innerWidth;
+      return {
+        scrollHeight,
+        clientHeight,
+        scrollWidth,
+        clientWidth,
+        verticalOverflow: scrollHeight - clientHeight,
+        horizontalOverflow: scrollWidth - clientWidth,
+      };
+    });
+
+    if (viewportInfo && viewportInfo.verticalOverflow <= 2 && viewportInfo.horizontalOverflow <= 2) {
+      checks.fitsViewport.pass = true;
+      checks.fitsViewport.detail = `Fits viewport: ${viewportInfo.clientWidth}x${viewportInfo.clientHeight}`;
+    } else {
+      const vOver = viewportInfo?.verticalOverflow || 0;
+      const hOver = viewportInfo?.horizontalOverflow || 0;
+      checks.fitsViewport.detail = `Overflows viewport: ${vOver}px vertical, ${hOver}px horizontal`;
+      report.defects.push({
+        severity: 'critical',
+        check: 'fitsViewport',
+        description: `Game does not fit on screen. Vertical overflow: ${vOver}px, horizontal overflow: ${hOver}px. Players should NEVER need to scroll.`,
+        suggestion: 'Set html/body to height:100vh, overflow:hidden. Use flexbox with flex:1 on the canvas. Constrain bottom panel max-height. All UI must fit within the viewport.',
       });
     }
 
@@ -686,6 +722,16 @@ async function testGame(url) {
 
   // Normalize to 10-point scale
   report.score = Math.round((weightedScore / MAX_WEIGHTED) * 10 * 10) / 10; // 1 decimal
+
+  // Scrolling penalty: cap at 5/10 if game requires scrolling
+  if (!checks.fitsViewport.pass && report.score > 5) {
+    report.score = 5;
+    report.defects.push({
+      severity: 'critical', check: 'scoring',
+      description: 'Score capped at 5/10 because game requires scrolling. The entire game must fit on screen.',
+      suggestion: 'Use height:100vh, overflow:hidden on body. Canvas should flex to fill available space.',
+    });
+  }
 
   // No-controls penalty: cap at 4/10 if no controls panel
   if (!checks.controlsVisible.pass && report.score > 4) {

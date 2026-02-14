@@ -27,13 +27,17 @@
     box-sizing: border-box;
 }
 
+html, body {
+    height: 100vh;
+    max-height: 100vh;
+    overflow: hidden;
+}
+
 body {
     font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
     background: var(--game-bg);
     color: var(--game-text);
     line-height: 1.5;
-    overflow-x: hidden;
-    min-height: 100vh;
 }
 
 /* ========================================================================
@@ -46,7 +50,9 @@ body {
     padding: 1rem;
     display: grid;
     grid-template-rows: auto 1fr;
-    min-height: 100vh;
+    height: 100vh;
+    max-height: 100vh;
+    overflow: hidden;
 }
 
 .game-header {
@@ -86,7 +92,8 @@ body {
     border: 1px solid var(--game-border);
     border-radius: 12px;
     padding: 1.5rem;
-    min-height: 400px;
+    min-height: 0;
+    overflow: hidden;
 }
 
 /* ========================================================================

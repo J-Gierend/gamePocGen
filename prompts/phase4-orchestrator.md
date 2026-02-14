@@ -343,11 +343,13 @@ Use this as the starting template. The Canvas is the PRIMARY element:
   <title>GAME_TITLE</title>
   <link rel="stylesheet" href="framework/css/game.css">
   <style>
-    /* Game-specific overrides */
+    /* CRITICAL: Game MUST fit viewport — NO SCROLLING EVER */
+    html, body { height: 100vh; max-height: 100vh; overflow: hidden; }
     #game-root {
       display: flex;
       flex-direction: column;
       height: 100vh;
+      max-height: 100vh;
       overflow: hidden;
     }
     #hud {
@@ -1046,6 +1048,7 @@ After all phases:
    - **PLAYER CAN INTERACT WITHIN 5 SECONDS**: From page load to first meaningful interaction must take under 5 seconds. No waiting for animations, no mandatory cutscenes
    - **AT LEAST 3 CANVAS CLICK ACTIONS**: Clicking different positions on the canvas must produce at least 3 distinct visible results
    - **THE 10-SECOND RULE**: If a new player who has never seen this game cannot figure out what to do within 10 seconds of reading the tutorial overlay, the game FAILS
+   - **NO SCROLLING — EVER**: The ENTIRE game (HUD, canvas, bottom panel, controls, tutorial) MUST fit within the browser viewport without ANY scrolling — vertical or horizontal. Use `height: 100vh; overflow: hidden` on html/body. The canvas uses `flex: 1` to fill remaining space. Bottom panels use `max-height` constraints. If you have to scroll to see or reach ANY part of the game, it FAILS. Test this by checking `document.documentElement.scrollHeight <= window.innerHeight`.
 
 5. **COMPLETE SYSTEM VERIFICATION (MANDATORY)** -- Every system described in the GDD must be fully implemented with BOTH backend logic AND visible frontend UI. A system that exists in code but has no user-facing interaction is NOT implemented. Walk through this checklist:
    - **Currency earning**: Can the player SEE currency numbers go up? Can they earn currency through gameplay actions (not just timers)?
@@ -1075,3 +1078,4 @@ After all phases:
 11. **No external dependencies.** Everything runs from local files.
 12. **Browser-first.** The game runs in the browser.
 13. **Keep it simple.** Working PoC, not production code.
+14. **No scrolling.** The game must fit entirely within the viewport. `html, body { height: 100vh; overflow: hidden; }`. Canvas fills available space with `flex: 1`. Bottom panel capped with `max-height`. No element may cause the page to scroll.
