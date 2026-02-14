@@ -3,35 +3,25 @@
  * GamePocGen Playwright Game Tester
  *
  * Tests a deployed game for completeness, functionality, and interactivity.
- * Produces a structured report with a weighted score and specific defect list.
+ * Produces a structured report with a tiered score and specific defect list.
  *
- * Scoring rubric (15 checks, weighted to 10-point scale):
+ * Scoring Philosophy:
+ *   10/10 = Perfect. Fun, polished, everything works, no issues.
+ *   8-9   = Great. Minor polish needed but fully playable.
+ *   5-7   = Playable but has notable issues.
+ *   3-4   = Game starts but is barely functional.
+ *   1-2   = Unplayable. Critical systems broken.
  *
- * Core (1 pt each):
- *  1. noJsErrors         - Page loads without JS errors
- *  2. canvasRendering    - Canvas present and rendering content
- *  3. configPresent      - CONFIG object present with game structure
- *  4. hudCurrencies      - HUD displays currencies with values
- *  5. tabsSwitchable     - Tabs present and switchable
- *  6. upgradesExist      - Upgrades tab has purchasable items
+ * Tier-based scoring with critical failure caps:
  *
- * Layout (1.5 pts):
- *  7. fitsViewport       - Game fits on screen without scrolling
+ *   FATAL (cap 1.0):  JS errors on load, no canvas rendering
+ *   UNPLAYABLE (cap 2.0): No gameplay loop, no currencies changing, no entities
+ *   BROKEN (cap 4.0): Missing currency display, no controls, no canvas interaction
+ *   INCOMPLETE (cap 6.0): Missing tabs/upgrades, waves stuck, viewport overflow
+ *   POLISH (deduction): Missing tutorial, minor issues
  *
- * Interactivity (1.5 pts each - weighted higher):
- *  8. controlsVisible    - On-screen controls/hotkeys panel visible
- *  9. tutorialPresent    - "How to play" instructions shown on load
- * 10. canvasInteraction  - Canvas clicks produce NEW entities/state changes
- * 11. canvasClickResponsive - 5 clicks at different positions, 3+ produce distinct results
- *
- * Gameplay (1 pt each):
- * 12. entitiesSpawn      - Enemies/entities spawn and move
- * 13. currenciesChange   - Currencies change during gameplay
- * 14. wavesAdvance       - Waves advance over time
- * 15. gameplayLoop       - Player actions (not just timers) drive state changes
- *
- * No-controls penalty: games without visible controls panel cap at 4/10 max
- * Scrolling penalty: games requiring scrolling cap at 5/10 max
+ * 15 checks across 5 tiers. The LOWEST failing tier determines the score cap.
+ * Within the cap, the score is calculated from passed checks.
  *
  * Usage:
  *   node test-game.js <url> [--screenshots ./shots] [--json report.json]
@@ -109,24 +99,37 @@ async function getCurrencyState(page) {
   });
 }
 
-// Check weight definitions
-const CHECK_WEIGHTS = {
-  noJsErrors: 1,
-  canvasRendering: 1,
-  configPresent: 1,
-  hudCurrencies: 1,
-  tabsSwitchable: 1,
-  upgradesExist: 1,
-  fitsViewport: 1.5,
-  controlsVisible: 1.5,
-  tutorialPresent: 0.5,
-  canvasInteraction: 1.5,
-  canvasClickResponsive: 1.5,
-  entitiesSpawn: 1,
-  currenciesChange: 1,
-  wavesAdvance: 1,
-  gameplayLoop: 1,
+// Check definitions with tier assignments
+// Tiers determine score caps when checks fail:
+//   fatal (cap 1.0) > unplayable (cap 2.0) > broken (cap 4.0) > incomplete (cap 6.0) > polish (no cap)
+const CHECK_DEFS = {
+  noJsErrors:           { weight: 1,   tier: 'fatal' },
+  canvasRendering:      { weight: 1,   tier: 'fatal' },
+  configPresent:        { weight: 0.5, tier: 'broken' },
+  hudCurrencies:        { weight: 1,   tier: 'broken' },
+  tabsSwitchable:       { weight: 0.5, tier: 'incomplete' },
+  upgradesExist:        { weight: 0.5, tier: 'incomplete' },
+  fitsViewport:         { weight: 0.5, tier: 'incomplete' },
+  controlsVisible:      { weight: 1,   tier: 'broken' },
+  tutorialPresent:      { weight: 0.5, tier: 'polish' },
+  canvasInteraction:    { weight: 1,   tier: 'unplayable' },
+  canvasClickResponsive:{ weight: 1,   tier: 'broken' },
+  entitiesSpawn:        { weight: 1,   tier: 'unplayable' },
+  currenciesChange:     { weight: 1,   tier: 'unplayable' },
+  wavesAdvance:         { weight: 0.5, tier: 'incomplete' },
+  gameplayLoop:         { weight: 1,   tier: 'unplayable' },
 };
+
+const TIER_CAPS = {
+  fatal: 1.0,
+  unplayable: 2.0,
+  broken: 4.0,
+  incomplete: 6.0,
+  polish: 10.0, // no cap
+};
+
+const CHECK_WEIGHTS = {};
+for (const [k, v] of Object.entries(CHECK_DEFS)) CHECK_WEIGHTS[k] = v.weight;
 
 const MAX_WEIGHTED = Object.values(CHECK_WEIGHTS).reduce((s, w) => s + w, 0);
 
@@ -298,9 +301,9 @@ async function testGame(url) {
       checks.hudCurrencies.detail = `${hudInfo.currencyDisplays.length} currency displays found`;
     } else {
       checks.hudCurrencies.detail = `Only ${hudInfo?.currencyDisplays?.length || 0} currency display(s)`;
-      report.defects.push({ severity: 'major', check: 'hudCurrencies',
-        description: `Only ${hudInfo?.currencyDisplays?.length || 0} currency display(s) found.`,
-        suggestion: 'Check _setupUI() for currency display creation.' });
+      report.defects.push({ severity: 'critical', check: 'hudCurrencies',
+        description: `Only ${hudInfo?.currencyDisplays?.length || 0} currency display(s) found. Players cannot see their resources.`,
+        suggestion: 'Check _setupUI() for currency display creation. Need >= 2 visible currency displays.' });
     }
 
     // Check 5: Tabs switchable
@@ -577,7 +580,7 @@ async function testGame(url) {
     } else {
       checks.entitiesSpawn.detail = `No entities after 20s`;
       report.defects.push({ severity: 'critical', check: 'entitiesSpawn',
-        description: 'No entities spawned after 20 seconds.',
+        description: 'No entities spawned after 20 seconds. The game world is empty.',
         suggestion: 'Check wave spawning logic and entity factory.' });
     }
 
@@ -690,12 +693,12 @@ async function testGame(url) {
       } else if (clickChange > 0 || idleChange > 0) {
         // At least something is happening
         checks.gameplayLoop.detail = `Economy active but clicks don't earn more: idle=${idleChange.toFixed(0)}, clicks=${clickChange.toFixed(0)}`;
-        report.defects.push({ severity: 'minor', check: 'gameplayLoop',
+        report.defects.push({ severity: 'major', check: 'gameplayLoop',
           description: 'Currencies change but player actions do not accelerate earning beyond passive timers.',
           suggestion: 'Ensure canvas interactions (placing, clicking, collecting) earn more than idle income.' });
       } else {
         checks.gameplayLoop.detail = 'No currency changes during either idle or active play';
-        report.defects.push({ severity: 'major', check: 'gameplayLoop',
+        report.defects.push({ severity: 'critical', check: 'gameplayLoop',
           description: 'No gameplay loop detected - neither idle nor active play produces currency.',
           suggestion: 'Check the entire economy pipeline.' });
       }
@@ -713,35 +716,49 @@ async function testGame(url) {
     await browser.close();
   }
 
-  // === SCORING (weighted, normalized to 10) ===
+  // === SCORING (tier-capped) ===
+  // Step 1: Calculate raw weighted score
   let weightedScore = 0;
   for (const [key, check] of Object.entries(checks)) {
     if (check.pass) weightedScore += CHECK_WEIGHTS[key];
   }
   report.weightedRaw = weightedScore;
 
-  // Normalize to 10-point scale
-  report.score = Math.round((weightedScore / MAX_WEIGHTED) * 10 * 10) / 10; // 1 decimal
+  // Step 2: Normalize to 10-point scale
+  let score = Math.round((weightedScore / MAX_WEIGHTED) * 10 * 10) / 10;
 
-  // Scrolling penalty: cap at 5/10 if game requires scrolling
-  if (!checks.fitsViewport.pass && report.score > 5) {
-    report.score = 5;
-    report.defects.push({
-      severity: 'critical', check: 'scoring',
-      description: 'Score capped at 5/10 because game requires scrolling. The entire game must fit on screen.',
-      suggestion: 'Use height:100vh, overflow:hidden on body. Canvas should flex to fill available space.',
-    });
+  // Step 3: Apply tier caps — failing ANY check in a tier caps the score
+  let lowestCap = 10.0;
+  let cappingTier = null;
+  const failedTiers = new Set();
+
+  for (const [key, check] of Object.entries(checks)) {
+    if (!check.pass) {
+      const tier = CHECK_DEFS[key]?.tier;
+      if (tier) {
+        failedTiers.add(tier);
+        const cap = TIER_CAPS[tier];
+        if (cap < lowestCap) {
+          lowestCap = cap;
+          cappingTier = tier;
+        }
+      }
+    }
   }
 
-  // No-controls penalty: cap at 4/10 if no controls panel
-  if (!checks.controlsVisible.pass && report.score > 4) {
-    report.score = 4;
+  if (score > lowestCap) {
     report.defects.push({
       severity: 'critical', check: 'scoring',
-      description: 'Score capped at 4/10 due to missing controls panel. No controls = unplayable.',
-      suggestion: 'Add a permanent on-screen controls panel.',
+      description: `Score capped at ${lowestCap}/10 due to ${cappingTier}-tier failure(s). Fix critical issues first.`,
+      suggestion: `Failing checks in tier "${cappingTier}" prevent the game from scoring higher than ${lowestCap}.`,
     });
+    score = lowestCap;
   }
+
+  report.score = score;
+  report.scoreCap = lowestCap;
+  report.cappingTier = cappingTier;
+  report.failedTiers = Array.from(failedTiers);
 
   // Sort defects: critical first
   const severityOrder = { critical: 0, major: 1, minor: 2 };
@@ -758,12 +775,17 @@ const report = await testGame(url);
 const log = (s) => process.stderr.write(s + '\n');
 log('');
 log(`${'='.repeat(74)}`);
-log(`  GAME TEST REPORT: ${report.score}/${report.maxScore} (weighted: ${report.weightedRaw}/${report.maxWeightedRaw})`);
+log(`  GAME TEST REPORT: ${report.score}/${report.maxScore} (raw: ${report.weightedRaw}/${report.maxWeightedRaw})`);
+if (report.cappingTier) {
+  log(`  SCORE CAPPED at ${report.scoreCap} by ${report.cappingTier}-tier failure(s)`);
+  log(`  Failed tiers: ${report.failedTiers.join(', ')}`);
+}
 log(`${'='.repeat(74)}`);
 for (const [name, check] of Object.entries(report.checks)) {
   const icon = check.pass ? 'PASS' : 'FAIL';
-  const w = `[${check.weight}pt]`;
-  log(`  ${icon}  ${w.padEnd(7)} ${name.padEnd(24)} ${check.detail.substring(0, 60)}`);
+  const tier = CHECK_DEFS[name]?.tier || '?';
+  const w = `[${tier}]`;
+  log(`  ${icon}  ${w.padEnd(14)} ${name.padEnd(24)} ${check.detail.substring(0, 50)}`);
 }
 log(`${'-'.repeat(74)}`);
 if (report.defects.length > 0) {
