@@ -533,12 +533,12 @@ h1{margin:0 0 4px}h2{margin:0 0 16px;color:#888;font-weight:normal}</style></hea
           });
         }
 
-        // Process improvement check
-        if (typeof globalThis._maybeRunProcessImprovement === 'function') {
-          globalThis._maybeRunProcessImprovement(job.id).catch(err => {
-            console.error(`[ProcessImprovement] Trigger failed: ${err.message}`);
-          });
-        }
+        // Process improvement disabled — interferes with prompt changes
+        // if (typeof globalThis._maybeRunProcessImprovement === 'function') {
+        //   globalThis._maybeRunProcessImprovement(job.id).catch(err => {
+        //     console.error(`[ProcessImprovement] Trigger failed: ${err.message}`);
+        //   });
+        // }
 
         // Write repair prompt into workspace for the persistent session
         await queueManager.addLog(job.id, 'info', `Writing repair prompt (attempt ${attempt})`);

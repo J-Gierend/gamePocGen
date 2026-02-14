@@ -13,7 +13,7 @@ You receive:
 ## Constraints
 
 1. **Do NOT change the game design.** The BUILD_LOG.md describes what the game should do. Fix the implementation to match it. Don't add new features, don't remove features, don't redesign mechanics.
-2. **Do NOT modify framework files.** Everything in `framework/` is read-only. Only modify: `game.js`, `config.js`, `entities.js`, `index.html`, and any game-specific modules.
+2. **Do NOT modify framework files.** Files in `core/` and `sprites/` are read-only. Only modify: `game.js`, `config.js`, `entities.js`, `index.html`, and any game-specific modules.
 3. **Fix the actual cause, not symptoms.** If sprites aren't rendering, don't add CSS hacks — fix the SpriteRenderer registration or the draw calls.
 4. **Preserve working features.** Don't break things that already work while fixing broken things.
 5. **Keep changes minimal.** The smallest fix that resolves the defect is the best fix.
@@ -22,7 +22,7 @@ You receive:
 
 These modules are available and MUST be used (not reimplemented):
 
-### SpriteRenderer (`framework/sprites/SpriteRenderer.js`)
+### SpriteRenderer (`sprites/SpriteRenderer.js`)
 ```javascript
 const renderer = new SpriteRenderer(canvasElement);
 renderer.registerSprite('name', SPRITE_DATA.name, PALETTES.name);
@@ -32,7 +32,7 @@ renderer.draw('name', x, y, frameIndex, { scale: 3, flipX: false, opacity: 1.0, 
 renderer.resize(width, height);
 ```
 
-### SpriteData (`framework/sprites/SpriteData.js`)
+### SpriteData (`sprites/SpriteData.js`)
 Available sprites (4 frames each, 16x16 pixels):
 - `SPRITE_DATA.knight` / `PALETTES.knight` — armored character
 - `SPRITE_DATA.wizard` / `PALETTES.wizard` — mage with staff
@@ -41,7 +41,7 @@ Available sprites (4 frames each, 16x16 pixels):
 - `SPRITE_DATA.fireball` / `PALETTES.fireball` — projectile
 - `SPRITE_DATA.spark` / `PALETTES.spark` — impact/death effect
 
-### ProceduralSprite (`framework/sprites/ProceduralSprite.js`)
+### ProceduralSprite (`sprites/ProceduralSprite.js`)
 ```javascript
 // Color variant of existing sprite:
 const redSlime = ProceduralSprite.generateColorVariant(
@@ -57,16 +57,16 @@ const bullet = ProceduralSprite.generateSimpleSprite(8, 8, 'circle');
 
 ### Core Modules (ES modules)
 ```javascript
-import { GameLoop, BigNum, SaveManager, EventBus } from './framework/core/index.js';
-import { CurrencyManager } from './framework/mechanics/Currency.js';
+import { GameLoop, BigNum, SaveManager, EventBus } from './core/index.js';
+import { CurrencyManager } from './mechanics/Currency.js';
 ```
 
 ### UI Modules
 ```javascript
-import { ResourceBar } from './framework/ui/ResourceBar.js';
-import { UpgradeButton } from './framework/ui/UpgradeButton.js';
-import { TabSystem } from './framework/ui/TabSystem.js';
-import { SkillTree } from './framework/ui/SkillTree.js';
+import { ResourceBar } from './ui/ResourceBar.js';
+import { UpgradeButton } from './ui/UpgradeButton.js';
+import { TabSystem } from './ui/TabSystem.js';
+import { SkillTree } from './ui/SkillTree.js';
 ```
 
 ## Repair Process

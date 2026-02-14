@@ -21,7 +21,7 @@ You are building on top of the GamePocGen bootstrap framework. These core module
 
 ### Core Modules (already exist -- DO NOT modify)
 
-**GameLoop** (`framework/core/GameLoop.js`)
+**GameLoop** (`core/GameLoop.js`)
 ```javascript
 const loop = new GameLoop({ tickRate: 20 });
 loop.onTick((deltaTime) => { /* deltaTime in seconds */ });
@@ -31,7 +31,7 @@ loop.stop();
 loop.setTickRate(30);
 ```
 
-**BigNum** (`framework/core/BigNum.js`)
+**BigNum** (`core/BigNum.js`)
 ```javascript
 const gold = BigNum.from(1000);
 const reward = BigNum.from(50);
@@ -46,7 +46,7 @@ gold.toNumber();                       // JS number (may lose precision)
 BigNum.from(0);                        // zero
 ```
 
-**SaveManager** (`framework/core/SaveManager.js`)
+**SaveManager** (`core/SaveManager.js`)
 ```javascript
 const saves = new SaveManager({ gameId: 'my-game', autoSaveInterval: 30000, version: '1.0' });
 saves.save('slot1', stateObject);
@@ -57,7 +57,7 @@ saves.exportSave('slot1');             // base64 string
 saves.importSave('slot1', base64Str);
 ```
 
-**EventBus** (`framework/core/EventBus.js`)
+**EventBus** (`core/EventBus.js`)
 ```javascript
 const bus = new EventBus();
 const unsub = bus.on('currencyChanged', (data) => { /* handle */ });
@@ -68,10 +68,10 @@ unsub(); // unsubscribe
 
 ### Sprite Modules (already exist -- DO NOT modify, MUST use for visual gameplay)
 
-**SpriteRenderer** (`framework/sprites/SpriteRenderer.js`)
+**SpriteRenderer** (`sprites/SpriteRenderer.js`)
 ```javascript
 // NOTE: This is NOT an ES module. It uses var/function style.
-// Load via <script src="framework/sprites/SpriteRenderer.js"></script>
+// Load via <script src="sprites/SpriteRenderer.js"></script>
 // Then SpriteRenderer is available as a global.
 
 const renderer = new SpriteRenderer(canvasElement);
@@ -92,7 +92,7 @@ renderer.draw('knight', x, y, frameIndex, {
 renderer.resize(width, height);
 ```
 
-**SpriteData** (`framework/sprites/SpriteData.js`)
+**SpriteData** (`sprites/SpriteData.js`)
 ```javascript
 // Available sprites (4 animation frames each, 16x16 pixels):
 // SPRITE_DATA.knight   - armored character (player unit)
@@ -111,7 +111,7 @@ renderer.resize(width, height);
 // PALETTES.spark    { same structure, yellow/white theme }
 ```
 
-**ProceduralSprite** (`framework/sprites/ProceduralSprite.js`)
+**ProceduralSprite** (`sprites/ProceduralSprite.js`)
 ```javascript
 // Create color variant of existing sprite (e.g., red slime enemy):
 const redSlime = ProceduralSprite.generateColorVariant(
@@ -132,7 +132,7 @@ const mirrored = ProceduralSprite.mirrorHorizontal(frameData);
 
 ### Mechanics Modules (create if they don't exist)
 
-**CurrencyManager** (`framework/mechanics/Currency.js`) -- likely exists
+**CurrencyManager** (`mechanics/Currency.js`) -- likely exists
 ```javascript
 const cm = new CurrencyManager();
 cm.register({ id: 'gold', name: 'Gold', icon: 'coin', initial: 0 });
@@ -147,7 +147,7 @@ cm.serialize();
 cm.deserialize(data);
 ```
 
-**Generator** (`framework/mechanics/Generator.js`) -- create if missing
+**Generator** (`mechanics/Generator.js`) -- create if missing
 ```javascript
 class Generator {
   constructor({ id, name, currencyId, baseRate, baseCost, costMultiplier, eventBus }) { }
@@ -161,7 +161,7 @@ class Generator {
 }
 ```
 
-**MultiplierStack** (`framework/mechanics/Multiplier.js`) -- create if missing
+**MultiplierStack** (`mechanics/Multiplier.js`) -- create if missing
 ```javascript
 class MultiplierStack {
   constructor() { }
@@ -172,7 +172,7 @@ class MultiplierStack {
 }
 ```
 
-**PrestigeManager** (`framework/mechanics/Prestige.js`) -- create if missing
+**PrestigeManager** (`mechanics/Prestige.js`) -- create if missing
 ```javascript
 class PrestigeManager {
   constructor({ prestigeCurrencyId, formula, eventBus }) { }
@@ -185,7 +185,7 @@ class PrestigeManager {
 }
 ```
 
-**UnlockManager** (`framework/mechanics/Unlockable.js`) -- create if missing
+**UnlockManager** (`mechanics/Unlockable.js`) -- create if missing
 ```javascript
 class UnlockManager {
   constructor({ eventBus }) { }
@@ -205,7 +205,7 @@ class UnlockManager {
 ### TestRunner (already exists -- use as-is)
 
 ```javascript
-import { TestRunner, assert } from '../framework/core/__tests__/TestRunner.js';
+import { TestRunner, assert } from '../core/__tests__/TestRunner.js';
 
 const runner = new TestRunner();
 
@@ -301,38 +301,39 @@ workspace/
     phase-1.test.js
     phase-2.test.js
     ...
-  framework/              # DO NOT MODIFY -- use as-is from bootstrap
-    core/
-      GameLoop.js
-      BigNum.js
-      SaveManager.js
-      EventBus.js
-      index.js
-      __tests__/
-        TestRunner.js
-    mechanics/
-      Currency.js
-      Generator.js
-      Multiplier.js
-      Prestige.js
-      Unlockable.js
-    ui/
-      ResourceBar.js
-      UpgradeButton.js
-      ProgressBar.js
-      TabSystem.js
-      SkillTree.js
-    sprites/
-      SpriteRenderer.js
-      SpriteData.js
-      ProceduralSprite.js
-    css/
-      game.css
+  core/                   # DO NOT MODIFY -- framework modules
+    GameLoop.js
+    BigNum.js
+    SaveManager.js
+    EventBus.js
+    index.js
+    __tests__/
+      TestRunner.js
+  mechanics/              # Create missing modules here
+    Currency.js
+    Generator.js
+    Multiplier.js
+    Prestige.js
+    Unlockable.js
+  ui/                     # Create missing modules here
+    ResourceBar.js
+    UpgradeButton.js
+    ProgressBar.js
+    TabSystem.js
+    SkillTree.js
+  sprites/                # DO NOT MODIFY -- sprite framework
+    SpriteRenderer.js
+    SpriteData.js
+    ProceduralSprite.js
+  css/                    # DO NOT MODIFY
+    game.css
 ```
 
 ## index.html Template
 
-Use this as the starting template. The Canvas is the PRIMARY element:
+Use this as the starting template. The Canvas is the PRIMARY element.
+
+**CRITICAL PATH RULE**: All file paths are relative to the workspace root where index.html lives. Use `core/`, `sprites/`, `mechanics/`, `ui/`, `css/` — NOT `framework/core/` or `./dist/config.js`. Do NOT prefix paths with `framework/` or `dist/`.
 
 ```html
 <!DOCTYPE html>
@@ -341,7 +342,7 @@ Use this as the starting template. The Canvas is the PRIMARY element:
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>GAME_TITLE</title>
-  <link rel="stylesheet" href="framework/css/game.css">
+  <link rel="stylesheet" href="css/game.css">
   <style>
     /* CRITICAL: Game MUST fit viewport — NO SCROLLING EVER */
     html, body { height: 100vh; max-height: 100vh; overflow: hidden; }
@@ -434,13 +435,13 @@ Use this as the starting template. The Canvas is the PRIMARY element:
   </div>
 
   <!-- Sprite modules (non-ES-module, expose globals) -->
-  <script src="framework/sprites/SpriteData.js"></script>
-  <script src="framework/sprites/SpriteRenderer.js"></script>
-  <script src="framework/sprites/ProceduralSprite.js"></script>
+  <script src="sprites/SpriteData.js"></script>
+  <script src="sprites/SpriteRenderer.js"></script>
+  <script src="sprites/ProceduralSprite.js"></script>
 
   <script type="module">
-    import { GameLoop, BigNum, SaveManager, EventBus } from './framework/core/index.js';
-    import { CurrencyManager } from './framework/mechanics/Currency.js';
+    import { GameLoop, BigNum, SaveManager, EventBus } from './core/index.js';
+    import { CurrencyManager } from './mechanics/Currency.js';
     // Import additional modules as phases add them
 
     import { CONFIG } from './config.js';
@@ -930,9 +931,9 @@ export const CONFIG = {
   <pre id="output">Loading tests...</pre>
 
   <!-- Sprite modules needed for Canvas tests -->
-  <script src="../framework/sprites/SpriteData.js"></script>
-  <script src="../framework/sprites/SpriteRenderer.js"></script>
-  <script src="../framework/sprites/ProceduralSprite.js"></script>
+  <script src="../sprites/SpriteData.js"></script>
+  <script src="../sprites/SpriteRenderer.js"></script>
+  <script src="../sprites/ProceduralSprite.js"></script>
 
   <script type="module">
     const output = document.getElementById('output');
@@ -1094,7 +1095,7 @@ After deployment, an automated Playwright test evaluates the game. These are the
 2. **INTERACTIVE Canvas gameplay is mandatory.** The game MUST have animated sprites on a Canvas that the player INTERACTS WITH. The player must click on the Canvas to play the game — placing towers, mining blocks, directing units, etc. If Phase 1 doesn't produce a visible Canvas where the player can click and see a gameplay result, everything else is wrong. A Canvas that just shows sprites auto-fighting while the player clicks upgrade buttons below is NOT gameplay — it's a screensaver.
 3. **EVERY SYSTEM MUST BE PLAYABLE.** If the GDD describes a skill tree, there must be a visible, clickable skill tree. If it describes prestige, there must be a prestige button that works. "Implemented in backend" is NOT done — the player must be able to USE every system through the UI. A human evaluates the game by PLAYING it, not by reading the code.
 4. **Use the sprite framework.** SpriteRenderer, SpriteData, ProceduralSprite are your tools for visual gameplay. Use them.
-5. **Do not modify framework/core/ files.** Only add new files to framework/mechanics/ and framework/ui/.
+5. **Do not modify core/ or sprites/ files.** Only add new files to mechanics/ and ui/.
 6. **All game values in config.js.** No magic numbers.
 7. **EventBus for decoupling.** UI listens to events, doesn't read state directly.
 8. **BigNum for all currency amounts.** Always `BigNum.from()`.
