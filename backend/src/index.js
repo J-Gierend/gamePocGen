@@ -542,7 +542,13 @@ h1{margin:0 0 4px}h2{margin:0 0 16px;color:#888;font-weight:normal}</style></hea
 
         // Write repair prompt into workspace for the persistent session
         await queueManager.addLog(job.id, 'info', `Writing repair prompt (attempt ${attempt})`);
-        let defectReport = JSON.stringify(testResult.defects || []);
+        // Format defects as readable list (not raw JSON) for better Claude comprehension
+        const defects = testResult.defects || [];
+        let defectReport = `Score: ${score}/10 (attempt ${attempt})\n\nDefects found:\n`;
+        for (const d of defects) {
+          defectReport += `  - [${d.severity}] ${d.description}\n`;
+          if (d.suggestion) defectReport += `    Suggestion: ${d.suggestion}\n`;
+        }
 
         const userFeedback = await queueManager.getUserFeedback(job.id);
         if (userFeedback) {

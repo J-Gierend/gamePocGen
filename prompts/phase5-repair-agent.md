@@ -180,6 +180,43 @@ After making all fixes, produce a repair summary:
 - [ ] Gameplay loop works
 ```
 
+## Automated Test Expectations (CRITICAL)
+
+The game is evaluated by a Playwright test. These exact checks determine the score:
+
+**FATAL tier (score capped at 1/10 if ANY fail):**
+- No JavaScript errors on page load (no console.error, no uncaught exceptions)
+- Canvas has >1% colored pixels (not blank/black)
+
+**UNPLAYABLE tier (score capped at 2/10 if ANY fail):**
+- Canvas clicks create new objects: `game.entities.length` or `game.structures.length` must increase after clicking
+- Entities exist: `game.entities.length > 0` after 20 seconds
+- Currency values change over 20 seconds
+- Active clicking produces more currency than passive waiting
+
+**BROKEN tier (score capped at 4/10 if ANY fail):**
+- `window.CONFIG` exists (add `window.CONFIG = CONFIG;` in index.html module script)
+- >=2 HUD currency displays: elements matching `[id*="display"], [class*="currency"], [id*="currency"]`
+- Controls panel visible with >=2 key binding patterns (e.g., "Click: Place", "Space: Start")
+- >=3 out of 5 canvas clicks produce state changes
+
+**INCOMPLETE tier (score capped at 6/10 if ANY fail):**
+- >=2 clickable tabs matching `[data-tab], .tab, [role="tab"], #tabs button`
+- Upgrades tab has clickable buttons
+- Game fits viewport (no scrolling)
+- Waves advance over 20 seconds
+
+**Required window globals:**
+```javascript
+window.CONFIG = CONFIG;  // The game config object
+window.game = game;      // The Game instance, MUST have:
+  // game.entities = []    - array of entity objects
+  // game.structures = []  - array of structure objects (can start empty)
+  // game.effects = []     - array of visual effects
+  // game.currencies       - CurrencyManager instance
+  // game.world = { wave: 0, waveActive: false }
+```
+
 ## Critical Rules
 
 1. **Fix implementation, not design.** If BUILD_LOG says "Skill tree with 3 branches", make the skill tree with 3 branches work. Don't decide it should have 4 branches.

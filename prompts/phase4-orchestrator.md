@@ -459,7 +459,8 @@ Use this as the starting template. The Canvas is the PRIMARY element:
     game.init();
     game.start();
 
-    // Expose for debugging
+    // Expose for automated testing — these MUST be set
+    window.CONFIG = CONFIG;
     window.game = game;
   </script>
 </body>
@@ -502,6 +503,8 @@ export class Game {
 
     // Game world
     this.entities = [];         // Active entities on Canvas
+    this.structures = [];       // Player-placed structures (towers, drills, etc.)
+    this.collectibles = [];     // Dropped items/pickups
     this.effects = [];          // Temporary visual effects (floating text, sparks)
     this.world = {
       wave: 0,
@@ -1062,6 +1065,28 @@ After all phases:
    - If ANY system from the GDD exists only as backend code without a working UI, the game is INCOMPLETE. Go back and implement the UI.
 
 6. Write summary in `BUILD_LOG.md`
+
+## Automated Testing Requirements (CRITICAL)
+
+After deployment, an automated Playwright test evaluates the game. These are the specific checks:
+
+1. **No JS errors on page load** — Any `console.error` or uncaught exception fails the game immediately (score capped at 1/10)
+2. **Canvas renders** — Canvas must have >1% colored pixels (not blank). Score capped at 1/10 if blank.
+3. **`window.CONFIG`** — The CONFIG object MUST be on `window`. Add `window.CONFIG = CONFIG;` in index.html.
+4. **`window.game`** — The game object MUST be on `window`. Add `window.game = game;` in index.html.
+5. **`window.game.entities`** — Must be an array of entities. Used to verify spawning.
+6. **`window.game.structures`** — Must be an array (can be empty initially). Used to verify canvas interaction.
+7. **`window.game.currencies`** — Must be a CurrencyManager with `.get(id)` returning `{amount}`.
+8. **`window.game.world.wave`** — Must track current wave number.
+9. **HUD currency displays** — Need >=2 elements matching `[id*="display"], [class*="currency"], [id*="currency"]`
+10. **Tabs** — Need >=2 clickable elements matching `[data-tab], .tab, [role="tab"], #tabs button`
+11. **Controls panel** — Text on page must contain >=2 key binding patterns like `"Click: Place"`, `"Space: Start"`
+12. **Canvas click creates objects** — Clicking canvas must increase `game.structures.length` or `game.entities.length`
+13. **Entities spawn** — After 20 seconds, `game.entities.length > 0`
+14. **Currencies change** — Currency values must change over 20 seconds
+15. **Player clicks earn more than idle** — Active clicking must produce more currency than passive waiting
+
+**IMPORTANT**: The index.html MUST use regular `<script>` tags for sprite modules and `<script type="module">` for core imports. Set `window.CONFIG = CONFIG;` and `window.game = game;` inside the module script. The Game class MUST have `.entities`, `.structures`, `.effects`, `.currencies`, and `.world` properties initialized as arrays/objects in the constructor.
 
 ## Critical Rules
 
