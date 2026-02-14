@@ -553,21 +553,17 @@ h1{margin:0 0 4px}h2{margin:0 0 16px;color:#888;font-weight:normal}</style></hea
         // Write repair-prompt.txt — on-idle.sh will pick it up
         containerManager.writeToWorkspace(job.id, 'repair-prompt.txt', defectReport);
 
-        // Wait for Claude to finish repair (poll for idle state)
+        // Wait for Claude to finish repair in two phases:
+        // Phase A: Wait for state to change to "running" (prompt was picked up)
+        // Phase B: Wait for state to change back to "idle" (repair finished)
         const repairStart = Date.now();
         let repairDone = false;
+        let sawRunning = false;
+
         while (Date.now() - repairStart < REPAIR_WAIT_TIMEOUT) {
           await new Promise(r => setTimeout(r, 3000));
 
-          // Check if repair-prompt.txt was consumed (on-idle.sh removes it)
-          // and state is back to idle (repair finished)
           const repairState = containerManager.readHarnessState(job.id);
-          if (repairState?.current_phase === 'phase5' && repairState?.status === 'idle') {
-            // Claude finished, waiting for next instruction
-            // But we need to verify dist/index.html was updated
-            repairDone = true;
-            break;
-          }
 
           // Check for terminal states
           if (repairState?.status === 'completed' || repairState?.status === 'failed') {
@@ -579,6 +575,25 @@ h1{margin:0 0 4px}h2{margin:0 0 16px;color:#888;font-weight:normal}</style></hea
           const cs = await containerManager.getContainerStatus(containerId);
           if (!cs?.running) {
             await queueManager.addLog(job.id, 'error', 'Container died during repair');
+            repairDone = true;
+            break;
+          }
+
+          // Phase A: wait for "running" (prompt picked up by on-idle.sh)
+          if (!sawRunning) {
+            if (repairState?.status === 'running') {
+              sawRunning = true;
+              await queueManager.addLog(job.id, 'info', 'Repair prompt picked up by worker');
+            }
+            // Also check if repair-prompt.txt was consumed (alternative signal)
+            if (!containerManager.hasMarkerFile(job.id, 'repair-prompt.txt')) {
+              sawRunning = true;
+            }
+            continue;
+          }
+
+          // Phase B: wait for "idle" (repair finished)
+          if (repairState?.current_phase === 'phase5' && repairState?.status === 'idle') {
             repairDone = true;
             break;
           }
