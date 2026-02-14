@@ -127,133 +127,150 @@ async function main() {
       );
     }
 
-    const phases = ['phase1', 'phase2', 'phase3', 'phase4'];
+    // --- Pre-launch: handle comparison jobs (copy idea from source) ---
+    if (sourceJobId) {
+      await queueManager.addLog(job.id, 'info', `Comparison job: waiting for source job ${sourceJobId} phase1...`);
+      const maxWait = 30 * 60 * 1000;
+      const startWait = Date.now();
+      let sourceReady = false;
+      while (Date.now() - startWait < maxWait) {
+        const sourceJob = await queueManager.getJob(sourceJobId);
+        if (!sourceJob) throw new Error(`Source job ${sourceJobId} not found`);
+        if (sourceJob.status === 'failed') throw new Error(`Source job ${sourceJobId} failed`);
+        const pastPhase1 = ['phase_2', 'phase_3', 'phase_4', 'completed'].includes(sourceJob.status);
+        if (pastPhase1) { sourceReady = true; break; }
+        await new Promise(r => setTimeout(r, 5000));
+      }
+      if (!sourceReady) throw new Error(`Timeout waiting for source job ${sourceJobId} to complete phase1`);
 
-    for (const phase of phases) {
-      try {
-        await queueManager.updateStatus(job.id, `phase_${phase.replace('phase', '')}`);
-        await queueManager.addLog(job.id, 'info', `Starting ${phase}`);
+      const { mkdirSync, copyFileSync, existsSync } = await import('node:fs');
+      const srcDir = `${containerManager.workspacePath}/job-${sourceJobId}`;
+      const destDir = `${containerManager.workspacePath}/job-${job.id}`;
+      mkdirSync(destDir, { recursive: true });
+      if (existsSync(`${srcDir}/idea.md`)) copyFileSync(`${srcDir}/idea.md`, `${destDir}/idea.md`);
+      if (existsSync(`${srcDir}/idea.json`)) copyFileSync(`${srcDir}/idea.json`, `${destDir}/idea.json`);
+      await queueManager.addLog(job.id, 'info', `Copied idea from source job ${sourceJobId}`);
+      await queueManager.updatePhaseOutput(job.id, 'phase1', { copied_from: sourceJobId });
+    }
 
-        // For comparison jobs: skip phase1 and copy idea from source
-        if (phase === 'phase1' && sourceJobId) {
-          await queueManager.addLog(job.id, 'info', `Comparison job: waiting for source job ${sourceJobId} phase1...`);
+    // --- Genre seed selection (for phase1 diversity) ---
+    const extraEnv = [...providerEnv];
+    try {
+      const existingGames = await deploymentManager.listDeployedGames();
+      const names = existingGames.map(g => g.title).filter(Boolean).join(', ');
+      if (names) extraEnv.push(`EXISTING_GAME_NAMES=${names}`);
 
-          // Wait for source job to finish phase1 (poll every 5s, 30min timeout)
-          const maxWait = 30 * 60 * 1000;
-          const startWait = Date.now();
-          let sourceReady = false;
-          while (Date.now() - startWait < maxWait) {
-            const sourceJob = await queueManager.getJob(sourceJobId);
-            if (!sourceJob) throw new Error(`Source job ${sourceJobId} not found`);
-            if (sourceJob.status === 'failed') throw new Error(`Source job ${sourceJobId} failed`);
-            // Source is past phase1 if status is phase_2 or later
-            const pastPhase1 = ['phase_2', 'phase_3', 'phase_4', 'completed'].includes(sourceJob.status);
-            if (pastPhase1) { sourceReady = true; break; }
-            await new Promise(r => setTimeout(r, 5000));
-          }
-          if (!sourceReady) throw new Error(`Timeout waiting for source job ${sourceJobId} to complete phase1`);
+      const recentJobs = await queueManager.getJobs({ limit: 20 });
+      const usedGenres = new Set(recentJobs.map(j => j.phase_outputs?.genreSeed).filter(Boolean));
+      const available = GENRE_SEEDS.filter(g => !usedGenres.has(g));
+      const genrePool = available.length > 0 ? available : GENRE_SEEDS;
+      const genreSeed = genrePool[Math.floor(Math.random() * genrePool.length)];
+      extraEnv.push(`GENRE_SEED=${genreSeed}`);
+      await queueManager.updatePhaseOutput(job.id, 'genreSeed', genreSeed);
+      await queueManager.addLog(job.id, 'info', `Genre seed: ${genreSeed}`);
+    } catch (err) {
+      console.error(`Genre seed selection failed: ${err.message}`);
+    }
 
-          // Copy idea.md from source workspace to our workspace
-          const sourceDir = `${containerManager.workspacePath}/job-${sourceJobId}`;
-          const destDir = `${containerManager.workspacePath}/job-${job.id}`;
-          const { mkdirSync, copyFileSync, existsSync } = await import('node:fs');
-          mkdirSync(destDir, { recursive: true });
-          const ideaSrc = `${sourceDir}/idea.md`;
-          const ideaJsonSrc = `${sourceDir}/idea.json`;
-          if (existsSync(ideaSrc)) copyFileSync(ideaSrc, `${destDir}/idea.md`);
-          if (existsSync(ideaJsonSrc)) copyFileSync(ideaJsonSrc, `${destDir}/idea.json`);
+    // --- Spawn ONE persistent container for the entire job ---
+    await queueManager.updateStatus(job.id, 'phase_1');
+    await queueManager.addLog(job.id, 'info', 'Spawning persistent worker container');
 
-          await queueManager.addLog(job.id, 'info', `Copied idea from source job ${sourceJobId}`);
-          await queueManager.updatePhaseOutput(job.id, 'phase1', { copied_from: sourceJobId });
-          continue; // Skip spawning phase1 container
-        }
+    let containerId;
+    try {
+      const result = await containerManager.spawnPersistentContainer(job, { extraEnv });
+      containerId = result.containerId;
+      await queueManager.addLog(job.id, 'info', `Container started: ${result.name}`);
+    } catch (err) {
+      await queueManager.addLog(job.id, 'error', `Failed to spawn container: ${err.message}`);
+      await queueManager.updateStatus(job.id, 'failed', { error: `Container spawn: ${err.message}` });
+      return;
+    }
 
-        // Pass diversity env vars to phase1
-        if (phase === 'phase1') {
-          try {
-            const extraEnv = [...providerEnv];
+    // --- Phase 1-4: Poll harness state file for phase transitions ---
+    let lastPhase = 'starting';
+    let deployResult = null;
+    const PHASE_POLL_INTERVAL = 3000;
+    const CONTAINER_TIMEOUT = 24 * 60 * 60 * 1000; // 24 hours max
+    const phaseStartTime = Date.now();
 
-            // Existing game names for title/genre diversity
-            const existingGames = await deploymentManager.listDeployedGames();
-            const names = existingGames.map(g => g.title).filter(Boolean).join(', ');
-            if (names) {
-              extraEnv.push(`EXISTING_GAME_NAMES=${names}`);
-            }
+    while (Date.now() - phaseStartTime < CONTAINER_TIMEOUT) {
+      await new Promise(r => setTimeout(r, PHASE_POLL_INTERVAL));
 
-            // Pick a genre seed not recently used by other jobs
-            const recentJobs = await queueManager.getJobs({ limit: 20 });
-            const usedGenres = new Set(
-              recentJobs
-                .map(j => j.phase_outputs?.genreSeed)
-                .filter(Boolean)
-            );
-            const available = GENRE_SEEDS.filter(g => !usedGenres.has(g));
-            const genrePool = available.length > 0 ? available : GENRE_SEEDS;
-            const genreSeed = genrePool[Math.floor(Math.random() * genrePool.length)];
-            extraEnv.push(`GENRE_SEED=${genreSeed}`);
-
-            // Store genre seed in phase_outputs for dedup tracking
-            await queueManager.updatePhaseOutput(job.id, 'genreSeed', genreSeed);
-
-            job.extraEnv = extraEnv;
-            await queueManager.addLog(job.id, 'info', `Genre seed: ${genreSeed}`);
-          } catch (err) {
-            // Log but don't fail — genre seed is nice-to-have
-            console.error(`Genre seed selection failed: ${err.message}`);
-          }
-        } else {
-          // Non-phase1: still pass provider env vars
-          job.extraEnv = [...providerEnv];
-        }
-
-        const { containerId } = await containerManager.spawnContainer(job, phase);
-
-        // Poll container until done
-        let status;
-        do {
-          await new Promise(r => setTimeout(r, 5000));
-          status = await containerManager.getContainerStatus(containerId);
-        } while (status?.running);
-
+      // Check container still alive
+      const containerStatus = await containerManager.getContainerStatus(containerId);
+      if (!containerStatus?.running) {
         const logs = await containerManager.getContainerLogs(containerId);
-        await queueManager.addLog(job.id, 'info', `${phase} logs: ${logs.slice(0, 500)}`);
-
-        if (status?.exitCode !== 0) {
-          throw new Error(`${phase} failed with exit code ${status?.exitCode}`);
-        }
-
-        await queueManager.addLog(job.id, 'info', `${phase} completed successfully`);
-
-        // After Phase 1: extract real game name from idea.json
-        if (phase === 'phase1') {
-          try {
-            const { readFileSync } = await import('node:fs');
-            const ideaPath = `${containerManager.workspacePath}/job-${job.id}/idea.json`;
-            const idea = JSON.parse(readFileSync(ideaPath, 'utf-8'));
-            if (idea.name) {
-              await queueManager.pool.query('UPDATE jobs SET game_name = $1 WHERE id = $2', [idea.name, job.id]);
-              job.game_name = idea.name;
-              await queueManager.addLog(job.id, 'info', `Game named: ${idea.name}`);
-            }
-          } catch { /* idea.json may not exist yet, non-critical */ }
-        }
-      } catch (err) {
-        await queueManager.addLog(job.id, 'error', `${phase} error: ${err.message}`);
-        await queueManager.updateStatus(job.id, 'failed', { error: `${phase}: ${err.message}` });
+        await queueManager.addLog(job.id, 'error', `Container died (exit ${containerStatus?.exitCode}): ${logs.slice(-500)}`);
+        await queueManager.updateStatus(job.id, 'failed', { error: `Container exited with code ${containerStatus?.exitCode}` });
         return;
+      }
+
+      // Read harness state
+      const state = containerManager.readHarnessState(job.id);
+      if (!state) continue;
+
+      // Track phase transitions
+      if (state.current_phase !== lastPhase) {
+        const phaseNum = state.current_phase.replace('phase', '');
+        if (['1', '2', '3', '4', '5'].includes(phaseNum)) {
+          await queueManager.updateStatus(job.id, `phase_${phaseNum}`);
+        }
+        await queueManager.addLog(job.id, 'info', `Phase transition: ${lastPhase} → ${state.current_phase} (${state.status})`);
+        lastPhase = state.current_phase;
+      }
+
+      // After phase1: extract game name from idea.json
+      if (state.current_phase !== 'phase1' && state.current_phase !== 'starting') {
+        try {
+          const { readFileSync } = await import('node:fs');
+          const ideaPath = `${containerManager.workspacePath}/job-${job.id}/idea.json`;
+          const idea = JSON.parse(readFileSync(ideaPath, 'utf-8'));
+          if (idea.name && idea.name !== job.game_name) {
+            await queueManager.pool.query('UPDATE jobs SET game_name = $1 WHERE id = $2', [idea.name, job.id]);
+            job.game_name = idea.name;
+            await queueManager.addLog(job.id, 'info', `Game named: ${idea.name}`);
+          }
+        } catch { /* non-critical */ }
+      }
+
+      // Container signals failure
+      if (state.status === 'failed') {
+        await queueManager.addLog(job.id, 'error', `Worker signaled failure in ${state.current_phase}`);
+        await queueManager.updateStatus(job.id, 'failed', { error: `Worker failed in ${state.current_phase}` });
+        return;
+      }
+
+      // Container signals completion (all phases + repairs done)
+      if (state.status === 'completed') {
+        await queueManager.addLog(job.id, 'info', 'Worker signaled completion');
+        await queueManager.updateStatus(job.id, 'completed');
+        return;
+      }
+
+      // Phase 4 complete: game built, time to deploy and start repair loop
+      if (containerManager.hasMarkerFile(job.id, 'phase4-complete.marker')) {
+        await queueManager.addLog(job.id, 'info', 'Phase 4 complete — deploying game');
+        containerManager.removeMarkerFile(job.id, 'phase4-complete.marker');
+        break; // Exit phase polling, enter repair loop
       }
     }
 
-    // Deploy
-    let deployResult;
+    // Check if we timed out
+    if (Date.now() - phaseStartTime >= CONTAINER_TIMEOUT) {
+      await queueManager.addLog(job.id, 'error', 'Container timed out during phases 1-4');
+      try { await containerManager.stopContainer(containerId); } catch { /* ignore */ }
+      await queueManager.updateStatus(job.id, 'failed', { error: 'Timeout during phases 1-4' });
+      return;
+    }
+
+    // --- Deploy the game ---
     try {
       const workspaceDir = `${containerManager.workspacePath}/job-${job.id}`;
       const sourceDir = `${workspaceDir}/dist`;
       deployResult = await deploymentManager.deployGame(job.id, job.game_name || `Game ${job.id}`, sourceDir, { workspaceDir });
       await queueManager.updatePhaseOutput(job.id, 'deployment', deployResult);
       await queueManager.addLog(job.id, 'info', `Deployed to ${deployResult.url}`);
-
-      // Update gallery
       const games = await deploymentManager.listDeployedGames();
       await deploymentManager.updateGalleryData(games);
     } catch (err) {
@@ -262,30 +279,27 @@ async function main() {
       return;
     }
 
-    // Phase 5: Repair loop — keep iterating until 10/10 or 100 attempts
+    // --- Phase 5: Repair loop ---
     await queueManager.updateStatus(job.id, 'phase_5');
     await queueManager.addLog(job.id, 'info', 'Starting Phase 5 repair loop');
 
-    // Use internal Docker network URL for Playwright tests (avoids hairpin NAT)
     const gameUrl = deployResult.url;
     const testUrl = `http://gamedemo${job.id}`;
     const MAX_REPAIR_ATTEMPTS = 100;
     const PASS_SCORE = 10;
     const FAIL_SCORE = 4;
 
-    // Helper: write score badge + repair log into deployed game
     const { writeFileSync, readFileSync } = await import('node:fs');
-    const repairLog = []; // Accumulates across all attempts
+    const repairLog = [];
+
     function updateScoreBadge(score, attempt) {
       try {
-        const badgePath = `${containerManager.workspacePath}/job-${job.id}/../deployed/gamedemo${job.id}/html/score-badge.js`;
         const altPath = `${deployResult.deployPath}/html/score-badge.js`;
         const js = `(function(){var d=document.createElement('div');d.id='qa-badge';d.style.cssText='position:fixed;top:8px;right:8px;z-index:999999;background:${score>=8?'#22c55e':score>=4?'#eab308':'#ef4444'};color:#fff;padding:6px 14px;border-radius:20px;font:bold 14px/1 system-ui;box-shadow:0 2px 8px rgba(0,0,0,.3);pointer-events:none;';d.textContent='Score: ${score}/10 • Repair #${attempt}';var old=document.getElementById('qa-badge');if(old)old.remove();document.body.appendChild(d);})();`;
-        try { writeFileSync(altPath, js); } catch { writeFileSync(badgePath, js); }
+        writeFileSync(altPath, js);
       } catch { /* non-critical */ }
     }
 
-    // Helper: inject badge script tag into game's index.html (once)
     function injectBadgeScript() {
       try {
         const htmlPath = `${deployResult.deployPath}/html/index.html`;
@@ -297,12 +311,10 @@ async function main() {
       } catch { /* non-critical */ }
     }
 
-    // Helper: write repair log (JSON + HTML) to deployed game
     function updateRepairLog() {
       try {
         const htmlDir = `${deployResult.deployPath}/html`;
         writeFileSync(`${htmlDir}/repair-log.json`, JSON.stringify(repairLog, null, 2));
-        // Human-readable HTML version
         const rows = repairLog.map(e => `<tr style="border-bottom:1px solid #333">
           <td style="padding:6px">${e.attempt}</td>
           <td style="padding:6px;font-weight:bold;color:${e.score>=8?'#22c55e':e.score>=4?'#eab308':'#ef4444'}">${e.score}/10</td>
@@ -321,25 +333,6 @@ h1{margin:0 0 4px}h2{margin:0 0 16px;color:#888;font-weight:normal}</style></hea
       } catch { /* non-critical */ }
     }
 
-    // Inject badge script on first deploy
-    injectBadgeScript();
-    updateScoreBadge(0, 0);
-    let consecutiveTimeouts = 0;
-    const MAX_CONSECUTIVE_TIMEOUTS = 5;
-    const PLATEAU_WINDOW = 5; // Check last N attempts for improvement
-    const PLATEAU_THRESHOLD = 0.5; // Minimum score delta to count as "improving"
-    let lastStrategyReviewAtAttempt = 0; // Don't review more than once every 5 attempts
-
-    // Helper: detect if repair loop is plateaued
-    function isPlateaued(attempt) {
-      if (repairLog.length < PLATEAU_WINDOW) return false;
-      if (attempt - lastStrategyReviewAtAttempt < PLATEAU_WINDOW) return false;
-      const recent = repairLog.slice(-PLATEAU_WINDOW);
-      const minScore = Math.min(...recent.map(r => r.score));
-      const maxScore = Math.max(...recent.map(r => r.score));
-      return (maxScore - minScore) < PLATEAU_THRESHOLD;
-    }
-
     // Helper: build repair history summary for strategy review
     function buildRepairHistory() {
       const lines = ['## Score Progression'];
@@ -352,7 +345,6 @@ h1{margin:0 0 4px}h2{margin:0 0 16px;color:#888;font-weight:normal}</style></hea
           }
         }
       }
-      // Identify recurring defects
       const defectCounts = {};
       for (const entry of repairLog) {
         for (const d of entry.defects || []) {
@@ -367,44 +359,60 @@ h1{margin:0 0 4px}h2{margin:0 0 16px;color:#888;font-weight:normal}</style></hea
       return lines.join('\n');
     }
 
-    // Helper: build auth env vars
-    function getAuthEnv() {
-      return provider === 'anthropic' ? [
-        'AUTH_MODE=subscription',
-        `CLAUDE_CODE_OAUTH_TOKEN=${process.env.CLAUDE_CODE_OAUTH_TOKEN || ''}`,
-        `CLAUDE_CODE_REFRESH_TOKEN=${process.env.CLAUDE_CODE_REFRESH_TOKEN || ''}`,
-        `CLAUDE_CODE_TOKEN_EXPIRES=${process.env.CLAUDE_CODE_TOKEN_EXPIRES || ''}`,
-        `MODEL=${job.config?.model || 'claude-opus-4-6'}`,
-      ] : [];
+    // Helper: detect if repair loop is plateaued
+    let lastStrategyReviewAtAttempt = 0;
+    const PLATEAU_WINDOW = 5;
+    const PLATEAU_THRESHOLD = 0.5;
+    function isPlateaued(attempt) {
+      if (repairLog.length < PLATEAU_WINDOW) return false;
+      if (attempt - lastStrategyReviewAtAttempt < PLATEAU_WINDOW) return false;
+      const recent = repairLog.slice(-PLATEAU_WINDOW);
+      const minScore = Math.min(...recent.map(r => r.score));
+      const maxScore = Math.max(...recent.map(r => r.score));
+      return (maxScore - minScore) < PLATEAU_THRESHOLD;
     }
 
-    // Helper: spawn container and wait for completion
-    async function spawnAndWait(phase, extraEnv) {
-      job.extraEnv = [...getAuthEnv(), ...extraEnv];
-      const { containerId } = await containerManager.spawnContainer(job, phase);
+    // Helper: spawn one-shot container and wait (for strategy review)
+    async function spawnAndWait(phase, phaseExtraEnv) {
+      job.extraEnv = [...providerEnv, ...phaseExtraEnv];
+      const { containerId: cid } = await containerManager.spawnContainer(job, phase);
       let status;
       do {
         await new Promise(r => setTimeout(r, 5000));
-        status = await containerManager.getContainerStatus(containerId);
+        status = await containerManager.getContainerStatus(cid);
       } while (status?.running);
-      const logs = await containerManager.getContainerLogs(containerId);
+      const logs = await containerManager.getContainerLogs(cid);
       return { status, logs };
     }
 
+    injectBadgeScript();
+    updateScoreBadge(0, 0);
+    let consecutiveTimeouts = 0;
+    const MAX_CONSECUTIVE_TIMEOUTS = 5;
+    const REPAIR_WAIT_TIMEOUT = 10 * 60 * 1000; // 10 min max wait per repair
+
     for (let attempt = 1; attempt <= MAX_REPAIR_ATTEMPTS; attempt++) {
       try {
+        // Check container still alive before each repair
+        const cStatus = await containerManager.getContainerStatus(containerId);
+        if (!cStatus?.running) {
+          await queueManager.addLog(job.id, 'error', `Worker container died during repair loop (exit ${cStatus?.exitCode})`);
+          break;
+        }
+
         await queueManager.addLog(job.id, 'info', `Repair loop iteration ${attempt}/${MAX_REPAIR_ATTEMPTS}: testing ${testUrl}`);
         const thumbnailPath = `${deployResult.deployPath}/html/thumbnail.png`;
         const testResult = await runPlaywrightTest(testUrl, { thumbnailPath });
         const score = testResult.score ?? 0;
 
-        // Detect infrastructure failures (ETIMEDOUT, etc.) and bail early
+        // Detect infrastructure failures
         const isInfraFailure = score === 0 && testResult.defects?.length === 1 &&
           testResult.defects[0]?.description?.includes('ETIMEDOUT');
         if (isInfraFailure) {
           consecutiveTimeouts++;
           if (consecutiveTimeouts >= MAX_CONSECUTIVE_TIMEOUTS) {
-            await queueManager.addLog(job.id, 'error', `${MAX_CONSECUTIVE_TIMEOUTS} consecutive test timeouts — bailing out (game may be unreachable or hanging)`);
+            await queueManager.addLog(job.id, 'error', `${MAX_CONSECUTIVE_TIMEOUTS} consecutive test timeouts — bailing out`);
+            containerManager.writeToWorkspace(job.id, 'job-failed.marker', 'Infrastructure failure');
             await queueManager.updateStatus(job.id, 'failed', { error: `Infrastructure failure: ${MAX_CONSECUTIVE_TIMEOUTS} consecutive ETIMEDOUT` });
             return;
           }
@@ -436,6 +444,7 @@ h1{margin:0 0 4px}h2{margin:0 0 16px;color:#888;font-weight:normal}</style></hea
 
         if (score >= PASS_SCORE) {
           await queueManager.addLog(job.id, 'info', `Score ${score} >= ${PASS_SCORE}, game passes quality gate`);
+          containerManager.writeToWorkspace(job.id, 'job-complete.marker', 'Quality gate passed');
           break;
         }
 
@@ -443,18 +452,20 @@ h1{margin:0 0 4px}h2{margin:0 0 16px;color:#888;font-weight:normal}</style></hea
           if (score < FAIL_SCORE) {
             await queueManager.addLog(job.id, 'error', `Score ${score} < ${FAIL_SCORE} after ${MAX_REPAIR_ATTEMPTS} attempts, removing game`);
             await deploymentManager.removeGame(job.id);
+            containerManager.writeToWorkspace(job.id, 'job-failed.marker', 'Quality gate failed');
             await queueManager.updateStatus(job.id, 'failed', { error: `Quality gate: score ${score}/10 after ${MAX_REPAIR_ATTEMPTS} repair attempts` });
             const games = await deploymentManager.listDeployedGames();
             await deploymentManager.updateGalleryData(games);
             return;
           }
           await queueManager.addLog(job.id, 'info', `Score ${score} >= ${FAIL_SCORE}, keeping game after ${MAX_REPAIR_ATTEMPTS} attempts`);
+          containerManager.writeToWorkspace(job.id, 'job-complete.marker', 'Max attempts reached');
           break;
         }
 
-        // --- PLATEAU DETECTION: trigger strategy review when stuck ---
+        // --- PLATEAU DETECTION ---
         if (isPlateaued(attempt)) {
-          await queueManager.addLog(job.id, 'info', `PLATEAU DETECTED at attempt ${attempt} (score ~${score} for last ${PLATEAU_WINDOW} attempts). Spawning strategy review...`);
+          await queueManager.addLog(job.id, 'info', `PLATEAU DETECTED at attempt ${attempt}. Spawning strategy review...`);
           lastStrategyReviewAtAttempt = attempt;
 
           const history = buildRepairHistory();
@@ -465,43 +476,64 @@ h1{margin:0 0 4px}h2{margin:0 0 16px;color:#888;font-weight:normal}</style></hea
 
           await queueManager.addLog(job.id, 'info', `Strategy review ${reviewStatus?.exitCode === 0 ? 'completed' : 'failed'}: ${reviewLogs.slice(0, 300)}`);
           await queueManager.updatePhaseOutput(job.id, `strategy_review_${attempt}`, {
-            triggeredAt: attempt,
-            score,
-            exitCode: reviewStatus?.exitCode,
+            triggeredAt: attempt, score, exitCode: reviewStatus?.exitCode,
             timestamp: new Date().toISOString(),
           });
-
-          // Continue to normal repair — it will now read repair-strategy.md
         }
 
-        // Also check if we should run global process improvement
+        // Process improvement check
         if (typeof globalThis._maybeRunProcessImprovement === 'function') {
           globalThis._maybeRunProcessImprovement(job.id).catch(err => {
             console.error(`[ProcessImprovement] Trigger failed: ${err.message}`);
           });
         }
 
-        // Spawn Phase 5 repair container with defect report + user feedback
-        await queueManager.addLog(job.id, 'info', `Spawning repair container (attempt ${attempt})`);
+        // Write repair prompt into workspace for the persistent session
+        await queueManager.addLog(job.id, 'info', `Writing repair prompt (attempt ${attempt})`);
         let defectReport = JSON.stringify(testResult.defects || []);
 
-        // Include user feedback if present
         const userFeedback = await queueManager.getUserFeedback(job.id);
         if (userFeedback) {
           defectReport += `\n\n=== USER FEEDBACK (implement these requests) ===\n${userFeedback}\n=== END USER FEEDBACK ===`;
-          await queueManager.addLog(job.id, 'info', `Including user feedback in repair: ${userFeedback.slice(0, 200)}`);
+          await queueManager.addLog(job.id, 'info', `Including user feedback: ${userFeedback.slice(0, 200)}`);
         }
 
-        const { status: repairStatus, logs: repairLogs } = await spawnAndWait('phase5', [
-          `GAME_URL=${gameUrl}`,
-          `DEFECT_REPORT=${defectReport}`,
-        ]);
+        // Write repair-prompt.txt — on-idle.sh will pick it up
+        containerManager.writeToWorkspace(job.id, 'repair-prompt.txt', defectReport);
 
-        await queueManager.addLog(job.id, 'info', `phase5 repair logs: ${repairLogs.slice(0, 500)}`);
+        // Wait for Claude to finish repair (poll for idle state)
+        const repairStart = Date.now();
+        let repairDone = false;
+        while (Date.now() - repairStart < REPAIR_WAIT_TIMEOUT) {
+          await new Promise(r => setTimeout(r, 3000));
 
-        if (repairStatus?.exitCode !== 0) {
-          await queueManager.addLog(job.id, 'error', `Repair container failed with exit code ${repairStatus?.exitCode}`);
-          continue;
+          // Check if repair-prompt.txt was consumed (on-idle.sh removes it)
+          // and state is back to idle (repair finished)
+          const repairState = containerManager.readHarnessState(job.id);
+          if (repairState?.current_phase === 'phase5' && repairState?.status === 'idle') {
+            // Claude finished, waiting for next instruction
+            // But we need to verify dist/index.html was updated
+            repairDone = true;
+            break;
+          }
+
+          // Check for terminal states
+          if (repairState?.status === 'completed' || repairState?.status === 'failed') {
+            repairDone = true;
+            break;
+          }
+
+          // Check container still alive
+          const cs = await containerManager.getContainerStatus(containerId);
+          if (!cs?.running) {
+            await queueManager.addLog(job.id, 'error', 'Container died during repair');
+            repairDone = true;
+            break;
+          }
+        }
+
+        if (!repairDone) {
+          await queueManager.addLog(job.id, 'error', `Repair wait timed out (${REPAIR_WAIT_TIMEOUT / 1000}s)`);
         }
 
         // Redeploy the fixed game
@@ -515,11 +547,16 @@ h1{margin:0 0 4px}h2{margin:0 0 16px;color:#888;font-weight:normal}</style></hea
         } catch (redeployErr) {
           await queueManager.addLog(job.id, 'error', `Redeploy error: ${redeployErr.message}`);
         }
+
+        // Set state back to idle so on-idle.sh doesn't re-trigger
+        // The next repair-prompt.txt write will trigger the next cycle
       } catch (err) {
         await queueManager.addLog(job.id, 'error', `Repair iteration ${attempt} error: ${err.message}`);
       }
     }
 
+    // Signal container to shut down
+    containerManager.writeToWorkspace(job.id, 'job-complete.marker', 'Done');
     await queueManager.updateStatus(job.id, 'completed');
   }
 

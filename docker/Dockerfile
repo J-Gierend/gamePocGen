@@ -1,7 +1,7 @@
 FROM node:22-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    git curl ca-certificates tini jq \
+    git curl ca-certificates tini jq tmux \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
@@ -19,6 +19,14 @@ RUN npm install -g @anthropic-ai/claude-code
 # Pre-copy framework and prompts into the image
 COPY --chown=claude:claude framework/ /home/claude/framework/
 COPY --chown=claude:claude prompts/ /home/claude/prompts/
+
+# Copy harness scripts
+COPY --chown=claude:claude harness/bin/ /home/claude/harness/bin/
+RUN chmod +x /home/claude/harness/bin/*.sh
+
+# Copy on-idle orchestrator
+COPY --chown=claude:claude docker/on-idle.sh /home/claude/on-idle.sh
+RUN chmod +x /home/claude/on-idle.sh
 
 # Copy entrypoint
 COPY --chown=claude:claude docker/entrypoint.sh /home/claude/entrypoint.sh

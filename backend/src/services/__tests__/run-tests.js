@@ -7,6 +7,7 @@ import { runTests as runQueueManagerTests } from './queueManager.test.js';
 import { runTests as runContainerManagerTests } from './containerManager.test.js';
 import { runTests as runDeploymentManagerTests } from './deploymentManager.test.js';
 import { runTests as runGameTesterTests } from './gameTester.test.js';
+import { runTests as runHarnessIntegrationTests } from './harnessIntegration.test.js';
 
 const results = { passed: 0, failed: 0, errors: [] };
 
@@ -32,6 +33,7 @@ async function run() {
   await runSuite('ContainerManager', runContainerManagerTests());
   await runSuite('DeploymentManager', runDeploymentManagerTests());
   await runSuite('GameTester', runGameTesterTests());
+  await runSuite('HarnessIntegration', runHarnessIntegrationTests());
 
   console.log(`\n--- Results: ${results.passed} passed, ${results.failed} failed ---\n`);
 

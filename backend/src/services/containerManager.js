@@ -5,7 +5,7 @@
  * Each job phase runs in an isolated container with resource limits.
  */
 
-import { mkdirSync, chmodSync } from 'node:fs';
+import { mkdirSync, chmodSync, readFileSync, writeFileSync, existsSync, unlinkSync, renameSync } from 'node:fs';
 
 const DEFAULT_TIMEOUTS = {
   phase1: 43200,  // 12 hours
@@ -216,5 +216,130 @@ export class ContainerManager {
       }
     }
     return removed;
+  }
+
+  /**
+   * Spawn a persistent container for an entire job lifecycle (harness mode).
+   * No PHASE env, no TIMEOUT_SECONDS — one container handles all phases.
+   * @param {Object} job - Job object with id, game_name, config
+   * @param {Object} [options]
+   * @param {string[]} [options.extraEnv] - Additional env vars
+   * @returns {Promise<{containerId: string, name: string}>}
+   */
+  async spawnPersistentContainer(job, options = {}) {
+    const containerName = `gamepocgen-worker-${job.id}`;
+    const workspaceDir = '/workspace';
+    const hostWorkspace = `${this.hostWorkspacePath}/job-${job.id}`;
+
+    // Pre-create workspace dir with write permissions for container user
+    const localWorkspace = `${this.workspacePath}/job-${job.id}`;
+    try {
+      mkdirSync(localWorkspace, { recursive: true });
+      chmodSync(localWorkspace, 0o777);
+    } catch {
+      // May already exist or be handled by Docker
+    }
+
+    const env = [
+      `JOB_ID=${job.id}`,
+      `GAME_NAME=${job.game_name}`,
+      `ZAI_API_KEY=${process.env.ZAI_API_KEY || ''}`,
+      `ZAI_BASE_URL=${process.env.ZAI_BASE_URL || 'https://api.z.ai/api/anthropic'}`,
+      `MODEL=claude-opus-4-6`,
+      `CLAUDE_CODE_EFFORT_LEVEL=high`,
+      `WORKSPACE_DIR=${workspaceDir}`,
+      ...(options.extraEnv || []),
+    ];
+
+    // Remove any existing container with the same name (stale from previous run)
+    try {
+      const old = this.docker.getContainer(containerName);
+      await old.remove({ force: true });
+    } catch {
+      // Container doesn't exist, fine
+    }
+
+    const container = await this.docker.createContainer({
+      Image: this.workerImage,
+      name: containerName,
+      Env: env,
+      HostConfig: {
+        Memory: this.memoryLimit,
+        NanoCpus: this.cpuLimit * 1e9,
+        Binds: [
+          `${hostWorkspace}:${workspaceDir}`,
+          ...(this.hostProjectRoot ? [
+            `${this.hostProjectRoot}/prompts:/home/claude/prompts`,
+            `${this.hostProjectRoot}/framework:/home/claude/framework`,
+          ] : []),
+        ],
+      },
+    });
+
+    await container.start();
+
+    return {
+      containerId: container.id,
+      name: containerName,
+    };
+  }
+
+  /**
+   * Write a file into a job's workspace directory.
+   * Uses atomic write (write to .tmp, then rename).
+   * @param {number} jobId
+   * @param {string} filename - Relative path within workspace
+   * @param {string} content
+   */
+  writeToWorkspace(jobId, filename, content) {
+    const filePath = `${this.workspacePath}/job-${jobId}/${filename}`;
+    const tmpPath = `${filePath}.tmp`;
+    writeFileSync(tmpPath, content);
+    try {
+      renameSync(tmpPath, filePath);
+    } catch {
+      writeFileSync(filePath, content);
+      try { unlinkSync(tmpPath); } catch { /* ignore */ }
+    }
+  }
+
+  /**
+   * Read the harness state file from a job's workspace.
+   * @param {number} jobId
+   * @returns {{current_phase: string, status: string, timestamp: string}|null}
+   */
+  readHarnessState(jobId) {
+    const statePath = `${this.workspacePath}/job-${jobId}/harness-state.json`;
+    try {
+      const content = readFileSync(statePath, 'utf-8');
+      return JSON.parse(content);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Check if a marker file exists in a job's workspace.
+   * @param {number} jobId
+   * @param {string} marker - Filename to check
+   * @returns {boolean}
+   */
+  hasMarkerFile(jobId, marker) {
+    const markerPath = `${this.workspacePath}/job-${jobId}/${marker}`;
+    return existsSync(markerPath);
+  }
+
+  /**
+   * Remove a marker file from a job's workspace.
+   * @param {number} jobId
+   * @param {string} marker - Filename to remove
+   */
+  removeMarkerFile(jobId, marker) {
+    const markerPath = `${this.workspacePath}/job-${jobId}/${marker}`;
+    try {
+      unlinkSync(markerPath);
+    } catch {
+      // File may not exist, that's fine
+    }
   }
 }

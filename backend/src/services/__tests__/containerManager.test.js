@@ -3,6 +3,8 @@
  */
 
 import { ContainerManager } from '../containerManager.js';
+import { mkdtempSync, writeFileSync as writeFS, readFileSync as readFS, mkdirSync as mkDir, existsSync as existsFS, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 
 // --- Assertion helpers ---
 
@@ -712,6 +714,171 @@ export function runTests() {
       // Should still remove the second container even though first failed
       assertEqual(count, 1, 'Should count only successfully removed');
       assert(removedIds.includes('ok-1'), 'Should remove ok-1 despite fail-1 error');
+    },
+
+    // === spawnPersistentContainer tests ===
+
+    'spawnPersistentContainer() creates container without PHASE env': async () => {
+      let createOpts = null;
+      const docker = createMockDocker({
+        createContainer: async (opts) => {
+          createOpts = opts;
+          return createMockContainer();
+        },
+      });
+      const cm = new ContainerManager(docker);
+      const job = { id: 42, game_name: 'TestGame', config: {} };
+      await cm.spawnPersistentContainer(job);
+
+      const env = createOpts.Env;
+      assert(!env.some(e => e.startsWith('PHASE=')), 'Should NOT include PHASE env');
+      assert(!env.some(e => e.startsWith('TIMEOUT_SECONDS=')), 'Should NOT include TIMEOUT_SECONDS');
+      assert(env.some(e => e === 'JOB_ID=42'), 'Should include JOB_ID');
+      assert(env.some(e => e === 'GAME_NAME=TestGame'), 'Should include GAME_NAME');
+    },
+
+    'spawnPersistentContainer() uses simpler container name': async () => {
+      let createOpts = null;
+      const docker = createMockDocker({
+        createContainer: async (opts) => {
+          createOpts = opts;
+          return createMockContainer();
+        },
+      });
+      const cm = new ContainerManager(docker);
+      const job = { id: 7, game_name: 'SpaceGame', config: {} };
+      const result = await cm.spawnPersistentContainer(job);
+
+      assertEqual(createOpts.name, 'gamepocgen-worker-7', 'Container name should not include phase');
+      assertEqual(result.name, 'gamepocgen-worker-7', 'Returned name should match');
+    },
+
+    'spawnPersistentContainer() passes extraEnv': async () => {
+      let createOpts = null;
+      const docker = createMockDocker({
+        createContainer: async (opts) => {
+          createOpts = opts;
+          return createMockContainer();
+        },
+      });
+      const cm = new ContainerManager(docker);
+      const job = { id: 1, game_name: 'Test', config: {} };
+      await cm.spawnPersistentContainer(job, {
+        extraEnv: ['AUTH_MODE=subscription', 'GENRE_SEED=dungeon-crawler'],
+      });
+
+      const env = createOpts.Env;
+      assert(env.some(e => e === 'AUTH_MODE=subscription'), 'Should include extra env');
+      assert(env.some(e => e === 'GENRE_SEED=dungeon-crawler'), 'Should include genre seed');
+    },
+
+    'spawnPersistentContainer() mounts workspace and prompts': async () => {
+      let createOpts = null;
+      const docker = createMockDocker({
+        createContainer: async (opts) => {
+          createOpts = opts;
+          return createMockContainer();
+        },
+      });
+      const cm = new ContainerManager(docker, {
+        hostProjectRoot: '/root/apps/gamepocgen',
+      });
+      const job = { id: 5, game_name: 'Test', config: {} };
+      await cm.spawnPersistentContainer(job);
+
+      const binds = createOpts.HostConfig.Binds;
+      assert(binds.some(b => b.includes('job-5') && b.includes('/workspace')), 'Should mount workspace');
+      assert(binds.some(b => b.includes('/prompts')), 'Should mount prompts');
+      assert(binds.some(b => b.includes('/framework')), 'Should mount framework');
+    },
+
+    // === writeToWorkspace tests ===
+
+    'writeToWorkspace() writes file atomically': () => {
+      const docker = createMockDocker();
+      const tmpDir = mkdtempSync(`${tmpdir()}/cm-test-`);
+      const cm = new ContainerManager(docker, { workspacePath: tmpDir });
+
+      mkDir(`${tmpDir}/job-1`, { recursive: true });
+
+      cm.writeToWorkspace(1, 'test.txt', 'hello world');
+      const content = readFS(`${tmpDir}/job-1/test.txt`, 'utf-8');
+      assertEqual(content, 'hello world', 'File content should match');
+
+      rmSync(tmpDir, { recursive: true });
+    },
+
+    // === readHarnessState tests ===
+
+    'readHarnessState() reads and parses state file': () => {
+      const docker = createMockDocker();
+      const tmpDir = mkdtempSync(`${tmpdir()}/cm-test-`);
+      const cm = new ContainerManager(docker, { workspacePath: tmpDir });
+
+      mkDir(`${tmpDir}/job-1`, { recursive: true });
+      writeFS(`${tmpDir}/job-1/harness-state.json`, JSON.stringify({
+        current_phase: 'phase2',
+        status: 'running',
+        timestamp: '2026-02-14T00:00:00Z',
+      }));
+
+      const state = cm.readHarnessState(1);
+      assertEqual(state.current_phase, 'phase2', 'Should read current_phase');
+      assertEqual(state.status, 'running', 'Should read status');
+
+      rmSync(tmpDir, { recursive: true });
+    },
+
+    'readHarnessState() returns null for missing file': () => {
+      const docker = createMockDocker();
+      const cm = new ContainerManager(docker, { workspacePath: '/tmp/nonexistent-test' });
+      const state = cm.readHarnessState(999);
+      assertEqual(state, null, 'Should return null for missing state file');
+    },
+
+    // === hasMarkerFile tests ===
+
+    'hasMarkerFile() returns true when file exists': () => {
+      const docker = createMockDocker();
+      const tmpDir = mkdtempSync(`${tmpdir()}/cm-test-`);
+      const cm = new ContainerManager(docker, { workspacePath: tmpDir });
+
+      mkDir(`${tmpDir}/job-1`, { recursive: true });
+      writeFS(`${tmpDir}/job-1/phase4-complete.marker`, '');
+
+      assert(cm.hasMarkerFile(1, 'phase4-complete.marker'), 'Should detect existing marker');
+
+      rmSync(tmpDir, { recursive: true });
+    },
+
+    'hasMarkerFile() returns false when file missing': () => {
+      const docker = createMockDocker();
+      const cm = new ContainerManager(docker, { workspacePath: '/tmp/nonexistent-test' });
+      assert(!cm.hasMarkerFile(999, 'nonexistent.marker'), 'Should return false for missing marker');
+    },
+
+    // === removeMarkerFile tests ===
+
+    'removeMarkerFile() deletes the file': () => {
+      const docker = createMockDocker();
+      const tmpDir = mkdtempSync(`${tmpdir()}/cm-test-`);
+      const cm = new ContainerManager(docker, { workspacePath: tmpDir });
+
+      mkDir(`${tmpDir}/job-1`, { recursive: true });
+      writeFS(`${tmpDir}/job-1/test.marker`, '');
+      assert(existsFS(`${tmpDir}/job-1/test.marker`), 'Marker should exist initially');
+
+      cm.removeMarkerFile(1, 'test.marker');
+      assert(!existsFS(`${tmpDir}/job-1/test.marker`), 'Marker should be deleted');
+
+      rmSync(tmpDir, { recursive: true });
+    },
+
+    'removeMarkerFile() does not throw for missing file': () => {
+      const docker = createMockDocker();
+      const cm = new ContainerManager(docker, { workspacePath: '/tmp/nonexistent-test' });
+      // Should not throw
+      cm.removeMarkerFile(999, 'nonexistent.marker');
     },
   };
 }
