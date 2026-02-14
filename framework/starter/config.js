@@ -14,7 +14,7 @@ export const CONFIG = {
   },
 
   entities: {
-    knight: { sprite: 'knight', hp: 100, damage: 10, speed: 30, attackSpeed: 1.0, scale: 3, team: 'player' },
+    knight: { sprite: 'knight', hp: 100, damage: 20, speed: 40, attackSpeed: 1.5, scale: 3, team: 'player' },
     slime: { sprite: 'slime', hp: 50, damage: 5, speed: 20, attackSpeed: 0.8, scale: 3, team: 'enemy', reward: 5 },
     ghost: { sprite: 'ghost', hp: 30, damage: 8, speed: 40, attackSpeed: 1.2, scale: 3, team: 'enemy', reward: 8 },
   },
@@ -23,7 +23,7 @@ export const CONFIG = {
     baseEnemyCount: 3,
     enemyCountGrowth: 1.2,
     spawnDelay: 0.5,
-    waveCooldown: 3,
+    waveCooldown: 2,
   },
 
   currencies: {

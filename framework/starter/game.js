@@ -50,6 +50,18 @@ export class Game {
     this._resizeCanvas();
     this._loadSave();
     window.addEventListener('resize', () => this._resizeCanvas());
+    // Auto-spawn initial player units so they fight enemies automatically
+    const playerTypes = Object.entries(this.config.entities || {})
+      .filter(([, def]) => def.team === 'player')
+      .map(([id]) => id);
+    const playerType = playerTypes[0] || Object.keys(this.config.entities || {})[0];
+    if (playerType) {
+      for (let i = 0; i < 3; i++) {
+        const x = 50 + Math.random() * 100;
+        const y = 50 + Math.random() * (this.canvas.height || 300);
+        this.spawnEntity(playerType, x, y, 'player');
+      }
+    }
     // Auto-start first wave
     this._startWave();
   }
