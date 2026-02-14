@@ -575,13 +575,17 @@ h1{margin:0 0 4px}h2{margin:0 0 16px;color:#888;font-weight:normal}</style></hea
                 const src = join(bestBackupDir, f);
                 if (existsSync(src)) writeFileSync(join(distDir, f), readFileSync(src));
               }
+              // Also copy to workspace dist/ for Claude
+              cpSync(bestBackupDir, distDir, { recursive: true });
               await deploymentManager.deployGame(job.id, job.game_name || `Game ${job.id}`, distDir, { workspaceDir });
               injectBadgeScript();
-              await queueManager.addLog(job.id, 'info', 'Restored best version and redeployed');
+              await queueManager.addLog(job.id, 'info', 'Restored best version and redeployed — skipping repair to retest');
             }
           } catch (restoreErr) {
             await queueManager.addLog(job.id, 'error', `Restore failed: ${restoreErr.message}`);
           }
+          // Skip repair prompt — retest the restored version on next iteration
+          continue;
         }
 
         // --- PASS GATE: score >= 8 is good enough ---
@@ -612,9 +616,9 @@ h1{margin:0 0 4px}h2{margin:0 0 16px;color:#888;font-weight:normal}</style></hea
           break;
         }
 
-        // --- STARTER RESET: If stuck at score <=1 after 5 attempts, nuke and reset ---
+        // --- STARTER RESET: If stuck at score <=2 after 5 attempts, nuke and reset ---
         const RESET_AFTER_STUCK = 5;
-        if (attempt === RESET_AFTER_STUCK && score <= 1) {
+        if (attempt === RESET_AFTER_STUCK && score <= 2) {
           await queueManager.addLog(job.id, 'info', `Score stuck at ${score}/10 after ${RESET_AFTER_STUCK} attempts — resetting dist/ to starter files`);
           try {
             const workspaceDir = `${containerManager.workspacePath}/job-${job.id}`;
