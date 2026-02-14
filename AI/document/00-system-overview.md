@@ -4,13 +4,13 @@
 graph TB
     subgraph "Frontend [nginx :80/:443]"
         DOCS["Docs Site\nindex.html 1125 lines\ngamepocgen.namjo-games.com"]
-        GALLERY["Gallery\ngallery.js 678 lines\n/gallery/ path"]
+        GALLERY["Gallery\ngallery.js 754 lines\n/gallery/ path"]
     end
 
     subgraph "Backend [Express :3010]"
-        API["REST API\napi.js 255 lines\n9 endpoints"]
-        POLLER["Job Poller\nindex.js 749 lines\n5s interval"]
-        QM["QueueManager\n255 lines\nPostgreSQL queue"]
+        API["REST API\napi.js 298 lines\n10 endpoints"]
+        POLLER["Job Poller\nindex.js 761 lines\n5s interval"]
+        QM["QueueManager\n287 lines\nPostgreSQL queue"]
         CM["ContainerManager\n220 lines\nDocker lifecycle"]
         DM["DeploymentManager\n526 lines\nnginx + Traefik"]
         GT["gameTester.js\n48 lines\nPlaywright quality"]
@@ -23,7 +23,7 @@ graph TB
     subgraph "Worker Pipeline [gamepocgen-worker]"
         ENTRY["entrypoint.sh 443 lines\n7-phase router"]
         CLAUDE["Claude Code CLI\nclaude-opus-4-6 via z.ai"]
-        PROMPTS["13 prompt templates\n4826 lines total"]
+        PROMPTS["13 prompt templates\n4838 lines total"]
     end
 
     subgraph "Game Framework [vanilla JS]"
@@ -31,14 +31,14 @@ graph TB
         MECH["Mechanics: Currency\nGenerator Multiplier\nPrestige Unlockable"]
         UI["UI: ResourceBar\nUpgradeButton ProgressBar\nTabSystem SkillTree"]
         SPRITES["Sprites: Renderer\nData ProceduralSprite"]
-        CSS["game.css 636 lines\nDark theme"]
+        CSS["game.css 643 lines\nDark theme"]
     end
 
     subgraph "Game Containers [nginx:alpine]"
         G1["gamedemo0-9\n.namjo-games.com\nStatic HTML games"]
     end
 
-    GALLERY -->|"GET /api/games"| API
+    GALLERY -->|"GET /api/jobs"| API
     API -->|"SQL queries"| QM
     QM -->|"pg Pool"| DB
     POLLER -->|"getNextJob()"| QM

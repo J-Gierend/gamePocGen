@@ -6,11 +6,11 @@ flowchart LR
     B -->|"poller claims\nFOR UPDATE SKIP LOCKED"| C["Phase 1 Container\nClaude Code CLI"]
     C -->|"idea-generator prompt"| D["idea.json\nGame concept\ntheme + mechanics"]
     D -->|"shared workspace\nbind mount"| E["Phase 2 Container\n3 sequential agents"]
-    E -->|"3 GDD prompts\ncurrencies → progression → ui-ux"| F["gdd/*.json\n3 design documents\ncurrencies progression ui-ux"]
+    E -->|"3 GDD prompts\ncurrencies progression ui-ux"| F["gdd/*.json\n3 design documents\ncurrencies progression ui-ux"]
     F -->|"shared workspace"| G["Phase 3 Container\nimplementation planner"]
     G -->|"implementation-guide prompt\nreads all GDD"| H["implementation-plan.json\nTDD phases"]
     H -->|"shared workspace\n+ framework/ copy"| I["Phase 4 Container\nTDD orchestrator"]
-    I -->|"orchestrator prompt\nwrite tests → implement"| J["dist/\nindex.html"]
+    I -->|"orchestrator prompt\nwrite tests then implement"| J["dist/\nindex.html"]
     J -->|"copy to deploy dir"| K["nginx:alpine\ngamedemoN.namjo-games.com\nTraefik auto-SSL"]
     K -->|"Playwright test\nrunPlaywrightTest()"| L["Phase 5 Repair Loop\nup to 100 iterations\ntarget 10/10 score"]
     L -->|"redeploy after\neach repair"| K
@@ -21,26 +21,31 @@ flowchart LR
 ```mermaid
 flowchart TD
     subgraph "After Phase 1"
-        W1["workspace/job-N/\n├── idea.json"]
+        W1["workspace/job-N/\n  idea.json"]
     end
 
     subgraph "After Phase 2"
-        W2["workspace/job-N/\n├── idea.json\n└── gdd/\n    ├── currencies.json\n    ├── progression.json\n    └── ui-ux.json"]
+        W2["workspace/job-N/\n  idea.json\n  gdd/\n    currencies.json\n    progression.json\n    ui-ux.json"]
     end
 
     subgraph "After Phase 3"
-        W3["workspace/job-N/\n├── idea.json\n├── gdd/ (3 files)\n└── implementation-plan.json"]
+        W3["workspace/job-N/\n  idea.json\n  gdd/ (3 files)\n  implementation-plan.json"]
     end
 
     subgraph "After Phase 4"
-        W4["workspace/job-N/\n├── idea.json\n├── gdd/ (3 files)\n├── implementation-plan.json\n├── framework/ (copied in)\n└── dist/\n    └── index.html"]
+        W4["workspace/job-N/\n  idea.json\n  gdd/ (3 files)\n  implementation-plan.json\n  framework/ (copied in)\n  dist/\n    index.html"]
     end
 
     subgraph "After Phase 5 Repair"
-        W5["deployed/gamedemoN/html/\n├── index.html\n├── score-badge.js\n├── repair-log.json\n└── repair-log.html"]
+        W5["deployed/gamedemoN/html/\n  index.html\n  guide.html\n  score-badge.js\n  repair-log.json\n  repair-log.html"]
+    end
+
+    subgraph "Strategy Review (plateau)"
+        W6["workspace/job-N/\n  repair-strategy.md"]
     end
 
     W1 --> W2 --> W3 --> W4 --> W5
+    W5 -.->|"plateau detected"| W6
 ```
 
 # Docker Bind Mount Path Translation
@@ -55,10 +60,13 @@ flowchart LR
     subgraph "Host LXC 102 Actual"
         HOST_WS["/root/apps/gamepocgen/docker/workspaces/job-N\nHOST_WORKSPACE_PATH"]
         HOST_DD["/root/apps/gamepocgen/docker/deployed\nHOST_DEPLOY_DIR"]
+        HOST_PR["/root/apps/gamepocgen\nHOST_PROJECT_ROOT"]
     end
 
     subgraph "Worker Container Sees"
         WC["/workspace\nBind from HOST path"]
+        WC_P["/home/claude/prompts\nBind from HOST_PROJECT_ROOT/prompts"]
+        WC_F["/home/claude/framework\nBind from HOST_PROJECT_ROOT/framework"]
     end
 
     subgraph "Game Container Sees"
@@ -67,6 +75,8 @@ flowchart LR
 
     BC_WS -.->|"reads/writes via\ncontainer mount"| HOST_WS
     HOST_WS -->|"Docker bind mount\npassed to createContainer"| WC
+    HOST_PR -->|"Live editing\nbind mounts"| WC_P
+    HOST_PR -->|"Live editing\nbind mounts"| WC_F
     BC_DD -.->|"reads/writes via\ncontainer mount"| HOST_DD
     HOST_DD -->|"Docker bind mount\npassed to createContainer"| GC
 ```
@@ -95,7 +105,7 @@ flowchart TD
 ```mermaid
 flowchart LR
     subgraph "All Phases"
-        BASE["PHASE\nJOB_ID\nGAME_NAME\nZAI_API_KEY\nZAI_BASE_URL\nTIMEOUT_SECONDS\nWORKSPACE_DIR=/workspace"]
+        BASE["PHASE\nJOB_ID\nGAME_NAME\nZAI_API_KEY\nZAI_BASE_URL\nMODEL=claude-opus-4-6\nCLAUDE_CODE_EFFORT_LEVEL=high\nTIMEOUT_SECONDS\nWORKSPACE_DIR=/workspace"]
     end
 
     subgraph "Subscription Mode Extra"
@@ -116,80 +126,30 @@ flowchart LR
     SUB --> P5
 ```
 
-# Phase 5 Repair Loop
+# Tier-Based Scoring System
 
 ```mermaid
 flowchart TD
-    DEPLOY["Game deployed\ngamedemoN.namjo-games.com"] --> INJECT["Inject score-badge.js\nscript tag into index.html"]
-    INJECT --> TEST["runPlaywrightTest\nhttp://gamedemoN internal URL"]
-    TEST --> SCORE{"Score?"}
-
-    SCORE -->|"score >= 10"| PASS["Quality gate passed\nstatus: completed"]
-    SCORE -->|"attempt = 100\nscore >= 4"| KEEP["Keep game\nstatus: completed"]
-    SCORE -->|"attempt = 100\nscore < 4"| REMOVE["removeGame()\nstatus: failed"]
-    SCORE -->|"score < 10\nattempt < 100"| REPAIR["Spawn phase5 container\nwith DEFECT_REPORT"]
-
-    REPAIR --> REDEPLOY["Redeploy dist/\nRe-inject badge"]
-    REDEPLOY --> UPDATE["Update score-badge.js\nUpdate repair-log.json\nUpdate repair-log.html"]
-    UPDATE --> TEST
-```
-
-# Worker Phase Execution
-
-```mermaid
-sequenceDiagram
-    participant Entry as entrypoint.sh
-    participant FS as Workspace /workspace
-    participant Claude as Claude Code CLI
-
-    Note over Entry,Claude: Single phase inside worker container
-    Entry->>Entry: Validate: PHASE, JOB_ID, GAME_NAME
-    Entry->>Entry: Validate: ZAI_API_KEY (apikey mode only)
-    Entry->>FS: mkdir workspace/ status/
-    Entry->>Entry: Configure auth (apikey or subscription)
-    Entry->>Entry: Write ~/.claude/settings.json
-    Entry->>Entry: Write ~/.claude.json (skip onboarding)
-    Entry->>FS: Copy framework/ into workspace
-    Entry->>FS: Write status/phase.json = running
-
-    alt PHASE = phase1
-        Entry->>Claude: claude -p --dangerously-skip-permissions phase1-idea-generator.md
-        Claude->>FS: Write idea.json
-    else PHASE = phase2
-        loop currencies, progression, ui-ux
-            Entry->>Claude: claude -p --dangerously-skip-permissions phase2-gdd/agent.md
-            Claude->>FS: Write gdd/agent.json
-        end
-    else PHASE = phase3
-        Entry->>Claude: claude -p --dangerously-skip-permissions phase3-implementation-guide.md
-        Claude->>FS: Write implementation-plan.json
-    else PHASE = phase4
-        Entry->>Claude: claude -p --dangerously-skip-permissions phase4-orchestrator.md
-        Claude->>FS: Write dist/index.html
-    else PHASE = phase5
-        Entry->>Claude: claude -p --dangerously-skip-permissions phase5-repair-agent.md
-        Claude->>FS: Fix files in dist/
+    subgraph "15 Checks Across 5 Tiers"
+        FATAL["FATAL tier (cap 1.0)\nnoJsErrors (weight 1)\ncanvasRendering (weight 1)"]
+        UNPLAYABLE["UNPLAYABLE tier (cap 2.0)\ncanvasInteraction (weight 1)\nentitiesSpawn (weight 1)\ncurrenciesChange (weight 1)\ngameplayLoop (weight 1)"]
+        BROKEN["BROKEN tier (cap 4.0)\nconfigPresent (weight 0.5)\nhudCurrencies (weight 1)\ncontrolsVisible (weight 1)\ncanvasClickResponsive (weight 1)"]
+        INCOMPLETE["INCOMPLETE tier (cap 6.0)\ntabsSwitchable (weight 0.5)\nupgradesExist (weight 0.5)\nfitsViewport (weight 0.5)\nwavesAdvance (weight 0.5)"]
+        POLISH["POLISH tier (no cap)\ntutorialPresent (weight 0.5)"]
     end
 
-    Entry->>FS: Write status/phase.json = completed|failed|timeout
-```
-
-# Phase Timeout Configuration
-
-```mermaid
-flowchart LR
-    subgraph "containerManager.js DEFAULT_TIMEOUTS"
-        T1["phase1: 43200s (12h)"]
-        T2["phase2: 43200s (12h)"]
-        T3["phase3: 43200s (12h)"]
-        T4["phase4: 43200s (12h)"]
-        T5["phase5: 3600s (1h per repair)"]
+    subgraph "Scoring Algorithm"
+        RAW["Step 1: Sum passed check weights\nMax weighted = 11.0"]
+        NORM["Step 2: Normalize to 10-point scale\nscore = round(weighted/max * 10, 1)"]
+        CAP["Step 3: Apply tier caps\nLowest failing tier caps the score"]
     end
 
-    subgraph "Resource Limits"
-        MEM["Memory: 2GB"]
-        CPU["CPU: 0.5 core"]
-    end
+    FATAL --> RAW
+    UNPLAYABLE --> RAW
+    BROKEN --> RAW
+    INCOMPLETE --> RAW
+    POLISH --> RAW
+    RAW --> NORM --> CAP
 ```
 
 # Comparison Job Pipeline

@@ -40,23 +40,22 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     actor User
+    participant Gallery as gallery.js
     participant API as Backend :3010
     participant QM as QueueManager
     participant DB as PostgreSQL
 
-    Note over User,DB: GET /api/jobs/:id (polling)
-    loop Every 2-5 seconds
-        User->>API: GET /api/jobs/{id}
-        API->>QM: getJob(parseInt(id))
-        QM->>DB: SELECT * FROM jobs WHERE id=$1
-        alt Job found
-            DB-->>QM: job row (all columns)
-            QM-->>API: {id, status, game_name, phase_outputs, config, error, created_at, updated_at, started_at, completed_at}
-            API-->>User: 200 {job}
-        else Job not found
-            DB-->>QM: null
-            API-->>User: 404 {error: 'Job N not found'}
-        end
+    Note over User,DB: Gallery polls GET /api/jobs every 5s
+    loop Every 5 seconds
+        Gallery->>API: GET /api/jobs
+        API->>QM: getJobs({limit: 50})
+        QM->>DB: SELECT * FROM jobs ORDER BY created_at DESC LIMIT 50
+        DB-->>QM: job rows
+        QM-->>API: jobs array
+        API-->>Gallery: 200 {jobs: [...]}
+        Gallery->>Gallery: Compare JSON hash to skip re-render if unchanged
+        Gallery->>Gallery: sortJobs by status priority then date
+        Gallery->>Gallery: renderJobs with phase dots + score + sparkline
     end
 ```
 
@@ -72,6 +71,7 @@ sequenceDiagram
     participant Worker as Worker Container
 
     Note over Poller,Worker: Background job processing
+    Poller->>Poller: Check queuePaused flag (process improvement)
     Poller->>QM: getNextJob()
     QM->>DB: UPDATE SET status='running', started_at=NOW() WHERE id=(SELECT ... status='queued' FOR UPDATE SKIP LOCKED LIMIT 1)
     DB-->>QM: job row
@@ -84,23 +84,27 @@ sequenceDiagram
             Poller->>QM: getJob(sourceJobId) repeatedly
             Poller->>Poller: Copy idea.md + idea.json from source workspace
             Poller->>QM: updatePhaseOutput(id, 'phase1', {copied_from: sourceJobId})
-        else Normal execution
-            Poller->>QM: addLog(id, 'info', 'Starting phaseN')
-            Poller->>CM: spawnContainer(job, phaseN)
-            CM->>Docker: createContainer({Image: gamepocgen-worker, Env, Memory:2GB, CPU:0.5})
-            CM->>Docker: container.start()
+        else Normal phase1
+            Poller->>Poller: Select GENRE_SEED from unused pool (16 genres)
+            Poller->>Poller: Get EXISTING_GAME_NAMES for diversity
+            Poller->>QM: updatePhaseOutput(id, 'genreSeed', seed)
+        end
 
-            loop Poll every 5s until exit
-                Poller->>CM: getContainerStatus(containerId)
-                CM->>Docker: container.inspect()
-            end
+        Poller->>CM: spawnContainer(job, phaseN)
+        CM->>Docker: createContainer({Image: gamepocgen-worker, Env, Memory:2GB, CPU:0.5})
+        Note over Docker: Binds: hostWorkspace:/workspace + hostProjectRoot/prompts + hostProjectRoot/framework
+        CM->>Docker: container.start()
 
-            Poller->>CM: getContainerLogs(containerId)
-            alt exitCode !== 0
-                Poller->>QM: addLog(id, 'error', 'phaseN error')
-                Poller->>QM: updateStatus(id, 'failed', {error})
-                Note over Poller: Return early
-            end
+        loop Poll every 5s until exit
+            Poller->>CM: getContainerStatus(containerId)
+            CM->>Docker: container.inspect()
+        end
+
+        Poller->>CM: getContainerLogs(containerId)
+        alt exitCode !== 0
+            Poller->>QM: addLog(id, 'error', 'phaseN error')
+            Poller->>QM: updateStatus(id, 'failed', {error})
+            Note over Poller: Return early
         end
     end
 
@@ -120,7 +124,7 @@ sequenceDiagram
     Note over Backend,Traefik: Deploy game after Phase 4
     Backend->>DM: deployGame(jobId, gameName, sourceDir, {workspaceDir})
     DM->>DM: name = gamedemo{jobId}
-    DM->>DM: port = basePort + jobId
+    DM->>DM: port = 8080 + jobId
     DM->>FS: mkdir deployDir/gamedemo{jobId}/html
     DM->>FS: cp sourceDir/* to html/
 
@@ -129,6 +133,8 @@ sequenceDiagram
     DM->>FS: Write metadata.json
 
     DM->>DM: generateGuideHtml(workspaceDir, title)
+    Note over DM: Reads idea.md + gdd/*.md + gdd/*.json
+    Note over DM: Renders HTML with Mermaid + marked.js support
     DM->>FS: Write html/guide.html
     DM->>DM: injectGuideButton(htmlPath)
     DM->>FS: Write docker-compose.yml
@@ -166,42 +172,47 @@ sequenceDiagram
     loop attempt 1..100
         Backend->>Tester: runPlaywrightTest(http://gamedemo{jobId})
         Tester-->>Backend: {score, defects, checks}
+
+        alt 5 consecutive ETIMEDOUT
+            Backend->>QM: updateStatus(id, 'failed', {error: Infrastructure failure})
+            Note over Backend: Return early
+        end
+
         Backend->>QM: addLog(id, 'info', 'Test score: N/10')
-        Backend->>QM: updatePhaseOutput(id, 'repair_N', {score, defectCount})
+        Backend->>QM: updatePhaseOutput(id, 'repair_N', {score, defectCount, defects, timestamp})
+        Backend->>QM: updatePhaseOutput(id, 'latest_score', {score, attempt, defectCount})
         Backend->>Backend: updateScoreBadge(score, attempt)
         Backend->>Backend: updateRepairLog() to html/repair-log.json + .html
 
         alt score >= 10
-            Note over Backend: Quality gate passed
-            Backend->>QM: addLog(id, 'info', 'passes quality gate')
-            Note over Backend: Break loop
+            Note over Backend: Quality gate passed - break
         else attempt = 100 AND score < 4
-            Backend->>QM: addLog(id, 'error', 'removing game')
             Backend->>DM: removeGame(jobId)
             Backend->>QM: updateStatus(id, 'failed', {error})
-            Backend->>DM: updateGalleryData()
             Note over Backend: Return early
         else attempt = 100 AND score >= 4
-            Backend->>QM: addLog(id, 'info', 'keeping game')
-            Note over Backend: Break loop
+            Note over Backend: Keep game - break
         else score < 10
+            alt Plateau detected (last 5 scores within 0.5 delta)
+                Backend->>CM: spawnContainer(job, 'phase5-strategy')
+                Note over CM: Env: GAME_URL, DEFECT_REPORT=repair history
+                Note over CM: Writes repair-strategy.md to workspace
+            end
+
+            opt Process improvement trigger
+                Backend->>Backend: maybeRunProcessImprovement(jobId)
+                Note over Backend: 1-hour cooldown between runs
+            end
+
+            Backend->>QM: getUserFeedback(jobId)
+            Note over Backend: Append user feedback to DEFECT_REPORT if present
+
             Backend->>CM: spawnContainer(job, 'phase5')
-            Note over CM: Env: GAME_URL, DEFECT_REPORT=JSON
-            CM-->>Backend: {containerId}
+            Note over CM: Env: GAME_URL, DEFECT_REPORT=JSON + user feedback
+            Note over CM: Reads repair-strategy.md if present
 
-            loop Poll every 5s until exit
-                Backend->>CM: getContainerStatus(containerId)
-            end
-
-            Backend->>CM: getContainerLogs(containerId)
-
-            alt exitCode === 0
-                Backend->>DM: deployGame(jobId, gameName, dist/, {workspaceDir})
-                Backend->>Backend: injectBadgeScript() + updateScoreBadge()
-            else exitCode !== 0
-                Backend->>QM: addLog(id, 'error', 'repair container failed')
-                Note over Backend: Continue to next iteration (re-test)
-            end
+            Backend->>DM: deployGame(jobId, gameName, dist/, {workspaceDir})
+            Backend->>Backend: injectBadgeScript() + updateScoreBadge()
         end
     end
 
@@ -251,13 +262,24 @@ sequenceDiagram
     else PHASE = phase5
         Entry->>Claude: claude -p phase5-repair-agent.md
         Note over Claude: Env: GAME_URL, DEFECT_REPORT
+        Note over Claude: Reads repair-strategy.md if present
         Claude->>FS: Fix defects in dist/
+    else PHASE = phase5-strategy
+        Entry->>Claude: claude -p phase5-strategy-review.md
+        Note over Claude: Env: GAME_URL, DEFECT_REPORT=repair history
+        Claude->>FS: Write repair-strategy.md
+    else PHASE = process-improvement
+        Entry->>Claude: claude -p process-improvement-agent.md
+        Note over Claude: Reads /workspace/cross-job-data.md
+        Note over Claude: RW access to /home/claude/prompts + /framework + /scripts
+        Claude->>FS: Write improvements/ reports
+        Claude->>Claude: Edit prompts/framework/scripts directly
     end
 
     Entry->>FS: Write status/{phase}.json = completed|failed|timeout
 ```
 
-# Gallery Authentication + Game Browsing
+# Gallery Authentication + Job Browsing
 
 ```mermaid
 sequenceDiagram
@@ -265,9 +287,9 @@ sequenceDiagram
     participant Browser
     participant Gallery as gallery.js
     participant Session as sessionStorage
-    participant API as GET /api/games
+    participant API as Backend /api/jobs
 
-    Note over User,API: Password auth + game listing
+    Note over User,API: Password auth + job listing with live updates
     User->>Browser: Visit /gallery/
     Browser->>Gallery: DOMContentLoaded or immediate
     Gallery->>Session: check gamepocgen_auth
@@ -284,24 +306,107 @@ sequenceDiagram
     end
 
     Gallery->>Browser: Show loading spinner
-    Gallery->>API: fetch(/api/games)
-    alt response.ok with games
-        API-->>Gallery: {games: [{gameId, name, title, description, guide, url, port, createdAt}]}
-        Gallery->>Gallery: Sort by createdAt desc
-        Gallery->>Gallery: escapeHtml() each field
-        Gallery->>Gallery: renderPixelIcon() per card
+    Gallery->>API: fetch(/api/jobs)
+    alt response.ok with jobs
+        API-->>Gallery: {jobs: [{id, status, game_name, phase_outputs, ...}]}
+        Gallery->>Gallery: sortJobs by status priority then date
+        Gallery->>Gallery: renderJobs: procedural thumbnails, phase dots, score sparklines, defect list
         Gallery->>Browser: Render card grid + game count
-    else response.ok no games
-        API-->>Gallery: {games: []}
+    else response.ok no jobs
+        API-->>Gallery: {jobs: []}
         Gallery->>Browser: Show empty state
     else 404
         Gallery->>Browser: Show empty state (API not ready)
     else Other HTTP error
         Gallery->>Browser: Show error message
-    else Network error (fetch throws TypeError)
-        Gallery->>Browser: Show empty state
     end
 
-    User->>Browser: Click "Play Now"
-    Browser->>Browser: window.open(gamedemo{gameId}.namjo-games.com, _blank)
+    Note over Gallery,API: Also polls GET /api/improvements every 5s
+    Gallery->>API: fetch(/api/improvements)
+    API-->>Gallery: {log: {reports}, reports: [{filename, content}]}
+    Gallery->>Gallery: renderImprovements timeline
+```
+
+# User Feedback Flow
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant Gallery as gallery.js
+    participant API as Backend /api
+    participant QM as QueueManager
+    participant DB as PostgreSQL
+
+    Note over User,DB: POST /api/jobs/:id/feedback
+    User->>Gallery: Click feedback button on game card
+    Gallery->>Gallery: openFeedbackModal(jobId)
+    User->>Gallery: Type feedback + click Send
+    Gallery->>API: POST /api/jobs/{id}/feedback {feedback: text}
+
+    API->>QM: getJob(id)
+    QM->>DB: SELECT * FROM jobs WHERE id=$1
+    DB-->>QM: job row
+
+    API->>API: Append timestamped entry to existing user_feedback
+    API->>QM: setUserFeedback(id, combined)
+    QM->>DB: UPDATE jobs SET user_feedback=$1 WHERE id=$2
+
+    alt job.status === 'completed'
+        API->>QM: updateStatus(id, 'phase_5')
+        Note over QM: Resets to phase_5 to trigger new repair run
+        API-->>Gallery: {jobId, feedback, willRepair: true}
+    else job.status !== 'completed'
+        API-->>Gallery: {jobId, feedback, willRepair: false}
+    end
+
+    Note over API,DB: During next repair iteration
+    Note over API: processJob reads getUserFeedback(id)
+    Note over API: Appends to DEFECT_REPORT env var
+```
+
+# Process Improvement Agent Flow
+
+```mermaid
+sequenceDiagram
+    participant Backend as processJob() repair loop
+    participant PIA as maybeRunProcessImprovement()
+    participant QM as QueueManager
+    participant CM as ContainerManager
+    participant Docker
+    participant Agent as Process Improvement Container
+
+    Note over Backend,Agent: Triggered during repair loop, 1h cooldown
+
+    Backend->>PIA: maybeRunProcessImprovement(jobId)
+    PIA->>PIA: Check 1-hour cooldown
+
+    alt Cooldown not expired
+        Note over PIA: Skip
+    else Cooldown expired
+        PIA->>QM: getJobs({limit: 50})
+        PIA->>PIA: Build cross-job analysis data
+        Note over PIA: Score progressions, recurring defects, strategy reviews, user feedback
+
+        PIA->>PIA: Write cross-job-data.md to shared workspace
+        PIA->>PIA: Copy scripts + prompts to shared workspace
+        PIA->>PIA: Pause job queue
+
+        PIA->>Docker: createContainer(gamepocgen-worker)
+        Note over Docker: PHASE=process-improvement
+        Note over Docker: Binds: shared:/workspace, hostProjectRoot/prompts, /framework, /scripts
+        Note over Docker: Memory: 2GB, CPU: 1.0, Network: traefik
+
+        Docker->>Agent: tini -> entrypoint.sh
+        Agent->>Agent: claude -p process-improvement-agent.md
+        Note over Agent: RW access to prompts, framework, scripts via bind mounts
+        Agent->>Agent: Analyze patterns, edit pipeline files directly
+
+        loop Poll every 10s
+            PIA->>Docker: container.inspect()
+        end
+
+        Agent-->>Docker: Container exits
+        PIA->>PIA: Read improvements/log.json
+        PIA->>PIA: Resume job queue
+    end
 ```

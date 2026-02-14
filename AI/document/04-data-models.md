@@ -4,11 +4,12 @@
 erDiagram
     JOBS {
         SERIAL id PK
-        VARCHAR(20) status "DEFAULT 'queued'"
-        VARCHAR(255) game_name "auto-generated"
+        VARCHAR_20 status "DEFAULT 'queued'"
+        VARCHAR_255 game_name "auto-generated"
         JSONB phase_outputs "DEFAULT '{}'"
         JSONB config "DEFAULT '{}'"
         TEXT error "failure message"
+        TEXT user_feedback "timestamped feedback entries"
         TIMESTAMP created_at "DEFAULT NOW()"
         TIMESTAMP updated_at "DEFAULT NOW()"
         TIMESTAMP started_at "set when status=running"
@@ -18,7 +19,7 @@ erDiagram
     JOB_LOGS {
         SERIAL id PK
         INTEGER job_id FK "REFERENCES jobs(id) ON DELETE CASCADE"
-        VARCHAR(10) level "info warn error debug"
+        VARCHAR_10 level "info warn error debug"
         TEXT message
         TIMESTAMP created_at "DEFAULT NOW()"
     }
@@ -42,7 +43,8 @@ stateDiagram-v2
     phase_2 --> failed: any phase error
     phase_3 --> failed: any phase error
     phase_4 --> failed: any phase error
-    phase_5 --> failed: quality gate fail
+    phase_5 --> failed: quality gate fail or 5 ETIMEDOUT
+    completed --> phase_5: user feedback resets status
     completed --> [*]
     failed --> [*]
 ```
@@ -55,18 +57,20 @@ graph TD
         PO["phase_outputs {}"]
         GS["genreSeed:\nstring genre name\nstored before phase1 spawn"]
         P1["phase1:\n{copied_from: sourceJobId}\nonly if idea reused"]
-        DEP["deployment:\n{url, subdomain, containerId,\ndeployPath, ...}"]
-        R1["repair_1:\n{score: N, defectCount: N}"]
-        R2["repair_2:\n{score: N, defectCount: N}"]
-        RN["repair_N:\n{score: N, defectCount: N}\nup to repair_100"]
+        DEP["deployment:\n{gameId, url, deployPath, port}"]
+        R1["repair_1:\n{score, defectCount,\ndefects: [strings],\ntimestamp: ISO8601}"]
+        RN["repair_N:\n...up to repair_100"]
+        LS["latest_score:\n{score, attempt, defectCount}"]
+        SR["strategy_review_N:\n{triggeredAt, score,\nexitCode, timestamp}"]
     end
 
     PO --> GS
     PO --> P1
     PO --> DEP
     PO --> R1
-    PO --> R2
     PO --> RN
+    PO --> LS
+    PO --> SR
 ```
 
 # SQL Operations
@@ -74,7 +78,7 @@ graph TD
 ```mermaid
 graph TD
     subgraph "QueueManager Methods"
-        INIT["init()\nCREATE TABLE IF NOT EXISTS jobs\nCREATE TABLE IF NOT EXISTS job_logs"]
+        INIT["init()\nCREATE TABLE IF NOT EXISTS jobs\nALTER TABLE ADD COLUMN IF NOT EXISTS user_feedback\nCREATE TABLE IF NOT EXISTS job_logs"]
         ADD["addJob({count?, options?})\nINSERT INTO jobs\n(status='queued', game_name, config)\nRETURNING id\nreturns number[]"]
         CLAIM["getNextJob()\nUPDATE jobs SET status='running'\nstarted_at=NOW()\nWHERE id = subselect\nstatus='queued' ORDER BY created_at\nFOR UPDATE SKIP LOCKED LIMIT 1\nRETURNING *"]
         GET["getJob(jobId)\nSELECT * FROM jobs\nWHERE id=$1"]
@@ -83,6 +87,8 @@ graph TD
         PHASE["updatePhaseOutput(jobId, phase, output)\nUPDATE jobs SET phase_outputs =\nphase_outputs || jsonb_build_object\nupdated_at=NOW()"]
         LOG["addLog(jobId, level, message)\nINSERT INTO job_logs\n(job_id, level, message)"]
         GETLOG["getJobLogs(jobId)\nSELECT * FROM job_logs\nWHERE job_id=$1\nORDER BY created_at ASC"]
+        SETFB["setUserFeedback(jobId, feedback)\nUPDATE jobs SET user_feedback=$1\nupdated_at=NOW()\nRETURNING *"]
+        GETFB["getUserFeedback(jobId)\nSELECT user_feedback FROM jobs\nWHERE id=$1\nreturns string or null"]
         CLEAN["cleanupOld(daysOld)\nDELETE FROM job_logs WHERE job_id IN\n(SELECT id FROM jobs WHERE created_at older)\nDELETE FROM jobs WHERE created_at older\nreturns rowCount"]
         STATS["getStats()\nSELECT status, COUNT(*)::int\nFROM jobs GROUP BY status\nreturns {queued, running,\ncompleted, failed, total}"]
     end
@@ -93,6 +99,8 @@ graph TD
     UPDATE --> PHASE
     PHASE --> LOG
     LOG --> GETLOG
-    GETLOG --> STATS
+    GETLOG --> SETFB
+    SETFB --> GETFB
+    GETFB --> STATS
     STATS --> CLEAN
 ```

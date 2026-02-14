@@ -3,11 +3,11 @@
 ```mermaid
 graph LR
     subgraph "backend/src/"
-        IDX["index.js 411 lines\nEntry: wires services\nstarts Express + poller\n+ Phase 5 repair loop"]
-        API["routes/api.js 195 lines\ncreateHandlers + createRouter\n7 REST endpoints\n+ comparison mode"]
-        QM["services/queueManager.js 255 lines\nPostgreSQL job queue\natomic claiming\njob_logs table"]
-        CM["services/containerManager.js 210 lines\nDocker container lifecycle\nspawn + poll + logs"]
-        DM["services/deploymentManager.js 526 lines\nnginx container creation\nTraefik labels\ngallery data"]
+        IDX["index.js 761 lines\nEntry: wires services\nstarts Express + poller\n+ Phase 5 repair loop\n+ process improvement agent\n+ plateau detection\n+ user feedback integration"]
+        API["routes/api.js 298 lines\ncreateHandlers + createRouter\n10 REST endpoints\n+ comparison mode\n+ feedback endpoint\n+ improvements endpoints"]
+        QM["services/queueManager.js 287 lines\nPostgreSQL job queue\natomic claiming\njob_logs table\nuser_feedback column"]
+        CM["services/containerManager.js 220 lines\nDocker container lifecycle\nspawn + poll + logs\nhostProjectRoot bind mounts"]
+        DM["services/deploymentManager.js 526 lines\nnginx container creation\nTraefik labels\ngallery data\nguide.html generation"]
         GT["services/gameTester.js 48 lines\nPlaywright-based\ngame quality testing"]
     end
 
@@ -30,15 +30,15 @@ graph LR
 graph LR
     subgraph "backend/src/services/__tests__/"
         SRR["run-tests.js 46 lines\nImports + runs 4 suites"]
-        QMT["queueManager.test.js\nMock pg Pool"]
-        CMT["containerManager.test.js\nMock Dockerode"]
-        DMT["deploymentManager.test.js\nMock Docker + fs"]
-        GTT["gameTester.test.js\nMock Playwright"]
+        QMT["queueManager.test.js 431 lines\nMock pg Pool"]
+        CMT["containerManager.test.js 717 lines\nMock Dockerode"]
+        DMT["deploymentManager.test.js 342 lines\nMock Docker + fs"]
+        GTT["gameTester.test.js 142 lines\nMock execSync"]
     end
 
     subgraph "backend/src/routes/__tests__/"
         RRR["run-tests.js 44 lines\nImports + runs 1 suite"]
-        AT["api.test.js 483 lines\nMock req/res pattern\n25 tests"]
+        AT["api.test.js 604 lines\nMock req/res pattern"]
     end
 
     SRR -->|"imports"| QMT
@@ -61,6 +61,16 @@ graph LR
         CI["index.js 13\nRe-exports + VERSION"]
     end
 
+    subgraph "framework/core/__tests__/"
+        GLT["GameLoop.test.js 273"]
+        EBT["EventBus.test.js 133"]
+        BNT["BigNum.test.js 222"]
+        SMT["SaveManager.test.js 241"]
+        TR["TestRunner.js 148"]
+        RR["run-tests.js 64"]
+        RH["run-tests.html 91"]
+    end
+
     CI -->|"exports"| GL
     CI -->|"exports"| EB
     CI -->|"exports"| BN
@@ -78,6 +88,15 @@ graph LR
         PR["Prestige.js 153\nReset layers + formula"]
         UN["Unlockable.js 109\nCondition checking"]
         MI["index.js 11\nRe-exports all"]
+    end
+
+    subgraph "framework/mechanics/__tests__/"
+        CUT["Currency.test.js 204"]
+        GET["Generator.test.js 307"]
+        MUT["Multiplier.test.js 131"]
+        PRT["Prestige.test.js 228"]
+        UNT["Unlockable.test.js 165"]
+        MRR["run-tests.js 65"]
     end
 
     CU -->|"uses"| BN["BigNum.js"]
@@ -99,6 +118,16 @@ graph LR
         TS["TabSystem.js 151\nTab switching"]
         SK["SkillTree.js 222\nNode graph + connectors"]
         UI["index.js 14\nRe-exports + UI_VERSION"]
+    end
+
+    subgraph "framework/ui/__tests__/"
+        RBT["ResourceBar.test.js 144"]
+        UBT["UpgradeButton.test.js 203"]
+        PBT["ProgressBar.test.js 169"]
+        TST["TabSystem.test.js 220"]
+        SKT["SkillTree.test.js 253"]
+        DM2["DomMock.js 163"]
+        URR["run-tests.js 58"]
     end
 
     RB -->|"uses"| BN["BigNum.js"]
@@ -126,14 +155,13 @@ graph LR
 ```mermaid
 graph LR
     subgraph "docker/"
-        DC["docker-compose.yml 63 lines\nbackend + postgres services"]
-        ENT["entrypoint.sh 368 lines\n5-phase worker router\nOAuth support"]
-        ENV[".env.example 3 lines\nPG password + API key"]
+        DC["docker-compose.yml 64 lines\nbackend + postgres services"]
+        ENT["entrypoint.sh 443 lines\n7-phase worker router\nOAuth + apikey support"]
         DW["Dockerfile 28 lines\nWorker image"]
     end
 
     subgraph "root"
-        DBK["Dockerfile.backend 18 lines\nNode 22 slim + Playwright"]
+        DBK["Dockerfile.backend 19 lines\nNode 22 slim + Playwright"]
     end
 
     DC -->|"builds from"| DBK
@@ -150,8 +178,8 @@ graph LR
     end
 
     subgraph "gallery/"
-        GIX["index.html 459 lines\nPassword screen + card grid"]
-        GJS["gallery.js 418 lines\nAuth + fetch + render"]
+        GIX["index.html 868 lines\nPassword screen + card grid\n+ improvement timeline"]
+        GJS["gallery.js 754 lines\nAuth + fetch + render\n+ procedural thumbnails\n+ sparklines + defects\n+ feedback modal\n+ improvement timeline"]
     end
 
     DDC -->|"mounts"| DIX
@@ -159,13 +187,18 @@ graph LR
     DDC -->|"mounts"| GJS
 ```
 
-# Prompts: Phase 1-3
+# Prompts File Map
 
 ```mermaid
 graph LR
     subgraph "prompts/"
         P1["phase1-idea-generator.md 297"]
         P3["phase3-implementation-guide.md 375"]
+        P4["phase4-orchestrator.md 1081"]
+        P5R["phase5-repair-agent.md 190"]
+        P5V["phase5-review-agent.md 135"]
+        P5S["phase5-strategy-review.md 85"]
+        PI["process-improvement-agent.md 142"]
     end
 
     subgraph "prompts/phase2-gdd/"
@@ -180,19 +213,20 @@ graph LR
     ENT["entrypoint.sh"] -->|"reads"| P1
     ENT -->|"reads"| P2C
     ENT -->|"reads"| P3
+    ENT -->|"reads"| P4
+    ENT -->|"reads"| P5R
+    ENT -->|"reads"| P5S
+    ENT -->|"reads"| PI
 ```
 
-# Prompts: Phase 4-5
+# Scripts + Test File Map
 
 ```mermaid
 graph LR
-    subgraph "prompts/"
-        P4["phase4-orchestrator.md 1077"]
-        P5R["phase5-repair-agent.md 182"]
-        P5V["phase5-review-agent.md 135"]
+    subgraph "scripts/"
+        TG["test-game.js 814 lines\nPlaywright game tester\n15 checks across 5 tiers\ntier-based scoring with caps\nno-scroll viewport check"]
+        SP["package.json 1 line\nPlaywright dependency"]
     end
 
-    ENT["entrypoint.sh"] -->|"reads"| P4
-    ENT -->|"reads"| P5R
-    ENT -->|"reads"| P5V
+    GT["gameTester.js 48 lines\nExec wrapper"] -->|"execSync"| TG
 ```

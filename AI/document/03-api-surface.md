@@ -8,6 +8,7 @@ graph LR
         GET_JOB["GET /jobs/:id\nParams: id (integer)\nReturns: 200 {job}\nAll columns from jobs table\nErrors: 404 'Job N not found'"]
         GET_LOGS["GET /jobs/:id/logs\nParams: id (integer)\nReturns: 200 {logs: [...]}\nFrom job_logs table\nOrder: created_at ASC\nErrors: 404 job not found"]
         GET_STATS["GET /stats\nReturns: 200 {stats}\n{queued, running, completed,\nfailed, total}"]
+        POST_FEEDBACK["POST /jobs/:id/feedback\nBody: {feedback: string}\nReturns: 200 {jobId, feedback,\nwillRepair: boolean}\nErrors: 400 feedback required\n404 job not found"]
     end
 ```
 
@@ -15,11 +16,12 @@ graph LR
 graph LR
     subgraph "Game Management [/api]"
         GET_GAMES["GET /games\nReturns: 200 {games: [...]}\nEach: {gameId, name, title,\ndescription, guide, url,\nport, createdAt}"]
-        DEL_GAME["DELETE /games/:id\nParams: id (integer)\nReturns: 200 {gameId, removed: true}\nErrors: 500 removal error"]
+        DEL_GAME["DELETE /games/:id\nParams: id (integer)\nReturns: 200 {gameId, removed: true}\nRefreshes gallery data\nErrors: 500 removal error"]
     end
 
     subgraph "Process Improvement [/api]"
-        POST_IMP["POST /improvements/run\nTriggers manual process\nimprovement analysis\nReturns: 200 {triggered: true}\nor 200 {triggered: false,\nreason: 'already running'}"]
+        POST_IMP["POST /improvements/run\nForce triggers process\nimprovement agent\nResets cooldown timer\nReturns: 202 {status: triggered}\nErrors: 503 agent not initialized"]
+        GET_IMP["GET /improvements\nReturns: 200 {log, reports}\nlog: {reports: [...]}\nreports: [{filename, content}]"]
     end
 
     subgraph "Health [root]"
@@ -50,12 +52,37 @@ graph TD
     CMP_REQ --> PAIR_B
 ```
 
+# POST /jobs/:id/feedback Request Shape
+
+```mermaid
+graph TD
+    subgraph "Feedback Submission"
+        FB_REQ["Body: {feedback: string}\nMust be non-empty string"]
+        FB_RES["200: {jobId: number,\nfeedback: string (combined),\nwillRepair: boolean}"]
+        FB_400["400: {error: 'Feedback text is required'}\nif feedback empty or missing"]
+        FB_404["404: {error: 'Job N not found'}"]
+    end
+
+    subgraph "Feedback Storage"
+        FB_STORE["Appended with timestamp\n[2026-01-15T12:00:00Z] user text\nStored in jobs.user_feedback column"]
+    end
+
+    subgraph "Side Effects"
+        FB_REPAIR["If job.status === 'completed'\nReset to phase_5\nTriggers new repair run\nwillRepair: true in response"]
+        FB_NOOP["If job.status !== 'completed'\nFeedback saved for next repair\nwillRepair: false in response"]
+    end
+
+    FB_REQ --> FB_STORE
+    FB_STORE --> FB_REPAIR
+    FB_STORE --> FB_NOOP
+```
+
 # GET /api/jobs/:id Response Shape
 
 ```mermaid
 graph TD
     subgraph "job object (all columns from jobs table)"
-        JOB["id: SERIAL\nstatus: VARCHAR(20)\ngame_name: VARCHAR(255)\nphase_outputs: JSONB\nconfig: JSONB\nerror: TEXT\ncreated_at: TIMESTAMP\nupdated_at: TIMESTAMP\nstarted_at: TIMESTAMP\ncompleted_at: TIMESTAMP"]
+        JOB["id: SERIAL\nstatus: VARCHAR(20)\ngame_name: VARCHAR(255)\nphase_outputs: JSONB\nconfig: JSONB\nerror: TEXT\nuser_feedback: TEXT\ncreated_at: TIMESTAMP\nupdated_at: TIMESTAMP\nstarted_at: TIMESTAMP\ncompleted_at: TIMESTAMP"]
     end
 
     subgraph "Valid statuses"
@@ -63,30 +90,6 @@ graph TD
     end
 
     JOB --> STAT
-```
-
-# GET /api/jobs/:id/logs Response Shape
-
-```mermaid
-graph TD
-    subgraph "logs array (from job_logs table)"
-        LOG["Each: {id, job_id, level, message, created_at}\nlevel: info | warn | error | debug\nOrder: created_at ASC"]
-    end
-```
-
-# GET /api/games Response Shape
-
-```mermaid
-graph TD
-    subgraph "games array (from DeploymentManager.listDeployedGames)"
-        GAME["Each: {\ngameId: number,\nname: string (gamedemoN),\ntitle: string,\ndescription: string,\nguide: string,\nurl: string (https://gamedemoN.namjo-games.com),\nport: number (basePort + gameId),\ncreatedAt: string (ISO8601)\n}"]
-    end
-
-    subgraph "Metadata source"
-        META["metadata.json in deployDir/gamedemoN/\nFallback: title from index.html tag"]
-    end
-
-    GAME --> META
 ```
 
 # Handler to Service Method Mapping
@@ -101,7 +104,9 @@ graph TD
         H5["getStats\nGET /stats"]
         H6["listGames\nGET /games"]
         H7["removeGame\nDELETE /games/:id"]
-        H8["runProcessImprovement\nPOST /improvements/run"]
+        H8["submitFeedback\nPOST /jobs/:id/feedback"]
+        H9["runProcessImprovement\nPOST /improvements/run"]
+        H10["getImprovements\nGET /improvements"]
     end
 
     subgraph "QueueManager methods"
@@ -110,11 +115,14 @@ graph TD
         QG["getJob(id)"]
         QL["getJobLogs(id)"]
         QS["getStats()"]
+        QF["setUserFeedback(id, text)"]
+        QGF["getUserFeedback(id)"]
     end
 
     subgraph "DeploymentManager methods"
         DL["listDeployedGames()"]
         DR["removeGame(id)"]
+        DU["updateGalleryData(games)"]
     end
 
     H1 --> QA
@@ -125,4 +133,9 @@ graph TD
     H5 --> QS
     H6 --> DL
     H7 --> DR
+    H7 --> DU
+    H8 --> QG
+    H8 --> QF
+    H9 -->|"globalThis._maybeRunProcessImprovement"| PI["Process Improvement Agent"]
+    H10 -->|"reads filesystem"| IMP["shared/improvements/"]
 ```
