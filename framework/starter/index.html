@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GamePocGen Game</title>
+  <link rel="stylesheet" href="css/game.css">
+  <style>
+    /* CRITICAL: Game MUST fit viewport — NO SCROLLING EVER */
+    html, body { height: 100vh; max-height: 100vh; overflow: hidden; margin: 0; padding: 0; }
+    #game-root {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      max-height: 100vh;
+      overflow: hidden;
+    }
+    #hud {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 16px;
+      background: rgba(0,0,0,0.8);
+      z-index: 10;
+    }
+    #resources { display: flex; gap: 16px; }
+    #hud .currency {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: monospace;
+      font-size: 16px;
+      color: #eee;
+    }
+    #hud .currency .amount { font-weight: bold; color: #4ade80; }
+    #game-canvas {
+      flex: 1;
+      width: 100%;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+      background: #1a1a2e;
+      cursor: crosshair;
+    }
+    #bottom-panel {
+      background: #0f0f1a;
+      border-top: 1px solid #333;
+      max-height: 40vh;
+      overflow-y: auto;
+    }
+    #tabs {
+      display: flex;
+      gap: 4px;
+      padding: 4px 8px;
+      background: #1a1a2e;
+    }
+    #tabs button {
+      padding: 6px 12px;
+      background: #2d2d4e;
+      color: #ccc;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    #tabs button.active { background: #4a4a7e; color: #fff; }
+    .game-panel { padding: 12px; display: none; flex-wrap: wrap; gap: 8px; }
+    .game-panel:first-of-type { display: flex; }
+    #controls {
+      background: rgba(0,0,0,0.7);
+      padding: 4px 12px;
+      font-size: 12px;
+      color: #aaa;
+      font-family: monospace;
+    }
+    #notifications {
+      position: fixed;
+      top: 60px;
+      right: 16px;
+      z-index: 100;
+    }
+  </style>
+</head>
+<body>
+  <div id="game-root">
+    <!-- HUD overlay -->
+    <header id="hud">
+      <div id="resources"></div>
+      <div id="wave-info">Wave 0</div>
+    </header>
+
+    <!-- Main game canvas -->
+    <canvas id="game-canvas"></canvas>
+
+    <!-- Controls help -->
+    <div id="controls">Click: Place unit | Space: Start wave | Enemies spawn automatically</div>
+
+    <!-- Bottom panel -->
+    <div id="bottom-panel">
+      <nav id="tabs"></nav>
+      <main id="panels">
+        <section id="panel-upgrades" class="game-panel"></section>
+        <section id="panel-skills" class="game-panel"></section>
+      </main>
+    </div>
+
+    <div id="notifications"></div>
+  </div>
+
+  <!-- Sprite modules (non-ES-module, expose globals) -->
+  <script src="sprites/SpriteData.js"></script>
+  <script src="sprites/SpriteRenderer.js"></script>
+  <script src="sprites/ProceduralSprite.js"></script>
+
+  <script type="module">
+    import { GameLoop, BigNum, SaveManager, EventBus } from './core/index.js';
+    import { CurrencyManager } from './mechanics/Currency.js';
+
+    import { CONFIG } from './config.js';
+    import { Game } from './game.js';
+
+    const root = document.getElementById('game-root');
+    const canvas = document.getElementById('game-canvas');
+
+    const game = new Game({
+      GameLoop, BigNum, SaveManager, EventBus,
+      CurrencyManager,
+      SpriteRenderer, SPRITE_DATA, PALETTES, ProceduralSprite,
+      config: CONFIG,
+      root: root,
+      canvas: canvas
+    });
+
+    game.init();
+    game.start();
+
+    // Expose for automated testing — REQUIRED
+    window.CONFIG = CONFIG;
+    window.game = game;
+  </script>
+</body>
+</html>

@@ -160,6 +160,24 @@ fi
 if [[ -f "${WORKSPACE}/implementation-plan.json" ]]; then
     write_state "phase4" "running"
 
+    # Pre-populate dist/ with working starter files + framework
+    # This gives Claude a WORKING baseline game to customize
+    mkdir -p "${WORKSPACE}/dist"
+
+    # Copy starter game files (index.html, game.js, entities.js, config.js)
+    STARTER_DIR="/home/claude/framework/starter"
+    if [[ -d "$STARTER_DIR" ]]; then
+        cp -n "$STARTER_DIR"/* "${WORKSPACE}/dist/" 2>/dev/null || true
+        echo "[on-idle] Copied starter files to dist/"
+    fi
+
+    # Copy framework directories into dist/ so the game is self-contained
+    for dir in core sprites mechanics ui css; do
+        if [[ -d "${WORKSPACE}/$dir" && ! -d "${WORKSPACE}/dist/$dir" ]]; then
+            cp -r "${WORKSPACE}/$dir" "${WORKSPACE}/dist/"
+        fi
+    done
+
     PROMPT_FILE="${PROMPTS_DIR}/phase4-orchestrator.md"
     PROMPT_CONTENT=""
     if [[ -f "$PROMPT_FILE" ]]; then
@@ -174,7 +192,17 @@ Workspace: ${WORKSPACE}
 Read the implementation plan from: ${WORKSPACE}/implementation-plan.json
 Read the GDD from: ${WORKSPACE}/gdd/
 The framework files are already copied into the workspace.
-Build the complete playable game in: ${WORKSPACE}/dist/"
+
+IMPORTANT: A working starter game has been pre-populated in ${WORKSPACE}/dist/.
+It already loads, renders sprites, spawns enemies, handles clicks, earns currency, and advances waves.
+Your job is to CUSTOMIZE these files to match the GDD — not build from scratch.
+The starter files you should customize:
+  - dist/config.js — Replace placeholder values with game-specific values from the GDD
+  - dist/game.js — Add game-specific mechanics (custom click behavior, generators, prestige, etc.)
+  - dist/entities.js — Add game-specific entity types and behaviors
+  - dist/index.html — Update title, add game-specific UI elements, customize controls text
+DO NOT delete the working starter code — extend and modify it.
+If you create NEW js files, put them in dist/ and import them in the module script."
 
     send_instruction
     exit 0

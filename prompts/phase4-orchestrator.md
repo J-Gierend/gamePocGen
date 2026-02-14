@@ -1,19 +1,29 @@
-# Phase 4: TDD Implementation Orchestrator
+# Phase 4: Game Customization & Implementation
 
-You are the build agent for GamePocGen. Your job is to execute an implementation guide phase by phase, using strict Test-Driven Development, to produce a complete working browser game WITH A CANVAS-BASED VISUAL GAME WORLD.
+You are the build agent for GamePocGen. A WORKING STARTER GAME has already been placed in `dist/`. Your job is to CUSTOMIZE it to match the game design document (GDD), adding game-specific mechanics, entities, and UI.
+
+**CRITICAL: The starter game in dist/ ALREADY WORKS.** It loads, renders sprites, spawns enemies, handles clicks, earns currency, and advances waves. Do NOT delete or rewrite the starter code. EXTEND and MODIFY it to match the GDD.
 
 ## Inputs
 
 Read these files from the workspace:
 
 ```
-implementation-guide.md     # Phased build plan with exactly 6 phases (produced by Phase 3)
-idea.md                     # Original game concept (for reference)
-gdd/                        # GDD sections: currencies.md, progression.md, ui-ux.md
-config.js                   # If it exists already; otherwise you create it
+dist/                       # WORKING starter game — customize these files
+  index.html                # Main entry point (already works)
+  game.js                   # Game class with working gameplay loop
+  entities.js               # Entity class with combat, movement, rendering
+  config.js                 # Configuration — REPLACE values with GDD values
+  core/                     # Framework modules (DO NOT MODIFY)
+  sprites/                  # Sprite modules (DO NOT MODIFY)
+  mechanics/                # Game mechanics (DO NOT MODIFY)
+  css/                      # Styles (DO NOT MODIFY)
+implementation-plan.json    # Build plan (produced by Phase 3)
+idea.json                   # Original game concept
+gdd/                        # GDD sections: currencies.json, progression.json, ui-ux.json
 ```
 
-The `implementation-guide.md` contains exactly 6 ordered phases. Execute them in order.
+Read the implementation plan and GDD, then customize the starter game to match.
 
 ## The Framework
 
@@ -287,53 +297,30 @@ If tests fail after implementation:
 
 ## File Structure
 
-Create this structure in the workspace:
+All game files are in `dist/`. This structure already exists:
 
 ```
-workspace/
-  index.html              # Main entry point (Canvas + HUD + bottom panel)
-  game.js                 # Main Game class
-  config.js               # All game configuration values
-  entities.js             # Entity class and entity management
-  tests/
-    run-tests.html        # Test runner page
-    run-tests.js
-    phase-1.test.js
-    phase-2.test.js
-    ...
+dist/
+  index.html              # Main entry point (ALREADY WORKS — customize it)
+  game.js                 # Main Game class (ALREADY WORKS — extend it)
+  config.js               # Game configuration (MUST customize with GDD values)
+  entities.js             # Entity class (ALREADY WORKS — extend it)
   core/                   # DO NOT MODIFY -- framework modules
-    GameLoop.js
-    BigNum.js
-    SaveManager.js
-    EventBus.js
-    index.js
-    __tests__/
-      TestRunner.js
-  mechanics/              # Create missing modules here
-    Currency.js
-    Generator.js
-    Multiplier.js
-    Prestige.js
-    Unlockable.js
-  ui/                     # Create missing modules here
-    ResourceBar.js
-    UpgradeButton.js
-    ProgressBar.js
-    TabSystem.js
-    SkillTree.js
+  mechanics/              # DO NOT MODIFY -- game mechanics
+  ui/                     # DO NOT MODIFY -- UI components
   sprites/                # DO NOT MODIFY -- sprite framework
-    SpriteRenderer.js
-    SpriteData.js
-    ProceduralSprite.js
-  css/                    # DO NOT MODIFY
-    game.css
+  css/                    # DO NOT MODIFY -- styles
 ```
 
-## index.html Template
+If you need to create NEW game-specific modules, put them in `dist/` and import them.
 
-Use this as the starting template. The Canvas is the PRIMARY element.
+## Starter File Reference
 
-**CRITICAL PATH RULE**: All file paths are relative to the workspace root where index.html lives. Use `core/`, `sprites/`, `mechanics/`, `ui/`, `css/` — NOT `framework/core/` or `./dist/config.js`. Do NOT prefix paths with `framework/` or `dist/`.
+These files are ALREADY in `dist/` and ALREADY WORK. They are shown below for reference so you understand their structure. Do NOT rewrite them from scratch — only modify what's needed for the GDD.
+
+**CRITICAL PATH RULE**: All file paths in dist/ are relative. Use `core/`, `sprites/`, `mechanics/`, `ui/`, `css/` — NOT `framework/core/` or `./dist/config.js`. Do NOT prefix paths with `framework/` or `dist/`.
+
+### index.html (already in dist/)
 
 ```html
 <!DOCTYPE html>
@@ -468,9 +455,7 @@ Use this as the starting template. The Canvas is the PRIMARY element.
 </html>
 ```
 
-## game.js Template
-
-Use this as the starting template. The game has a Canvas with entities:
+### game.js (already in dist/ — extend, don't rewrite)
 
 ```javascript
 /**
@@ -690,9 +675,7 @@ export class Game {
 }
 ```
 
-## Entity Pattern (for Phase 2+)
-
-Create `entities.js` with this pattern:
+### entities.js (already in dist/ — extend, don't rewrite)
 
 ```javascript
 /**
@@ -830,7 +813,7 @@ export class Entity {
 }
 ```
 
-## config.js Template
+### config.js (already in dist/ — MUST customize with GDD values)
 
 ```javascript
 /**
@@ -896,7 +879,7 @@ export const CONFIG = {
 };
 ```
 
-## tests/run-tests.html Template
+### tests/run-tests.html (optional — for unit testing)
 
 ```html
 <!DOCTYPE html>
@@ -991,17 +974,17 @@ export const CONFIG = {
 Follow this exact sequence:
 
 ### 1. Read the Plan
-- Read `implementation-guide.md` fully
-- Count total phases
-- Note dependencies between phases
+- Read `implementation-plan.json` fully
+- Read ALL GDD files in `gdd/`
+- Note what game-specific customizations are needed
 
-### 2. Create Scaffolding
-Before starting Phase 1, create these files:
-- `config.js` (populated from the implementation guide and GDD)
-- `index.html` (from the template above -- with Canvas as primary element)
-- `game.js` (from the template above -- with SpriteRenderer and entity system)
-- `entities.js` (Entity class from the pattern above)
-- `tests/run-tests.html` (from the template above -- includes sprite script tags)
+### 2. Customize Starter Files (MOST IMPORTANT STEP)
+The starter game in `dist/` already works. Customize these files:
+- `dist/config.js` — Replace ALL placeholder values with GDD-specific values (currencies, entities, upgrades, etc.)
+- `dist/game.js` — Add game-specific mechanics from the GDD (custom click behavior, generators, prestige, etc.)
+- `dist/entities.js` — Add game-specific entity types, behaviors, and interactions
+- `dist/index.html` — Update `<title>`, controls text, add game-specific UI elements
+Do NOT rewrite these files from scratch. The existing code WORKS. Add to it.
 
 ### 3. Execute Each Phase
 
