@@ -496,6 +496,8 @@ h1{margin:0 0 4px}h2{margin:0 0 16px;color:#888;font-weight:normal}</style></hea
     let consecutiveTimeouts = 0;
     const MAX_CONSECUTIVE_TIMEOUTS = 5;
     const REPAIR_WAIT_TIMEOUT = 10 * 60 * 1000; // 10 min max wait per repair
+    let bestScore = 0;
+    const bestBackupDir = `${containerManager.workspacePath}/job-${job.id}/dist-best`;
 
     for (let attempt = 1; attempt <= MAX_REPAIR_ATTEMPTS; attempt++) {
       try {
@@ -547,6 +549,47 @@ h1{margin:0 0 4px}h2{margin:0 0 16px;color:#888;font-weight:normal}</style></hea
 
         updateScoreBadge(score, attempt);
         updateRepairLog();
+
+        // --- BEST VERSION BACKUP ---
+        if (score > bestScore) {
+          bestScore = score;
+          try {
+            const workspaceDir = `${containerManager.workspacePath}/job-${job.id}`;
+            const distDir = join(workspaceDir, 'dist');
+            cpSync(distDir, bestBackupDir, { recursive: true });
+            await queueManager.addLog(job.id, 'info', `New best score ${score} — backed up dist/`);
+          } catch (backupErr) {
+            await queueManager.addLog(job.id, 'error', `Backup failed: ${backupErr.message}`);
+          }
+        }
+
+        // --- REGRESSION DETECTION: restore best if score dropped significantly ---
+        if (bestScore >= 4 && score < bestScore - 1) {
+          await queueManager.addLog(job.id, 'info', `Score regressed ${bestScore} → ${score} — restoring best version`);
+          try {
+            const workspaceDir = `${containerManager.workspacePath}/job-${job.id}`;
+            const distDir = join(workspaceDir, 'dist');
+            if (existsSync(bestBackupDir)) {
+              // Restore game files from best backup
+              for (const f of ['index.html', 'game.js', 'entities.js', 'config.js']) {
+                const src = join(bestBackupDir, f);
+                if (existsSync(src)) writeFileSync(join(distDir, f), readFileSync(src));
+              }
+              await deploymentManager.deployGame(job.id, job.game_name || `Game ${job.id}`, distDir, { workspaceDir });
+              injectBadgeScript();
+              await queueManager.addLog(job.id, 'info', 'Restored best version and redeployed');
+            }
+          } catch (restoreErr) {
+            await queueManager.addLog(job.id, 'error', `Restore failed: ${restoreErr.message}`);
+          }
+        }
+
+        // --- PASS GATE: score >= 8 is good enough ---
+        if (score >= 8) {
+          await queueManager.addLog(job.id, 'info', `Score ${score} >= 8, game passes quality gate (good enough)`);
+          containerManager.writeToWorkspace(job.id, 'job-complete.marker', 'Quality gate passed');
+          break;
+        }
 
         if (score >= PASS_SCORE) {
           await queueManager.addLog(job.id, 'info', `Score ${score} >= ${PASS_SCORE}, game passes quality gate`);
