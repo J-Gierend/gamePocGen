@@ -326,6 +326,43 @@ async function main() {
             fixed = fixed.replace(/(?:src|href)="dist\//g, (m) => m.replace('dist/', ''));
             // Fix from './dist/ → from './ (self-referential dist/ import)
             fixed = fixed.replace(/from\s+['"]\.\/dist\//g, "from './");
+
+            // For HTML files: fix <script src="X.js"> loading ES module files
+            if (f.endsWith('.html')) {
+              // Convert non-module script tags to module tags for files that use export/import
+              fixed = fixed.replace(/<script\s+src="([^"]+\.js)">/g, (match, srcPath) => {
+                const jsFile = join(dir, srcPath);
+                if (existsSync(jsFile)) {
+                  const jsContent = readFileSync(jsFile, 'utf8');
+                  if (/^\s*(export|import)\s/m.test(jsContent)) {
+                    return `<script type="module" src="${srcPath}">`;
+                  }
+                }
+                return match;
+              });
+              // Ensure window.CONFIG and window.game are set in the module script
+              if (!/window\.CONFIG\s*=/.test(fixed) && /import.*CONFIG/.test(fixed)) {
+                fixed = fixed.replace(
+                  /(import\s+\{[^}]*CONFIG[^}]*\}\s+from\s+['"][^'"]+['"];?)/,
+                  '$1\n    window.CONFIG = CONFIG;'
+                );
+              }
+              if (!/window\.game\s*=/.test(fixed) && /(?:new\s+Game|const\s+game)/.test(fixed)) {
+                // If game is created but not exposed, add window.game
+                fixed = fixed.replace(
+                  /((?:const|let|var)\s+game\s*=\s*new\s+\w+)/,
+                  '$1'  // Already matched, add after init
+                );
+                // Try to find where game is created and add window.game after game.start() or game.init()
+                if (!/window\.game\s*=/.test(fixed)) {
+                  fixed = fixed.replace(
+                    /(game\.(?:start|init)\(\);)/,
+                    '$1\n    window.game = game;'
+                  );
+                }
+              }
+            }
+
             if (fixed !== content) {
               writeFileSync(full, fixed);
             }

@@ -77,4 +77,6 @@ var SPRITE_DATA = {
   ],
 };
 
+// Ensure globals are on window (works in both module and non-module contexts)
+if (typeof window !== 'undefined') { window.PALETTES = PALETTES; window.SPRITE_DATA = SPRITE_DATA; }
 if (typeof module !== 'undefined') module.exports = { PALETTES: PALETTES, SPRITE_DATA: SPRITE_DATA };

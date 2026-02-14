@@ -147,4 +147,5 @@ SpriteRenderer.prototype.resize = function (width, height) {
   this._canvas.height = height;
 };
 
+if (typeof window !== 'undefined') { window.SpriteRenderer = SpriteRenderer; }
 if (typeof module !== 'undefined') module.exports = { SpriteRenderer: SpriteRenderer };
