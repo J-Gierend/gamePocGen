@@ -20,15 +20,15 @@
  *   INCOMPLETE (cap 6.0): Missing tabs/upgrades, waves stuck, viewport overflow
  *   POLISH (deduction): Missing tutorial, minor issues
  *
- * 15 checks across 5 tiers. The LOWEST failing tier determines the score cap.
+ * 16 checks across 5 tiers. The LOWEST failing tier determines the score cap.
  * Within the cap, the score is calculated from passed checks.
  *
  * Usage:
- *   node test-game.js <url> [--screenshots ./shots] [--json report.json]
+ *   node test-game.js <url> [--screenshots ./shots] [--json report.json] [--game-context context.json]
  */
 
 import { chromium } from 'playwright';
-import { writeFileSync, mkdirSync, existsSync } from 'fs';
+import { writeFileSync, readFileSync, mkdirSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 
 const args = process.argv.slice(2);
@@ -46,6 +46,14 @@ const JSON_OUT = jsonIdx >= 0 ? args[jsonIdx + 1] : null;
 
 const thumbIdx = args.indexOf('--thumbnail');
 const THUMBNAIL_OUT = thumbIdx >= 0 ? args[thumbIdx + 1] : null;
+
+const ctxIdx = args.indexOf('--game-context');
+let GAME_CONTEXT = null;
+if (ctxIdx >= 0 && args[ctxIdx + 1]) {
+  try {
+    GAME_CONTEXT = JSON.parse(readFileSync(args[ctxIdx + 1], 'utf8'));
+  } catch { /* optional, proceed without */ }
+}
 
 if (SCREENSHOT_DIR && !existsSync(SCREENSHOT_DIR)) mkdirSync(SCREENSHOT_DIR, { recursive: true });
 if (JSON_OUT) { const d = dirname(JSON_OUT); if (!existsSync(d)) mkdirSync(d, { recursive: true }); }
@@ -120,7 +128,8 @@ const CHECK_DEFS = {
   entitiesSpawn:        { weight: 1,   tier: 'unplayable' },
   currenciesChange:     { weight: 1,   tier: 'unplayable' },
   wavesAdvance:         { weight: 0.5, tier: 'incomplete' },
-  gameplayLoop:         { weight: 1,   tier: 'unplayable' },
+  currencySpending:     { weight: 1,   tier: 'unplayable' },
+  economicLoop:         { weight: 1,   tier: 'broken' },
 };
 
 const TIER_CAPS = {
@@ -155,6 +164,7 @@ async function testGame(url) {
     consoleErrors: [],
     gameState: null,
     configSummary: null,
+    gameContext: GAME_CONTEXT,
     screenshots: [],
   };
 
@@ -308,7 +318,28 @@ async function testGame(url) {
       };
     });
 
-    if (hudInfo?.currencyDisplays?.length >= 2) {
+    // CONFIG-aware: check each configured currency has a display
+    const configCurrencyIds = report.configSummary?.currencyIds || [];
+    if (configCurrencyIds.length > 0 && hudInfo?.currencyDisplays) {
+      const displayTexts = hudInfo.currencyDisplays.map(d => `${d.id} ${d.text}`.toLowerCase());
+      const missingCurrencies = configCurrencyIds.filter(cid => {
+        return !displayTexts.some(dt => dt.includes(cid.toLowerCase()));
+      });
+      if (missingCurrencies.length === 0) {
+        checks.hudCurrencies.pass = true;
+        checks.hudCurrencies.detail = `All ${configCurrencyIds.length} CONFIG currencies have displays`;
+      } else if (hudInfo.currencyDisplays.length >= 2) {
+        // Has enough displays but some CONFIG currencies are missing
+        checks.hudCurrencies.pass = true;
+        checks.hudCurrencies.detail = `${hudInfo.currencyDisplays.length} displays found (missing: ${missingCurrencies.join(', ')})`;
+      } else {
+        checks.hudCurrencies.detail = `Missing displays for currencies: ${missingCurrencies.join(', ')}`;
+        const ctxName = GAME_CONTEXT?.theme ? ` in ${GAME_CONTEXT.theme} game` : '';
+        report.defects.push({ severity: 'critical', check: 'hudCurrencies',
+          description: `Missing display for currencies: ${missingCurrencies.join(', ')}${ctxName}. Only ${hudInfo.currencyDisplays.length} display(s) found, need all ${configCurrencyIds.length}.`,
+          suggestion: `Create display elements for each currency in CONFIG.currencies: ${configCurrencyIds.join(', ')}. Each needs an element matching [id*="display"], [class*="currency"], or [id*="currency"].` });
+      }
+    } else if (hudInfo?.currencyDisplays?.length >= 2) {
       checks.hudCurrencies.pass = true;
       checks.hudCurrencies.detail = `${hudInfo.currencyDisplays.length} currency displays found`;
     } else {
@@ -601,38 +632,82 @@ async function testGame(url) {
 
     const afterWaitState = await getCurrencyState(page);
 
-    // Check 11: Entities spawn
+    // Check 11: Entities spawn (CONFIG-aware)
+    const configEntityTypes = report.configSummary?.entityTypes || [];
     if (afterWaitState?.entities > 0 || (afterWaitState?.entities === 0 && afterWaitState?.wave > (initialState?.wave || 0))) {
-      checks.entitiesSpawn.pass = true;
-      checks.entitiesSpawn.detail = `${afterWaitState.entities} entities at wave ${afterWaitState.wave}`;
+      // Check which CONFIG entity types actually exist
+      if (configEntityTypes.length > 0) {
+        const foundTypes = await safeEval(page, () => {
+          const g = window.game;
+          if (!g?.entities) return [];
+          const types = new Set();
+          for (const e of g.entities) { if (e.type) types.add(e.type); }
+          return Array.from(types);
+        });
+        const foundSet = new Set(Array.isArray(foundTypes) ? foundTypes : []);
+        const missingTypes = configEntityTypes.filter(t => !foundSet.has(t));
+        if (missingTypes.length === 0 || foundSet.size > 0) {
+          checks.entitiesSpawn.pass = true;
+          const detail = missingTypes.length > 0
+            ? `${afterWaitState.entities} entities (types found: ${[...foundSet].join(', ')}; not seen: ${missingTypes.join(', ')})`
+            : `${afterWaitState.entities} entities, all ${configEntityTypes.length} CONFIG types present`;
+          checks.entitiesSpawn.detail = detail;
+        }
+      } else {
+        checks.entitiesSpawn.pass = true;
+        checks.entitiesSpawn.detail = `${afterWaitState.entities} entities at wave ${afterWaitState.wave}`;
+      }
     } else {
+      const entityContext = configEntityTypes.length > 0
+        ? `Configured entity types: ${configEntityTypes.join(', ')}. None found after 20s.`
+        : 'No entities spawned after 20 seconds. The game world is empty.';
       checks.entitiesSpawn.detail = `No entities after 20s`;
       report.defects.push({ severity: 'critical', check: 'entitiesSpawn',
-        description: 'No entities spawned after 20 seconds. The game world is empty.',
-        suggestion: 'Check wave spawning logic and entity factory.' });
+        description: entityContext,
+        suggestion: 'Check wave spawning logic and entity factory. Ensure spawnEntity() creates entities from CONFIG.entities.' });
     }
 
-    // Check 12: Currencies change
+    // Check 12: Currencies change (CONFIG-aware: track primary + specific currencies)
     if (initialState && afterWaitState) {
-      let anyChanged = false;
+      const changedCurrencies = [];
+      const unchangedCurrencies = [];
       for (const [id, val] of Object.entries(afterWaitState.currencies || {})) {
         const before = initialState.currencies?.[id];
-        if (typeof val === 'number' && typeof before === 'number' && val !== before) {
-          anyChanged = true;
-          break;
+        if (typeof val === 'number' && typeof before === 'number') {
+          if (val !== before) changedCurrencies.push(id);
+          else unchangedCurrencies.push(id);
         }
       }
-      if (!anyChanged && initialState.hudText && afterWaitState.hudText && initialState.hudText !== afterWaitState.hudText) {
-        anyChanged = true;
+      // Also check HUD text as fallback
+      if (changedCurrencies.length === 0 && initialState.hudText && afterWaitState.hudText && initialState.hudText !== afterWaitState.hudText) {
+        changedCurrencies.push('(hud-text)');
       }
-      if (anyChanged) {
+
+      // Get primary currency from CONFIG
+      const primaryCurrency = await safeEval(page, () => window.CONFIG?.primaryCurrency);
+      const primaryChanged = typeof primaryCurrency === 'string'
+        ? changedCurrencies.includes(primaryCurrency)
+        : changedCurrencies.length > 0;
+
+      if (changedCurrencies.length > 0) {
         checks.currenciesChange.pass = true;
-        checks.currenciesChange.detail = `Currencies changed over 20s`;
+        const detail = primaryCurrency
+          ? `Primary '${primaryCurrency}' ${primaryChanged ? 'changed' : 'UNCHANGED'}. Changed: ${changedCurrencies.join(', ')}${unchangedCurrencies.length > 0 ? `. Unchanged: ${unchangedCurrencies.join(', ')}` : ''}`
+          : `Currencies changed: ${changedCurrencies.join(', ')}`;
+        checks.currenciesChange.detail = detail;
+        // Warn if primary currency didn't change even though others did
+        if (primaryCurrency && !primaryChanged) {
+          report.defects.push({ severity: 'major', check: 'currenciesChange',
+            description: `Primary currency '${primaryCurrency}' did not change after 20s, though other currencies did (${changedCurrencies.join(', ')}).`,
+            suggestion: `Ensure the primary currency '${primaryCurrency}' increases through gameplay - kills, generators, or passive income.` });
+        }
       } else {
         checks.currenciesChange.detail = 'No currency change after 20s';
+        const currencyNames = configCurrencyIds.length > 0 ? configCurrencyIds.join(', ') : 'unknown';
+        const primaryLabel = primaryCurrency ? ` (primary: '${primaryCurrency}')` : '';
         report.defects.push({ severity: 'critical', check: 'currenciesChange',
-          description: 'No currency values changed after 20 seconds.',
-          suggestion: 'Check currency earning events and EventBus wiring.' });
+          description: `No currency values changed after 20 seconds. Currencies${primaryLabel}: ${currencyNames}.`,
+          suggestion: `Check currency earning events and EventBus wiring. Ensure '${primaryCurrency || 'primary currency'}' increases from gameplay.` });
       }
     }
 
@@ -677,58 +752,103 @@ async function testGame(url) {
         suggestion: 'Check wave completion logic.' });
     }
 
-    // === NEW CHECK 14: Gameplay loop (player actions drive state, not just timers) ===
-    // Compare: currencies earned during 10s idle vs 10s with clicks
-    const preIdleState = await getCurrencyState(page);
-    await page.waitForTimeout(10000);
-    const postIdleState = await getCurrencyState(page);
+    // === CHECK: Currency Spending (can player SPEND currency on upgrades?) ===
+    try {
+      // Give player lots of currency so upgrades are affordable
+      const spendingResult = await safeEval(page, () => {
+        const g = window.game;
+        const config = window.CONFIG;
+        if (!g?.currencies) return { error: 'no currencies manager' };
 
-    // Now click actively for 10 seconds
-    if (canvasInfo?.present) {
-      const canvas = page.locator('canvas').first();
-      const box = await canvas.boundingBox();
-      if (box) {
-        const clickStart = Date.now();
-        while (Date.now() - clickStart < 10000) {
-          const xf = 0.2 + Math.random() * 0.6;
-          const yf = 0.2 + Math.random() * 0.6;
-          await page.mouse.click(box.x + box.width * xf, box.y + box.height * yf);
+        const currencyIds = config?.currencies ? Object.keys(config.currencies) : [];
+        if (currencyIds.length === 0) return { error: 'no currencies in CONFIG' };
+
+        // Add 100k of each currency
+        const before = {};
+        for (const id of currencyIds) {
+          try { g.currencies.add(id, 100000); } catch {}
+          try {
+            const entry = g.currencies.get?.(id);
+            before[id] = entry?.amount?.toNumber?.() ?? (typeof entry?.amount === 'number' ? entry.amount : 0);
+          } catch { before[id] = 0; }
+        }
+        return { before, currencyIds };
+      });
+
+      if (spendingResult && !spendingResult.error && !spendingResult._error) {
+        // Switch to upgrades tab and click upgrade buttons
+        const upgradesTab = page.locator('[data-tab="upgrades"], .tab:has-text("Upgrade")').first();
+        if (await upgradesTab.count() > 0) {
+          await upgradesTab.click({ force: true, timeout: 3000 }).catch(() => {});
           await page.waitForTimeout(500);
         }
-      }
-    }
-    const postClickState = await getCurrencyState(page);
 
-    if (preIdleState && postIdleState && postClickState) {
-      // Calculate total currency change during idle and during clicks
-      let idleChange = 0;
-      let clickChange = 0;
-      for (const id of Object.keys(postClickState.currencies || {})) {
-        const pre = preIdleState.currencies?.[id] || 0;
-        const mid = postIdleState.currencies?.[id] || 0;
-        const post = postClickState.currencies?.[id] || 0;
-        idleChange += Math.abs(mid - pre);
-        clickChange += Math.abs(post - mid);
-      }
+        // Click all upgrade buttons
+        const upgradeBtns = await page.locator('.game-panel.active button, [id*="upgrade"] button, .upgrade-card button, .upgrade-btn, button:has-text("Buy"), button:has-text("Upgrade")').all();
+        for (const btn of upgradeBtns.slice(0, 5)) {
+          try { await btn.click({ force: true, timeout: 1000 }); } catch {}
+          await page.waitForTimeout(300);
+        }
 
-      // Also check if structures/entities changed more during click phase
-      const idleEntityDelta = Math.abs((postIdleState.entities || 0) - (preIdleState.entities || 0));
-      const clickEntityDelta = Math.abs((postClickState.entities || 0) - (postIdleState.entities || 0));
+        // Check if any currency decreased
+        const afterSpend = await getCurrencyState(page);
+        let anyDecreased = false;
+        const decreasedIds = [];
+        for (const id of spendingResult.currencyIds) {
+          const before = spendingResult.before[id] || 0;
+          const after = afterSpend?.currencies?.[id] || 0;
+          if (after < before) {
+            anyDecreased = true;
+            decreasedIds.push(id);
+          }
+        }
 
-      if (clickChange > idleChange * 1.2 || clickEntityDelta > idleEntityDelta) {
-        checks.gameplayLoop.pass = true;
-        checks.gameplayLoop.detail = `Active play earns more: idle=${idleChange.toFixed(0)}, clicks=${clickChange.toFixed(0)}`;
-      } else if (clickChange > 0 || idleChange > 0) {
-        // At least something is happening
-        checks.gameplayLoop.detail = `Economy active but clicks don't earn more: idle=${idleChange.toFixed(0)}, clicks=${clickChange.toFixed(0)}`;
-        report.defects.push({ severity: 'major', check: 'gameplayLoop',
-          description: 'Currencies change but player actions do not accelerate earning beyond passive timers.',
-          suggestion: 'Ensure canvas interactions (placing, clicking, collecting) earn more than idle income.' });
+        if (anyDecreased) {
+          checks.currencySpending.pass = true;
+          checks.currencySpending.detail = `Spending works: ${decreasedIds.join(', ')} decreased after buying upgrades`;
+        } else {
+          checks.currencySpending.detail = 'No currency decreased after clicking upgrades';
+          const ctxLoop = GAME_CONTEXT?.coreLoop ? ` Game core loop: ${GAME_CONTEXT.coreLoop}.` : '';
+          report.defects.push({ severity: 'critical', check: 'currencySpending',
+            description: `Upgrades do not deduct currency. Player was given 100k of each currency (${spendingResult.currencyIds.join(', ')}) and clicked upgrade buttons, but no currency decreased.${ctxLoop}`,
+            suggestion: 'Check upgrade buy handlers. Ensure they call currencies.spend() or currencies.remove() and that the cost check uses the correct currency ID.' });
+        }
+
+        // Switch back to first tab
+        const firstTab = page.locator('[data-tab], .tab').first();
+        if (await firstTab.count() > 0) await firstTab.click({ force: true }).catch(() => {});
       } else {
-        checks.gameplayLoop.detail = 'No currency changes during either idle or active play';
-        report.defects.push({ severity: 'critical', check: 'gameplayLoop',
-          description: 'No gameplay loop detected - neither idle nor active play produces currency.',
-          suggestion: 'Check the entire economy pipeline.' });
+        checks.currencySpending.detail = spendingResult?.error || 'Could not test spending';
+      }
+    } catch (e) {
+      checks.currencySpending.detail = `Spending test error: ${e.message}`;
+    }
+
+    // === CHECK: Economic Loop (earn + spend cycle exists) ===
+    // This replaces the old gameplayLoop check. Instead of "clicking earns more than idle",
+    // we verify: (a) currencies can increase, (b) currencies can decrease via spending.
+    {
+      const canEarn = checks.currenciesChange.pass;
+      const canSpend = checks.currencySpending.pass;
+
+      if (canEarn && canSpend) {
+        checks.economicLoop.pass = true;
+        checks.economicLoop.detail = 'Earn + spend cycle verified: currencies increase and decrease';
+      } else if (canEarn) {
+        checks.economicLoop.detail = 'Currencies increase but spending does not work';
+        report.defects.push({ severity: 'critical', check: 'economicLoop',
+          description: 'No economic loop: player earns currency but cannot spend it. Upgrades must deduct currency to create a progression loop.',
+          suggestion: 'Fix upgrade buy handlers to actually deduct currency when purchasing.' });
+      } else if (canSpend) {
+        checks.economicLoop.detail = 'Spending works but no earning detected';
+        report.defects.push({ severity: 'critical', check: 'economicLoop',
+          description: 'No economic loop: spending works but currencies never increase naturally. Player has no way to earn.',
+          suggestion: 'Add passive income, kill rewards, or generator-based earning.' });
+      } else {
+        checks.economicLoop.detail = 'Neither earning nor spending works';
+        report.defects.push({ severity: 'critical', check: 'economicLoop',
+          description: 'No economic loop: currencies never change and spending does not work. The entire economy is broken.',
+          suggestion: 'Check the entire economy pipeline: currency earning, generators, and upgrade purchasing.' });
       }
     }
 

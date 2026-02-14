@@ -278,7 +278,7 @@ After making all fixes, produce a repair summary:
 
 ## Automated Test Expectations (CRITICAL)
 
-The game is evaluated by a Playwright test. These exact checks determine the score:
+The game is evaluated by a CONFIG-aware Playwright test. The test reads `window.CONFIG` and uses game-specific data (currency IDs, entity types, primary currency) to produce targeted defect reports. These exact checks determine the score:
 
 **FATAL tier (score capped at 1/10 if ANY fail):**
 - No JavaScript errors on page load (no console.error, no uncaught exceptions)
@@ -286,21 +286,27 @@ The game is evaluated by a Playwright test. These exact checks determine the sco
 
 **UNPLAYABLE tier (score capped at 2/10 if ANY fail):**
 - Canvas clicks create new objects: `game.entities.length` or `game.structures.length` must increase after clicking
-- Entities exist: `game.entities.length > 0` after 20 seconds
-- Currency values change over 20 seconds
-- Active clicking produces more currency than passive waiting
+- Entities exist: `game.entities.length > 0` after 20 seconds. Test checks which CONFIG entity types are present.
+- Currency values change over 20 seconds. Test checks the PRIMARY currency specifically (`CONFIG.primaryCurrency`).
+- **Economic Loop**: Both earning AND spending must work. Currencies must increase over time AND decrease when buying upgrades.
 
 **BROKEN tier (score capped at 4/10 if ANY fail):**
 - `window.CONFIG` exists (add `window.CONFIG = CONFIG;` in index.html module script)
-- >=2 HUD currency displays: elements matching `[id*="display"], [class*="currency"], [id*="currency"]`
+- HUD currency displays: each currency in `CONFIG.currencies` should have a visible display element matching `[id*="display"], [class*="currency"], [id*="currency"]`
 - Controls panel visible with >=2 key binding patterns (e.g., "Click: Place", "Space: Start")
 - >=3 out of 5 canvas clicks produce state changes
+- **Currency Spending**: The test gives the player 100k of each currency, clicks upgrade buttons, and verifies at least one currency decreased. Upgrades MUST actually deduct currency.
 
 **INCOMPLETE tier (score capped at 6/10 if ANY fail):**
 - >=2 clickable tabs matching `[data-tab], .tab, [role="tab"], #tabs button`
 - Upgrades tab has clickable buttons
 - Game fits viewport (no scrolling)
 - Waves advance over 20 seconds
+
+**Key difference from previous test version:** The old test just checked "did any currency change?" and "does clicking earn more than idle?" The new test specifically verifies:
+1. The primary currency (from CONFIG) increases
+2. Upgrades actually SPEND currency (not just display a cost)
+3. Both earn + spend create a complete economic loop
 
 **Required window globals:**
 ```javascript

@@ -2,7 +2,9 @@
  * GameTester tests - uses mock execSync, no actual Playwright needed.
  */
 
-import { runPlaywrightTest } from '../gameTester.js';
+import { runPlaywrightTest, buildGameContext } from '../gameTester.js';
+import { mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
 
 // --- Assertion helpers ---
 
@@ -163,6 +165,122 @@ export function runTests() {
 
       await runPlaywrightTest('https://example.com', { execSync: mockExecSync });
       assert(!capturedCmd.includes('--thumbnail'), 'command should NOT include --thumbnail flag');
+    },
+
+    'runPlaywrightTest() passes --game-context flag when gameContextPath is set': async () => {
+      let capturedCmd = '';
+      const mockExecSync = (cmd) => {
+        capturedCmd = cmd;
+        return JSON.stringify({ score: 5, defects: [], checks: {} });
+      };
+
+      await runPlaywrightTest('https://example.com', {
+        execSync: mockExecSync,
+        gameContextPath: '/tmp/test-context.json',
+      });
+      assert(capturedCmd.includes('--game-context'), 'command should include --game-context flag');
+      assert(capturedCmd.includes('/tmp/test-context.json'), 'command should include context path');
+    },
+
+    'runPlaywrightTest() does not pass --game-context when not set': async () => {
+      let capturedCmd = '';
+      const mockExecSync = (cmd) => {
+        capturedCmd = cmd;
+        return JSON.stringify({ score: 5, defects: [], checks: {} });
+      };
+
+      await runPlaywrightTest('https://example.com', { execSync: mockExecSync });
+      assert(!capturedCmd.includes('--game-context'), 'command should NOT include --game-context flag');
+    },
+
+    'buildGameContext() returns null for empty workspace': async () => {
+      const tmpDir = '/tmp/test-gameTester-empty-' + Date.now();
+      mkdirSync(tmpDir, { recursive: true });
+      try {
+        const ctx = await buildGameContext(tmpDir);
+        assertEqual(ctx, null, 'should return null for empty workspace');
+      } finally {
+        rmSync(tmpDir, { recursive: true, force: true });
+      }
+    },
+
+    'buildGameContext() extracts game data from idea.json': async () => {
+      const tmpDir = '/tmp/test-gameTester-idea-' + Date.now();
+      mkdirSync(tmpDir, { recursive: true });
+      writeFileSync(join(tmpDir, 'idea.json'), JSON.stringify({
+        name: 'Crystal Defenders',
+        theme: 'Tower defense with crystals',
+        genre: 'tower-defense',
+        coreLoop: 'Place units -> kill enemies -> earn gold',
+        currencies: { gold: {}, crystals: {} },
+        entities: { slime: {}, knight: {} },
+      }));
+      try {
+        const ctx = await buildGameContext(tmpDir);
+        assert(ctx !== null, 'should return context');
+        assertEqual(ctx.name, 'Crystal Defenders', 'name');
+        assertEqual(ctx.theme, 'Tower defense with crystals', 'theme');
+        assert(ctx.currencies.includes('gold'), 'should have gold currency');
+        assert(ctx.currencies.includes('crystals'), 'should have crystals currency');
+        assert(ctx.entities.includes('slime'), 'should have slime entity');
+        assert(ctx.entities.includes('knight'), 'should have knight entity');
+      } finally {
+        rmSync(tmpDir, { recursive: true, force: true });
+      }
+    },
+
+    'buildGameContext() handles array currencies in idea.json': async () => {
+      const tmpDir = '/tmp/test-gameTester-array-' + Date.now();
+      mkdirSync(tmpDir, { recursive: true });
+      writeFileSync(join(tmpDir, 'idea.json'), JSON.stringify({
+        title: 'Space Battle',
+        currencies: [{ name: 'credits' }, { name: 'energy' }],
+        entities: ['fighter', 'bomber'],
+      }));
+      try {
+        const ctx = await buildGameContext(tmpDir);
+        assert(ctx !== null, 'should return context');
+        assertEqual(ctx.name, 'Space Battle', 'title as name');
+        assert(ctx.currencies.includes('credits'), 'should have credits');
+        assert(ctx.entities.includes('fighter'), 'should have fighter');
+      } finally {
+        rmSync(tmpDir, { recursive: true, force: true });
+      }
+    },
+
+    'buildGameContext() handles malformed idea.json gracefully': async () => {
+      const tmpDir = '/tmp/test-gameTester-malformed-' + Date.now();
+      mkdirSync(tmpDir, { recursive: true });
+      writeFileSync(join(tmpDir, 'idea.json'), 'not valid json');
+      try {
+        const ctx = await buildGameContext(tmpDir);
+        assertEqual(ctx, null, 'should return null for malformed JSON');
+      } finally {
+        rmSync(tmpDir, { recursive: true, force: true });
+      }
+    },
+
+    'buildGameContext() reads gdd directory files': async () => {
+      const tmpDir = '/tmp/test-gameTester-gdd-' + Date.now();
+      const gddDir = join(tmpDir, 'gdd');
+      mkdirSync(gddDir, { recursive: true });
+      writeFileSync(join(gddDir, 'economy.json'), JSON.stringify({
+        currencies: { mana: {}, crystals: {} },
+        coreLoop: 'cast spells to earn mana',
+      }));
+      writeFileSync(join(gddDir, 'entities.json'), JSON.stringify({
+        entities: { wizard: {}, imp: {} },
+      }));
+      try {
+        const ctx = await buildGameContext(tmpDir);
+        assert(ctx !== null, 'should have context from gdd');
+        assert(ctx.currencies.includes('mana'), 'mana from gdd');
+        assert(ctx.currencies.includes('crystals'), 'crystals from gdd');
+        assert(ctx.entities.includes('wizard'), 'wizard from gdd');
+        assertEqual(ctx.coreLoop, 'cast spells to earn mana', 'coreLoop from gdd');
+      } finally {
+        rmSync(tmpDir, { recursive: true, force: true });
+      }
     },
   };
 }

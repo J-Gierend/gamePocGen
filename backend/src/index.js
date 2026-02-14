@@ -41,7 +41,7 @@ const GENRE_SEEDS = [
   'underwater-exploration',
 ];
 
-import { runPlaywrightTest } from './services/gameTester.js';
+import { runPlaywrightTest, buildGameContext } from './services/gameTester.js';
 
 async function main() {
   // --- Database ---
@@ -510,7 +510,19 @@ h1{margin:0 0 4px}h2{margin:0 0 16px;color:#888;font-weight:normal}</style></hea
 
         await queueManager.addLog(job.id, 'info', `Repair loop iteration ${attempt}/${MAX_REPAIR_ATTEMPTS}: testing ${testUrl}`);
         const thumbnailPath = `${deployResult.deployPath}/html/thumbnail.png`;
-        const testResult = await runPlaywrightTest(testUrl, { thumbnailPath });
+
+        // Build game context for CONFIG-aware testing
+        let gameContextPath = null;
+        try {
+          const workspaceDir = `${containerManager.workspacePath}/job-${job.id}`;
+          const gameContext = await buildGameContext(workspaceDir);
+          if (gameContext) {
+            gameContextPath = join(workspaceDir, 'game-context.json');
+            writeFileSync(gameContextPath, JSON.stringify(gameContext));
+          }
+        } catch { /* non-critical, test works without it */ }
+
+        const testResult = await runPlaywrightTest(testUrl, { thumbnailPath, gameContextPath });
         const score = testResult.score ?? 0;
 
         // Detect infrastructure failures
@@ -616,65 +628,6 @@ h1{margin:0 0 4px}h2{margin:0 0 16px;color:#888;font-weight:normal}</style></hea
           break;
         }
 
-        // --- STARTER RESET: If stuck at score <=2 after 5 attempts, nuke and reset ---
-        const RESET_AFTER_STUCK = 5;
-        if (attempt === RESET_AFTER_STUCK && score <= 2) {
-          await queueManager.addLog(job.id, 'info', `Score stuck at ${score}/10 after ${RESET_AFTER_STUCK} attempts — resetting dist/ to starter files`);
-          try {
-            const workspaceDir = `${containerManager.workspacePath}/job-${job.id}`;
-            const distDir = join(workspaceDir, 'dist');
-            const starterDir = join(workspaceDir, 'starter');
-            // Starter files are copied to workspace root by entrypoint.sh via framework/starter
-            // They're also at /home/claude/framework/starter inside the container
-            // Reset game files to starter versions
-            const starterFiles = ['index.html', 'game.js', 'entities.js', 'config.js'];
-            for (const f of starterFiles) {
-              const src = join(starterDir, f);
-              const alt = join(workspaceDir, f.replace(/\.js$/, '').replace(/\.html$/, '') + '-starter' + (f.endsWith('.js') ? '.js' : '.html'));
-              if (existsSync(src)) {
-                writeFileSync(join(distDir, f), readFileSync(src));
-              }
-            }
-            // Ensure framework dirs are in dist/
-            for (const dir of ['core', 'sprites', 'mechanics', 'ui', 'css']) {
-              const srcD = join(workspaceDir, dir);
-              const destD = join(distDir, dir);
-              if (existsSync(srcD) && statSync(srcD).isDirectory()) {
-                try { cpSync(srcD, destD, { recursive: true }); } catch {}
-              }
-            }
-            fixPathsInDir(distDir);
-            await deploymentManager.deployGame(job.id, job.game_name || `Game ${job.id}`, distDir, { workspaceDir });
-            injectBadgeScript();
-            await queueManager.addLog(job.id, 'info', 'Reset to starter files and redeployed');
-
-            // Also reset the files inside the workspace dist/ for Claude to see
-            const resetReport = `Score: ${score}/10 (attempt ${attempt})
-
-CRITICAL: The game has been RESET to the working starter files because the previous code had unfixable JavaScript errors.
-The starter game in dist/ ALREADY WORKS (loads, renders, spawns entities, earns currency).
-
-Your job now is to make MINIMAL, CAREFUL changes to customize it for this game concept.
-DO NOT rewrite game.js or entities.js from scratch. Only MODIFY specific values and ADD small methods.
-
-The most important things to customize:
-1. dist/config.js — Change gameId, primaryCurrency, entity names/stats, currency names, upgrade names
-2. dist/index.html — Change the <title> tag and controls text
-3. dist/game.js — Only change specific behaviors, don't rewrite the class
-
-RULES:
-- Every edit must be SMALL (under 20 lines changed per file)
-- Test mentally: will this change break the existing working code?
-- Do NOT add new imports or modules unless absolutely necessary
-- Do NOT change the constructor, init(), start(), _tick(), _render() methods structure`;
-
-            containerManager.writeToWorkspace(job.id, 'repair-prompt.txt', resetReport);
-            // Fall through to repair wait loop below (don't write another prompt)
-          } catch (resetErr) {
-            await queueManager.addLog(job.id, 'error', `Starter reset failed: ${resetErr.message}`);
-          }
-        }
-
         // --- PLATEAU DETECTION ---
         if (isPlateaued(attempt)) {
           await queueManager.addLog(job.id, 'info', `PLATEAU DETECTED at attempt ${attempt}. Spawning strategy review...`);
@@ -701,14 +654,40 @@ RULES:
         // }
 
         // Write repair prompt into workspace for the persistent session
-        // Skip if we already wrote a reset prompt above
-        if (containerManager.hasMarkerFile(job.id, 'repair-prompt.txt')) {
-          await queueManager.addLog(job.id, 'info', 'Repair prompt already written (from reset)');
-        } else {
         await queueManager.addLog(job.id, 'info', `Writing repair prompt (attempt ${attempt})`);
+
+        // --- GDD CONTEXT: Read idea.json to give repair agent game-specific context ---
+        let gddContext = '';
+        try {
+          const ideaPath = `${containerManager.workspacePath}/job-${job.id}/idea.json`;
+          if (existsSync(ideaPath)) {
+            const idea = JSON.parse(readFileSync(ideaPath, 'utf-8'));
+            const parts = ['=== GAME DESIGN CONTEXT ==='];
+            if (idea.name || idea.title) parts.push(`Game: ${idea.name || idea.title}`);
+            if (idea.theme) parts.push(`Theme: ${idea.theme}`);
+            if (idea.genre) parts.push(`Genre: ${idea.genre}`);
+            if (idea.coreLoop) parts.push(`Core Loop: ${idea.coreLoop}`);
+            if (idea.currencies) {
+              const currNames = Array.isArray(idea.currencies)
+                ? idea.currencies.map(c => typeof c === 'string' ? c : c.name || c.id).join(', ')
+                : Object.keys(idea.currencies).join(', ');
+              parts.push(`Currencies: ${currNames}`);
+            }
+            if (idea.entities) {
+              const entNames = Array.isArray(idea.entities)
+                ? idea.entities.map(e => typeof e === 'string' ? e : e.name || e.type).join(', ')
+                : Object.keys(idea.entities).join(', ');
+              parts.push(`Entities: ${entNames}`);
+            }
+            if (idea.description) parts.push(`Description: ${idea.description}`);
+            parts.push('=== END GAME DESIGN CONTEXT ===\n');
+            gddContext = parts.join('\n');
+          }
+        } catch { /* non-critical, proceed without GDD context */ }
+
         // Format defects as readable list (not raw JSON) for better Claude comprehension
         const defects = testResult.defects || [];
-        let defectReport = `Score: ${score}/10 (attempt ${attempt})\n\nDefects found:\n`;
+        let defectReport = gddContext + `Score: ${score}/10 (attempt ${attempt})\n\nDefects found:\n`;
         for (const d of defects) {
           defectReport += `  - [${d.severity}] ${d.description}\n`;
           if (d.suggestion) defectReport += `    Suggestion: ${d.suggestion}\n`;
@@ -745,7 +724,6 @@ RULES:
 
         // Write repair-prompt.txt — on-idle.sh will pick it up
         containerManager.writeToWorkspace(job.id, 'repair-prompt.txt', defectReport);
-        } // end else (skip if reset prompt already written)
 
         // Wait for Claude to finish repair in two phases:
         // Phase A: Wait for state to change to "running" (prompt was picked up)
