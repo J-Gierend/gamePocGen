@@ -69,8 +69,15 @@ is_idle() {
     fi
 
     local pane
-    pane=$(tmux capture-pane -t "$SESSION_NAME" -p -S -3 2>/dev/null || echo "")
-    # Check last non-empty line for prompt pattern
+    pane=$(tmux capture-pane -t "$SESSION_NAME" -p -S -5 2>/dev/null || echo "")
+
+    # Claude Code specific: check for "bypass permissions on" status line
+    # This only appears when Claude is at the idle prompt
+    if echo "$pane" | grep -q "bypass permissions on"; then
+        return 0
+    fi
+
+    # Generic: check last non-empty line for prompt pattern
     local last_line
     last_line=$(echo "$pane" | grep -v '^$' | tail -1 || echo "")
     if echo "$last_line" | grep -qE "$IDLE_PATTERN"; then

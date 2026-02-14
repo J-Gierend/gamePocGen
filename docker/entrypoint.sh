@@ -279,9 +279,61 @@ export GAME_URL="${GAME_URL:-}"
 export GENRE_SEED="${GENRE_SEED:-}"
 export EXISTING_GAME_NAMES="${EXISTING_GAME_NAMES:-}"
 
-# Run watchdog in foreground — it manages the tmux session
+SESSION_NAME="game-worker-${JOB_ID}"
+
+# --- Auto-accept Claude Code TUI prompts ---
+# Claude Code interactive mode shows bypass-permissions confirmation and effort
+# selection on startup. We auto-accept these before handing off to watchdog.
+
+auto_accept_prompts() {
+    echo "[harness] Starting tmux session and auto-accepting prompts..."
+    tmux new-session -d -s "$SESSION_NAME" -x 200 -y 50 "$CLAUDE_CMD"
+    sleep 5  # Wait for Claude Code to initialize
+
+    local max_attempts=12  # 12 * 5s = 60s max wait
+    local attempt=0
+
+    while [[ $attempt -lt $max_attempts ]]; do
+        local pane
+        pane=$(tmux capture-pane -t "$SESSION_NAME" -p -S -20 2>/dev/null || echo "")
+
+        # Check if bypass permissions prompt is showing
+        if echo "$pane" | grep -q "Yes, I accept"; then
+            echo "[harness] Detected bypass permissions prompt — accepting"
+            tmux send-keys -t "$SESSION_NAME" Down
+            sleep 0.5
+            tmux send-keys -t "$SESSION_NAME" Enter
+            sleep 3
+            continue
+        fi
+
+        # Check if effort selection prompt is showing
+        if echo "$pane" | grep -q "Use high effort"; then
+            echo "[harness] Detected effort prompt — accepting high"
+            tmux send-keys -t "$SESSION_NAME" Enter
+            sleep 3
+            continue
+        fi
+
+        # Check if we're at the idle prompt (ready for input)
+        if echo "$pane" | grep -q "bypass permissions on"; then
+            echo "[harness] Claude Code is ready at idle prompt"
+            return 0
+        fi
+
+        attempt=$((attempt + 1))
+        sleep 5
+    done
+
+    echo "[harness] Warning: auto-accept timed out after ${max_attempts} attempts"
+    return 0  # Continue anyway, watchdog will handle
+}
+
+auto_accept_prompts
+
+# Run watchdog in foreground — it manages the existing tmux session
 exec "$HARNESS_DIR/watchdog.sh" \
-    --name "game-worker-${JOB_ID}" \
+    --name "$SESSION_NAME" \
     --cmd "$CLAUDE_CMD" \
     --on-idle /home/claude/on-idle.sh \
     --poll 10 \
