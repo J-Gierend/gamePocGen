@@ -408,11 +408,13 @@ Timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)
 Cross-job data (score progressions, defects, strategy reviews):
 ${CROSS_JOB_DATA:-No cross-job data provided}
 
-Read previous improvement reports from: ${WORKSPACE_DIR}/improvements/
-Read the test suite from: ${WORKSPACE_DIR}/scripts/test-game.js
-Read phase prompts from: ${WORKSPACE_DIR}/prompts/
+IMPORTANT: You have READ-WRITE access to the pipeline files:
+- Prompts: /home/claude/prompts/ (EDIT these to fix systemic issues)
+- Framework: /home/claude/framework/ (EDIT these to add missing capabilities)
+- Test scripts: /home/claude/scripts/ (EDIT if test expectations are wrong)
+- Improvement reports: ${WORKSPACE_DIR}/improvements/
 
-Write your report and update the improvement log."
+Analyze the cross-job data, identify systemic defects, and DIRECTLY EDIT the pipeline files to fix them. Follow the workflow in the prompt exactly: analyze, plan, execute changes one at a time with verification, then document."
 
         run_claude "$PROMPT" "process-improvement"
         EXIT_CODE=$?

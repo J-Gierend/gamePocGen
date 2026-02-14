@@ -351,6 +351,50 @@ export function runTests() {
       );
     },
 
+    'spawnContainer() mounts prompts and framework when hostProjectRoot set': async () => {
+      let createOpts = null;
+      const docker = createMockDocker({
+        createContainer: async (opts) => {
+          createOpts = opts;
+          return createMockContainer();
+        },
+      });
+      const cm = new ContainerManager(docker, {
+        hostProjectRoot: '/root/apps/gamepocgen',
+      });
+      const job = { id: 1, game_name: 'Test', config: {} };
+      await cm.spawnContainer(job, 'phase1');
+
+      const binds = createOpts.HostConfig.Binds;
+      assert(
+        binds.some(b => b === '/root/apps/gamepocgen/prompts:/home/claude/prompts'),
+        'Should mount host prompts dir'
+      );
+      assert(
+        binds.some(b => b === '/root/apps/gamepocgen/framework:/home/claude/framework'),
+        'Should mount host framework dir'
+      );
+    },
+
+    'spawnContainer() skips prompts/framework mount without hostProjectRoot': async () => {
+      let createOpts = null;
+      const docker = createMockDocker({
+        createContainer: async (opts) => {
+          createOpts = opts;
+          return createMockContainer();
+        },
+      });
+      const cm = new ContainerManager(docker);
+      const job = { id: 1, game_name: 'Test', config: {} };
+      await cm.spawnContainer(job, 'phase1');
+
+      const binds = createOpts.HostConfig.Binds;
+      assert(
+        !binds.some(b => b.includes('/home/claude/prompts')),
+        'Should NOT mount prompts without hostProjectRoot'
+      );
+    },
+
     'spawnContainer() mounts workspace volume': async () => {
       let createOpts = null;
       const docker = createMockDocker({

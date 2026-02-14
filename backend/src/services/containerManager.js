@@ -38,6 +38,8 @@ export class ContainerManager {
     this.workspacePath = options.workspacePath || '/tmp/gamepocgen/workspaces';
     // Host path is needed for Docker bind mounts (when backend runs in a container itself)
     this.hostWorkspacePath = options.hostWorkspacePath || this.workspacePath;
+    // Host project root for mounting prompts/framework (enables live editing)
+    this.hostProjectRoot = options.hostProjectRoot || '';
   }
 
   /**
@@ -109,7 +111,13 @@ export class ContainerManager {
       HostConfig: {
         Memory: this.memoryLimit,
         NanoCpus: this.cpuLimit * 1e9,
-        Binds: [`${hostWorkspace}:${workspaceDir}`],
+        Binds: [
+          `${hostWorkspace}:${workspaceDir}`,
+          ...(this.hostProjectRoot ? [
+            `${this.hostProjectRoot}/prompts:/home/claude/prompts`,
+            `${this.hostProjectRoot}/framework:/home/claude/framework`,
+          ] : []),
+        ],
       },
     });
 

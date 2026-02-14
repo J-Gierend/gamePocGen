@@ -57,6 +57,7 @@ async function main() {
   const containerManager = new ContainerManager(docker, {
     workspacePath: process.env.WORKSPACE_PATH || '/app/workspaces',
     hostWorkspacePath: process.env.HOST_WORKSPACE_PATH || process.env.WORKSPACE_PATH || '/app/workspaces',
+    hostProjectRoot: process.env.HOST_PROJECT_ROOT || '',
   });
 
   const deploymentManager = new DeploymentManager({
@@ -88,9 +89,13 @@ async function main() {
 
   // --- Job Polling ---
   let running = 0;
+  let queuePaused = false;
+  globalThis._pauseQueue = () => { queuePaused = true; console.log('[Queue] PAUSED for process improvement'); };
+  globalThis._resumeQueue = () => { queuePaused = false; console.log('[Queue] RESUMED'); };
+  globalThis._isQueuePaused = () => queuePaused;
 
   async function pollQueue() {
-    if (running >= MAX_CONCURRENT) return;
+    if (queuePaused || running >= MAX_CONCURRENT) return;
 
     const job = await queueManager.getNextJob();
     if (!job) return;
@@ -622,9 +627,30 @@ h1{margin:0 0 4px}h2{margin:0 0 16px;color:#888;font-weight:normal}</style></hea
 
       console.log(`[ProcessImprovement] Spawning agent with ${crossJobData.length} jobs' data...`);
 
-      // Spawn container with shared workspace
+      // Pause job queue while process improvement runs
+      if (typeof globalThis._pauseQueue === 'function') globalThis._pauseQueue();
+
+      // Git checkpoint before changes (so we can revert if broken)
+      const hostProjectRoot = process.env.HOST_PROJECT_ROOT || '';
+      if (hostProjectRoot) {
+        try {
+          const { execSync } = await import('node:child_process');
+          // The backend can't run git on the host directly, but we'll track via the agent
+          console.log(`[ProcessImprovement] Host project root: ${hostProjectRoot}`);
+        } catch { /* ignore */ }
+      }
+
       const hostSharedDir = `${containerManager.hostWorkspacePath}/shared`;
       const containerName = `gamepocgen-process-improvement-${Date.now()}`;
+
+      // Mount prompts/framework/scripts from host so agent can edit them directly
+      const binds = [`${hostSharedDir}:/workspace`];
+      if (hostProjectRoot) {
+        binds.push(`${hostProjectRoot}/prompts:/home/claude/prompts`);
+        binds.push(`${hostProjectRoot}/framework:/home/claude/framework`);
+        binds.push(`${hostProjectRoot}/scripts:/home/claude/scripts`);
+      }
+
       const containerId = await new Promise((resolve, reject) => {
         const docker = containerManager.docker;
         docker.createContainer({
@@ -645,58 +671,58 @@ h1{margin:0 0 4px}h2{margin:0 0 16px;color:#888;font-weight:normal}</style></hea
           HostConfig: {
             Memory: 2 * 1024 * 1024 * 1024,
             NanoCpus: 1e9,
-            Binds: [`${hostSharedDir}:/workspace`],
+            Binds: binds,
             NetworkMode: 'traefik',
           },
         }).then(c => c.start().then(() => resolve(c.id))).catch(reject);
       });
 
-      // Wait for completion (non-blocking — run in background)
-      (async () => {
-        try {
-          let status;
-          do {
-            await new Promise(r => setTimeout(r, 10000));
+      // Wait for completion (BLOCKING — queue is paused, we must wait)
+      try {
+        let status;
+        do {
+          await new Promise(r => setTimeout(r, 10000));
+          try {
+            const c = containerManager.docker.getContainer(containerId);
+            const info = await c.inspect();
+            status = { running: info.State.Running, exitCode: info.State.ExitCode };
+          } catch {
+            await new Promise(r => setTimeout(r, 2000));
             try {
               const c = containerManager.docker.getContainer(containerId);
               const info = await c.inspect();
               status = { running: info.State.Running, exitCode: info.State.ExitCode };
             } catch {
-              // Container might be gone, give it one more try
-              await new Promise(r => setTimeout(r, 2000));
-              try {
-                const c = containerManager.docker.getContainer(containerId);
-                const info = await c.inspect();
-                status = { running: info.State.Running, exitCode: info.State.ExitCode };
-              } catch {
-                status = { running: false, exitCode: -1 };
-              }
+              status = { running: false, exitCode: -1 };
             }
-          } while (status?.running);
-
-          // Get logs before cleanup
-          try {
-            const c = containerManager.docker.getContainer(containerId);
-            const logStream = await c.logs({ stdout: true, stderr: true, tail: 20 });
-            console.log(`[ProcessImprovement] Agent logs: ${logStream.toString().slice(0, 500)}`);
-            await c.remove();
-          } catch { /* container might already be removed */ }
-
-          console.log(`[ProcessImprovement] Agent finished (exit=${status?.exitCode})`);
-
-          // Check if reports were written
-          const logPath = `${improvementsDir}/log.json`;
-          if (existsSync(logPath)) {
-            const { readFileSync } = await import('node:fs');
-            try {
-              const log = JSON.parse(readFileSync(logPath, 'utf-8'));
-              console.log(`[ProcessImprovement] ${log.reports?.length || 0} reports in log`);
-            } catch { /* ignore */ }
           }
-        } catch (err) {
-          console.error(`[ProcessImprovement] Error: ${err.message}`);
+        } while (status?.running);
+
+        // Get logs before cleanup
+        try {
+          const c = containerManager.docker.getContainer(containerId);
+          const logStream = await c.logs({ stdout: true, stderr: true, tail: 30 });
+          console.log(`[ProcessImprovement] Agent logs: ${logStream.toString().replace(/[\x00-\x08]/g, '').slice(0, 1000)}`);
+          await c.remove();
+        } catch { /* container might already be removed */ }
+
+        console.log(`[ProcessImprovement] Agent finished (exit=${status?.exitCode})`);
+
+        // Check if reports were written
+        const logPath = `${improvementsDir}/log.json`;
+        if (existsSync(logPath)) {
+          const { readFileSync } = await import('node:fs');
+          try {
+            const log = JSON.parse(readFileSync(logPath, 'utf-8'));
+            console.log(`[ProcessImprovement] ${log.reports?.length || 0} reports in log`);
+          } catch { /* ignore */ }
         }
-      })();
+      } catch (err) {
+        console.error(`[ProcessImprovement] Error waiting for agent: ${err.message}`);
+      } finally {
+        // Always resume queue, even if agent failed
+        if (typeof globalThis._resumeQueue === 'function') globalThis._resumeQueue();
+      }
 
     } catch (err) {
       console.error(`[ProcessImprovement] Failed to run: ${err.message}`);
