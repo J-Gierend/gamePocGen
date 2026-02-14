@@ -303,18 +303,35 @@ async function main() {
         }
       }
 
-      // Fix ../ references in dist/index.html so deployed game finds its files
-      const distIndex = join(distDir, 'index.html');
-      if (existsSync(distIndex)) {
-        try {
-          let html = readFileSync(distIndex, 'utf8');
-          // Replace ../core/ → core/, ../css/ → css/, etc.
-          const fixed = html.replace(/\.\.\/(core|css|sprites|mechanics|ui)\//g, '$1/');
-          if (fixed !== html) {
-            writeFileSync(distIndex, fixed);
-          }
-        } catch { /* ignore */ }
-      }
+      // Fix common path issues in all HTML and JS files in dist/
+      fixPathsInDir(distDir);
+    }
+
+    function fixPathsInDir(dir) {
+      try {
+        for (const f of readdirSync(dir)) {
+          const full = join(dir, f);
+          if (statSync(full).isDirectory()) continue;
+          if (!/\.(html|js)$/.test(f)) continue;
+          try {
+            let content = readFileSync(full, 'utf8');
+            let fixed = content;
+            // Fix ../core/ → core/, ../css/ → css/, etc.
+            fixed = fixed.replace(/\.\.\/(core|css|sprites|mechanics|ui)\//g, '$1/');
+            // Fix framework/core/ → core/, framework/sprites/ → sprites/, etc.
+            fixed = fixed.replace(/framework\/(core|css|sprites|mechanics|ui)\//g, '$1/');
+            // Fix bare module specifiers: from 'core/ → from './core/
+            fixed = fixed.replace(/from\s+['"](?!\.\/|\.\.\/|https?:)(core|mechanics|ui|sprites)\//g, "from './$1/");
+            // Fix src="dist/config.js" → src="config.js" (self-referential dist/ path)
+            fixed = fixed.replace(/(?:src|href)="dist\//g, (m) => m.replace('dist/', ''));
+            // Fix from './dist/ → from './ (self-referential dist/ import)
+            fixed = fixed.replace(/from\s+['"]\.\/dist\//g, "from './");
+            if (fixed !== content) {
+              writeFileSync(full, fixed);
+            }
+          } catch { /* ignore individual file errors */ }
+        }
+      } catch { /* ignore */ }
     }
 
     // --- Deploy the game ---
@@ -549,6 +566,29 @@ h1{margin:0 0 4px}h2{margin:0 0 16px;color:#888;font-weight:normal}</style></hea
           defectReport += `  - [${d.severity}] ${d.description}\n`;
           if (d.suggestion) defectReport += `    Suggestion: ${d.suggestion}\n`;
         }
+
+        // Check for missing files referenced in index.html
+        const workspaceDir2 = `${containerManager.workspacePath}/job-${job.id}`;
+        const distDir2 = join(workspaceDir2, 'dist');
+        try {
+          const indexPath = join(distDir2, 'index.html');
+          if (existsSync(indexPath)) {
+            const html = readFileSync(indexPath, 'utf8');
+            // Check for imported JS files that don't exist
+            const importRefs = [...html.matchAll(/(?:from\s+['"]\.\/|src=")([^'"]+\.js)/g)];
+            const missingFiles = [];
+            for (const m of importRefs) {
+              const refPath = join(distDir2, m[1]);
+              if (!existsSync(refPath)) missingFiles.push(m[1]);
+            }
+            if (missingFiles.length > 0) {
+              defectReport += `\n  MISSING FILES in dist/ (these are imported by index.html but do not exist):\n`;
+              for (const f of missingFiles) {
+                defectReport += `    - ${f} is MISSING — create this file in dist/\n`;
+              }
+            }
+          }
+        } catch { /* ignore validation errors */ }
 
         const userFeedback = await queueManager.getUserFeedback(job.id);
         if (userFeedback) {
