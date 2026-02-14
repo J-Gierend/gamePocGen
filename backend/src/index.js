@@ -271,23 +271,28 @@ async function main() {
 
     // Sync workspace root game files to dist/ before deploy/redeploy.
     // Claude sometimes edits at workspace root instead of dist/.
+    // Also fixes ../ references in index.html (games reference framework files outside dist/).
     function syncRootToDist(workspaceDir) {
       const distDir = `${workspaceDir}/dist`;
-      const rootIndex = `${workspaceDir}/index.html`;
-      if (!existsSync(rootIndex)) return;
       mkdirSync(distDir, { recursive: true });
-      for (const f of readdirSync(workspaceDir)) {
-        const full = join(workspaceDir, f);
-        if (!statSync(full).isFile()) continue;
-        if (/\.(html|js|css)$/.test(f)) {
-          const distFile = join(distDir, f);
-          try {
-            if (!existsSync(distFile) || statSync(full).mtimeMs > statSync(distFile).mtimeMs) {
-              writeFileSync(distFile, readFileSync(full));
-            }
-          } catch { /* ignore */ }
+
+      // Copy flat game files from root if newer
+      if (existsSync(`${workspaceDir}/index.html`)) {
+        for (const f of readdirSync(workspaceDir)) {
+          const full = join(workspaceDir, f);
+          if (!statSync(full).isFile()) continue;
+          if (/\.(html|js|css)$/.test(f)) {
+            const distFile = join(distDir, f);
+            try {
+              if (!existsSync(distFile) || statSync(full).mtimeMs > statSync(distFile).mtimeMs) {
+                writeFileSync(distFile, readFileSync(full));
+              }
+            } catch { /* ignore */ }
+          }
         }
       }
+
+      // Copy framework subdirectories into dist/
       for (const dir of ['css', 'core', 'sprites', 'mechanics', 'ui']) {
         const srcDir = join(workspaceDir, dir);
         const destDir = join(distDir, dir);
@@ -296,6 +301,19 @@ async function main() {
             cpSync(srcDir, destDir, { recursive: true });
           } catch { /* ignore */ }
         }
+      }
+
+      // Fix ../ references in dist/index.html so deployed game finds its files
+      const distIndex = join(distDir, 'index.html');
+      if (existsSync(distIndex)) {
+        try {
+          let html = readFileSync(distIndex, 'utf8');
+          // Replace ../core/ → core/, ../css/ → css/, etc.
+          const fixed = html.replace(/\.\.\/(core|css|sprites|mechanics|ui)\//g, '$1/');
+          if (fixed !== html) {
+            writeFileSync(distIndex, fixed);
+          }
+        } catch { /* ignore */ }
       }
     }
 
