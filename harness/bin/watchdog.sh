@@ -71,10 +71,15 @@ is_idle() {
     local pane
     pane=$(tmux capture-pane -t "$SESSION_NAME" -p -S -5 2>/dev/null || echo "")
 
-    # Claude Code specific: check for "bypass permissions on" status line
-    # This only appears when Claude is at the idle prompt
+    # Claude Code specific idle detection:
+    # Idle:       "bypass permissions on (shift+tab to cycle)"
+    # Processing: "bypass permissions on (shift+tab to cycle) · esc to interrupt"
+    # Only idle when "bypass permissions on" is present WITHOUT "esc to interrupt"
     if echo "$pane" | grep -q "bypass permissions on"; then
-        return 0
+        if echo "$pane" | grep -q "esc to interrupt"; then
+            return 1  # Processing, not idle
+        fi
+        return 0  # Truly idle
     fi
 
     # Generic: check last non-empty line for prompt pattern
