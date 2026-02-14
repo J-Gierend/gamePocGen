@@ -775,10 +775,15 @@ async function testGame(url) {
   }
 
   if (score > lowestCap) {
+    // List which specific checks in the capping tier failed
+    const failingChecks = Object.entries(checks)
+      .filter(([k, c]) => !c.pass && CHECK_DEFS[k]?.tier === cappingTier)
+      .map(([k, c]) => `${k}: ${c.detail || 'failed'}`)
+      .join('; ');
     report.defects.push({
       severity: 'critical', check: 'scoring',
-      description: `Score capped at ${lowestCap}/10 due to ${cappingTier}-tier failure(s). Fix critical issues first.`,
-      suggestion: `Failing checks in tier "${cappingTier}" prevent the game from scoring higher than ${lowestCap}.`,
+      description: `Score capped at ${lowestCap}/10 due to ${cappingTier}-tier failure(s): ${failingChecks}`,
+      suggestion: `Fix these ${cappingTier}-tier checks to unlock higher scores: ${failingChecks}`,
     });
     score = lowestCap;
   }
