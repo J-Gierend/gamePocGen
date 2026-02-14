@@ -24,7 +24,11 @@ export async function runPlaywrightTest(url, options = {}) {
   }
 
   try {
-    const result = execSyncFn(`node "${scriptPath}" "${url}"`, {
+    let cmd = `node "${scriptPath}" "${url}"`;
+    if (options.thumbnailPath) {
+      cmd += ` --thumbnail "${options.thumbnailPath}"`;
+    }
+    const result = execSyncFn(cmd, {
       timeout,
       encoding: 'utf8',
       stdio: ['pipe', 'pipe', 'pipe'],

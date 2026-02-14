@@ -394,7 +394,8 @@ h1{margin:0 0 4px}h2{margin:0 0 16px;color:#888;font-weight:normal}</style></hea
     for (let attempt = 1; attempt <= MAX_REPAIR_ATTEMPTS; attempt++) {
       try {
         await queueManager.addLog(job.id, 'info', `Repair loop iteration ${attempt}/${MAX_REPAIR_ATTEMPTS}: testing ${testUrl}`);
-        const testResult = await runPlaywrightTest(testUrl);
+        const thumbnailPath = `${deployResult.deployPath}/html/thumbnail.png`;
+        const testResult = await runPlaywrightTest(testUrl, { thumbnailPath });
         const score = testResult.score ?? 0;
 
         // Detect infrastructure failures (ETIMEDOUT, etc.) and bail early

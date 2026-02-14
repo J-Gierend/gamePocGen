@@ -228,12 +228,16 @@
             overflow: hidden;
         }
 
+        .game-thumbnail canvas,
+        .game-thumbnail img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
         .game-thumbnail canvas {
             image-rendering: pixelated;
             image-rendering: crisp-edges;
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
         }
 
         /* Status Badge */
@@ -863,6 +867,6 @@
         </main>
     </div>
 
-    <script src="gallery.js?v=8"></script>
+    <script src="gallery.js?v=9"></script>
 </body>
 </html>

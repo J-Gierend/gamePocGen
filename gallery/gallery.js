@@ -519,9 +519,16 @@
             actionHtml = `<span class="generating-label"><span class="pulse-dot"></span>${escapeHtml(statusLabel)}...</span>`;
         }
 
+        // Use real screenshot if game is deployed, procedural fallback otherwise
+        const thumbnailUrl = gameUrl ? `${gameUrl}/thumbnail.png` : null;
+        const thumbnailHtml = thumbnailUrl
+            ? `<img src="${escapeHtml(thumbnailUrl)}" alt="${escapeHtml(job.game_name || 'Game')}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">`
+              + `<canvas width="480" height="270" style="display:none"></canvas>`
+            : `<canvas width="480" height="270"></canvas>`;
+
         card.innerHTML = `
             <div class="game-thumbnail">
-                <canvas width="480" height="270"></canvas>
+                ${thumbnailHtml}
                 <div class="status-badge" style="background:${statusColor}">${statusLabel}</div>
             </div>
             <div class="game-info">
@@ -534,9 +541,22 @@
                 </div>
             </div>`;
 
-        // Render unique thumbnail
+        // Render procedural thumbnail into canvas (visible as fallback or for non-deployed games)
         const canvas = card.querySelector('canvas');
-        if (canvas) renderProceduralThumbnail(canvas, job.id, job.game_name);
+        if (canvas && canvas.style.display !== 'none') {
+            renderProceduralThumbnail(canvas, job.id, job.game_name);
+        }
+        // For deployed games: if img fails to load, the onerror shows the canvas and we render into it
+        const img = card.querySelector('.game-thumbnail img');
+        if (img) {
+            img.addEventListener('error', () => {
+                const fallbackCanvas = card.querySelector('canvas');
+                if (fallbackCanvas) {
+                    fallbackCanvas.style.display = 'block';
+                    renderProceduralThumbnail(fallbackCanvas, job.id, job.game_name);
+                }
+            });
+        }
 
         // Render sparkline
         if (scoreHistory.length > 1) {

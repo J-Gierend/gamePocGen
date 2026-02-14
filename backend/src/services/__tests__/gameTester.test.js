@@ -138,5 +138,31 @@ export function runTests() {
       assertEqual(result.defects.length, 3, 'three defects');
       assertEqual(result.defects[0].severity, 'critical', 'first defect critical');
     },
+
+    'runPlaywrightTest() passes --thumbnail flag when thumbnailPath is set': async () => {
+      let capturedCmd = '';
+      const mockExecSync = (cmd) => {
+        capturedCmd = cmd;
+        return JSON.stringify({ score: 5, defects: [], checks: {} });
+      };
+
+      await runPlaywrightTest('https://example.com', {
+        execSync: mockExecSync,
+        thumbnailPath: '/deploy/gamedemo1/html/thumbnail.png',
+      });
+      assert(capturedCmd.includes('--thumbnail'), 'command should include --thumbnail flag');
+      assert(capturedCmd.includes('/deploy/gamedemo1/html/thumbnail.png'), 'command should include thumbnail path');
+    },
+
+    'runPlaywrightTest() does not pass --thumbnail flag when thumbnailPath is not set': async () => {
+      let capturedCmd = '';
+      const mockExecSync = (cmd) => {
+        capturedCmd = cmd;
+        return JSON.stringify({ score: 5, defects: [], checks: {} });
+      };
+
+      await runPlaywrightTest('https://example.com', { execSync: mockExecSync });
+      assert(!capturedCmd.includes('--thumbnail'), 'command should NOT include --thumbnail flag');
+    },
   };
 }

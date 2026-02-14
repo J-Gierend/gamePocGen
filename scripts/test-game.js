@@ -44,6 +44,9 @@ const SCREENSHOT_DIR = ssIdx >= 0 ? args[ssIdx + 1] : null;
 const jsonIdx = args.indexOf('--json');
 const JSON_OUT = jsonIdx >= 0 ? args[jsonIdx + 1] : null;
 
+const thumbIdx = args.indexOf('--thumbnail');
+const THUMBNAIL_OUT = thumbIdx >= 0 ? args[thumbIdx + 1] : null;
+
 if (SCREENSHOT_DIR && !existsSync(SCREENSHOT_DIR)) mkdirSync(SCREENSHOT_DIR, { recursive: true });
 if (JSON_OUT) { const d = dirname(JSON_OUT); if (!existsSync(d)) mkdirSync(d, { recursive: true }); }
 
@@ -562,6 +565,22 @@ async function testGame(url) {
     // === WAIT FOR GAMEPLAY (20 seconds) ===
     await page.waitForTimeout(20000);
     report.screenshots.push(await screenshot(page, '03-after-20s'));
+
+    // Capture canvas thumbnail for gallery
+    if (THUMBNAIL_OUT) {
+      try {
+        const thumbDir = dirname(THUMBNAIL_OUT);
+        if (!existsSync(thumbDir)) mkdirSync(thumbDir, { recursive: true });
+        const canvas = page.locator('canvas').first();
+        if (await canvas.count() > 0) {
+          await canvas.screenshot({ path: THUMBNAIL_OUT });
+        } else {
+          await page.screenshot({ path: THUMBNAIL_OUT, clip: { x: 0, y: 0, width: 480, height: 270 } });
+        }
+      } catch (thumbErr) {
+        process.stderr.write(`Thumbnail capture failed: ${thumbErr.message}\n`);
+      }
+    }
 
     // Collect any new JS errors during gameplay
     const gameplayErrors = jsErrors.filter(e => !report.consoleErrors.includes(e) && !e.includes('favicon'));
