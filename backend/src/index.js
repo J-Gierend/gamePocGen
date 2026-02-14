@@ -223,6 +223,20 @@ async function main() {
         }
 
         await queueManager.addLog(job.id, 'info', `${phase} completed successfully`);
+
+        // After Phase 1: extract real game name from idea.json
+        if (phase === 'phase1') {
+          try {
+            const { readFileSync } = await import('node:fs');
+            const ideaPath = `${containerManager.workspacePath}/job-${job.id}/idea.json`;
+            const idea = JSON.parse(readFileSync(ideaPath, 'utf-8'));
+            if (idea.name) {
+              await queueManager.pool.query('UPDATE jobs SET game_name = $1 WHERE id = $2', [idea.name, job.id]);
+              job.game_name = idea.name;
+              await queueManager.addLog(job.id, 'info', `Game named: ${idea.name}`);
+            }
+          } catch { /* idea.json may not exist yet, non-critical */ }
+        }
       } catch (err) {
         await queueManager.addLog(job.id, 'error', `${phase} error: ${err.message}`);
         await queueManager.updateStatus(job.id, 'failed', { error: `${phase}: ${err.message}` });

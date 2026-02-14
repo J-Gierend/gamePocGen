@@ -513,6 +513,8 @@
         } else if (job.status === 'failed') {
             const errMsg = job.error ? job.error.substring(0, 60) : 'Generation failed';
             actionHtml = `<span class="fail-label" title="${escapeHtml(job.error || '')}">${escapeHtml(errMsg)}</span>`;
+        } else if (job.status === 'phase_5' && repairInfo) {
+            actionHtml = `<span class="generating-label"><span class="pulse-dot"></span>Repair ${repairInfo.attempt}/100</span>`;
         } else if (isActive) {
             actionHtml = `<span class="generating-label"><span class="pulse-dot"></span>${escapeHtml(statusLabel)}...</span>`;
         }
