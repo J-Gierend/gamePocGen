@@ -255,20 +255,16 @@ cp -rn "$FRAMEWORK_DIR"/* "$WORKSPACE_DIR/" 2>/dev/null || true
 cat > "${WORKSPACE_DIR}/CLAUDE.md" <<'CLAUDEMD'
 # Workspace Rules
 
-CRITICAL: Do NOT modify these files — they are managed by the harness system:
-- harness-state.json
-- next-prompt.md
-- exit-worker.marker
-- phase4-complete.marker
-- job-complete.marker
-- job-failed.marker
-- repair-prompt.txt
-
 Build all game output files in the `dist/` subdirectory.
 The main game entry point MUST be `dist/index.html`.
 
-IMPORTANT: During Phase 5 repairs, edit files ONLY in `dist/`.
-Do NOT edit files in the workspace root — only `dist/` is deployed.
+CRITICAL RULES:
+- Do NOT create any `.marker` files anywhere in the workspace.
+- Do NOT create or modify `harness-state.json`.
+- Do NOT create or modify `next-prompt.md`.
+- Do NOT create any files in the workspace root except `idea.json`, `idea.md`, `implementation-plan.json`, and the `gdd/` and `dist/` directories.
+- During Phase 5 repairs, edit files ONLY in `dist/`.
+- Do NOT write status files, completion signals, or progress markers. The harness system manages all workflow state automatically.
 CLAUDEMD
 
 cd "$WORKSPACE_DIR"
