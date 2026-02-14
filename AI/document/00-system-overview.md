@@ -4,14 +4,14 @@
 graph TB
     subgraph "Frontend [nginx :80/:443]"
         DOCS["Docs Site\nindex.html 1125 lines\ngamepocgen.namjo-games.com"]
-        GALLERY["Gallery\ngallery.js 418 lines\n/gallery/ path"]
+        GALLERY["Gallery\ngallery.js 678 lines\n/gallery/ path"]
     end
 
     subgraph "Backend [Express :3010]"
-        API["REST API\napi.js 195 lines\n8 endpoints"]
-        POLLER["Job Poller\nindex.js 411 lines\n5s interval"]
+        API["REST API\napi.js 255 lines\n9 endpoints"]
+        POLLER["Job Poller\nindex.js 749 lines\n5s interval"]
         QM["QueueManager\n255 lines\nPostgreSQL queue"]
-        CM["ContainerManager\n210 lines\nDocker lifecycle"]
+        CM["ContainerManager\n220 lines\nDocker lifecycle"]
         DM["DeploymentManager\n526 lines\nnginx + Traefik"]
         GT["gameTester.js\n48 lines\nPlaywright quality"]
     end
@@ -21,9 +21,9 @@ graph TB
     end
 
     subgraph "Worker Pipeline [gamepocgen-worker]"
-        ENTRY["entrypoint.sh 368 lines\n5-phase router"]
-        CLAUDE["Claude Code CLI\nz.ai API"]
-        PROMPTS["11 prompt templates\n4599 lines total"]
+        ENTRY["entrypoint.sh 443 lines\n7-phase router"]
+        CLAUDE["Claude Code CLI\nclaude-opus-4-6 via z.ai"]
+        PROMPTS["13 prompt templates\n4826 lines total"]
     end
 
     subgraph "Game Framework [vanilla JS]"

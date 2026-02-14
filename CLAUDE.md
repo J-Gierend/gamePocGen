@@ -6,14 +6,14 @@
 graph TB
     subgraph "Frontend [nginx :80/:443]"
         DOCS["Docs Site\nindex.html 1125 lines\ngamepocgen.namjo-games.com"]
-        GALLERY["Gallery\ngallery.js 418 lines\n/gallery/ path"]
+        GALLERY["Gallery\ngallery.js 678 lines\n/gallery/ path"]
     end
 
     subgraph "Backend [Express :3010]"
-        API["REST API\napi.js 195 lines\n8 endpoints"]
-        POLLER["Job Poller\nindex.js 411 lines\n5s interval"]
+        API["REST API\napi.js 255 lines\n9 endpoints"]
+        POLLER["Job Poller\nindex.js 749 lines\n5s interval"]
         QM["QueueManager\n255 lines\nPostgreSQL queue"]
-        CM["ContainerManager\n210 lines\nDocker lifecycle"]
+        CM["ContainerManager\n220 lines\nDocker lifecycle"]
         DM["DeploymentManager\n526 lines\nnginx + Traefik"]
         GT["gameTester.js\n48 lines\nPlaywright quality"]
     end
@@ -23,9 +23,9 @@ graph TB
     end
 
     subgraph "Worker Pipeline [gamepocgen-worker]"
-        ENTRY["entrypoint.sh 368 lines\n5-phase router"]
-        CLAUDE["Claude Code CLI\nz.ai API"]
-        PROMPTS["11 prompt templates\n4599 lines total"]
+        ENTRY["entrypoint.sh 443 lines\n7-phase router"]
+        CLAUDE["Claude Code CLI\nclaude-opus-4-6 via z.ai"]
+        PROMPTS["13 prompt templates\n4826 lines total"]
     end
 
     subgraph "Game Framework [vanilla JS]"
@@ -111,7 +111,7 @@ graph TB
         subgraph "LXC 102 webservices 192.168.138.11"
             TRAEFIK["Traefik\n:80 → redirect\n:443 TLS termination\nLet's Encrypt auto-SSL\nDocker provider auto-discovery"]
 
-            subgraph "Backend Stack docker/docker-compose.yml 63 lines"
+            subgraph "Backend Stack docker/docker-compose.yml 64 lines"
                 BACK["gamepocgen-backend\nNode 22 slim :3010→:3000\nDockerfile.backend 18 lines\nExpress + job poller + Playwright"]
                 PG["postgres:15-alpine\n:5432\nvol: pgdata\nhealthcheck: pg_isready"]
             end
@@ -121,7 +121,7 @@ graph TB
             end
 
             subgraph "Worker Containers ephemeral"
-                WORKER["gamepocgen-worker\ndocker/Dockerfile 28 lines\nNode 22 + Claude Code CLI\nMem: 2GB CPU: 0.5\nTimeout: 43200s phases1-4\n3600s phase5"]
+                WORKER["gamepocgen-worker\ndocker/Dockerfile 28 lines\nNode 22 + Claude Code CLI\nclaude-opus-4-6 + effort=high\nHost mounts: prompts framework\nMem: 2GB CPU: 0.5\nTimeout: 43200s phases1-4\n3600s phase5"]
             end
 
             subgraph "Game Containers persistent"
@@ -146,8 +146,8 @@ graph TB
 
 ```mermaid
 graph TD
-    subgraph "docker/docker-compose.yml 63 lines"
-        B_SVC["backend service\nbuild: context ../ dockerfile Dockerfile.backend\nports: 3010:3000\nvolumes:\n  /var/run/docker.sock\n  ./workspaces:/data/workspaces\n  ./deployed:/data/deployed\nenv: DATABASE_URL ZAI_API_KEY ZAI_BASE_URL\n  CLAUDE_CODE_OAUTH_TOKEN\n  CLAUDE_CODE_REFRESH_TOKEN\n  CLAUDE_CODE_TOKEN_EXPIRES\n  MAX_CONCURRENT WORKSPACE_PATH\n  HOST_WORKSPACE_PATH DEPLOY_DIR\n  HOST_DEPLOY_DIR GALLERY_DATA_PATH\n  DOMAIN WORKER_IMAGE\ndepends_on: postgres condition service_healthy\nlabels: traefik priority=10\nnetworks: traefik + internal\nrestart: unless-stopped"]
+    subgraph "docker/docker-compose.yml 64 lines"
+        B_SVC["backend service\nbuild: context ../ dockerfile Dockerfile.backend\nports: 3010:3000\nvolumes:\n  /var/run/docker.sock\n  ./workspaces:/data/workspaces\n  ./deployed:/data/deployed\nenv: DATABASE_URL ZAI_API_KEY ZAI_BASE_URL\n  CLAUDE_CODE_OAUTH_TOKEN\n  CLAUDE_CODE_REFRESH_TOKEN\n  CLAUDE_CODE_TOKEN_EXPIRES\n  MAX_CONCURRENT WORKSPACE_PATH\n  HOST_WORKSPACE_PATH DEPLOY_DIR\n  HOST_DEPLOY_DIR GALLERY_DATA_PATH\n  DOMAIN WORKER_IMAGE\n  HOST_PROJECT_ROOT\ndepends_on: postgres condition service_healthy\nlabels: traefik priority=10\nnetworks: traefik + internal\nrestart: unless-stopped"]
 
         P_SVC["postgres service\nimage: postgres:15-alpine\nvolumes: pgdata\nenv: POSTGRES_DB POSTGRES_USER\n  POSTGRES_PASSWORD\nhealthcheck: pg_isready -U gamepocgen\n  interval 5s timeout 5s retries 5\nnetworks: internal ONLY\nrestart: unless-stopped"]
     end
@@ -167,7 +167,7 @@ graph TD
 graph TD
     subgraph "/root/apps/"
         T_DIR["traefik/\ndocker-compose.yml\ntraefik.yml\nacme.json\ndynamic/"]
-        G_DIR["gamepocgen/\n├── Dockerfile.backend 18 lines\n├── docker/\n│   ├── Dockerfile 28 lines worker\n│   ├── docker-compose.yml 63 lines\n│   ├── .env\n│   ├── entrypoint.sh 368 lines\n│   ├── workspaces/\n│   │   └── job-N/\n│   └── deployed/\n│       ├── gamedemoN/\n│       │   ├── html/\n│       │   ├── metadata.json\n│       │   └── docker-compose.yml\n│       └── gallery/games.json\n├── docs/\n│   ├── docker-compose.yml 19 lines\n│   └── index.html\n├── gallery/\n│   ├── index.html\n│   └── gallery.js\n├── framework/\n├── prompts/\n├── scripts/\n├── backend/\n└── AI/"]
+        G_DIR["gamepocgen/\n├── Dockerfile.backend 18 lines\n├── docker/\n│   ├── Dockerfile 28 lines worker\n│   ├── docker-compose.yml 63 lines\n│   ├── .env\n│   ├── entrypoint.sh 443 lines\n│   ├── workspaces/\n│   │   └── job-N/\n│   └── deployed/\n│       ├── gamedemoN/\n│       │   ├── html/\n│       │   ├── metadata.json\n│       │   └── docker-compose.yml\n│       └── gallery/games.json\n├── docs/\n│   ├── docker-compose.yml 19 lines\n│   └── index.html\n├── gallery/\n│   ├── index.html\n│   └── gallery.js\n├── framework/\n├── prompts/\n├── scripts/\n├── backend/\n└── AI/"]
     end
 ```
 
@@ -230,12 +230,14 @@ Detailed subsystem documentation lives in `AI/document/`. Read these on-demand w
 
 | File | Covers |
 |------|--------|
+| `AI/document/00-system-overview.md` | High-level system overview, component relationships, and design philosophy |
 | `AI/document/01-file-map.md` | Every file's purpose, line count, and dependency graph |
 | `AI/document/02-user-flows.md` | Job submission, polling, 5-phase execution, Phase 5 repair loop, gallery auth, deployment |
 | `AI/document/03-api-surface.md` | All REST API endpoints, request/response shapes, error codes, comparison mode |
 | `AI/document/04-data-models.md` | Database schema (jobs + job_logs tables), JSONB structures, SQL operations |
 | `AI/document/05-data-pipelines.md` | 5-phase generation pipeline, workspace accumulation, bind mount paths, env translation |
 | `AI/document/06-state-lifecycle.md` | Job status transitions (queued/running/phase_1-5/completed/failed), container lifecycles |
+| `AI/document/07-deployment.md` | Deployment flow, nginx container creation, Traefik label routing, game URL assignment |
 | `AI/document/08-config.md` | Environment variables, config files, hardcoded values, container resource limits |
 | `AI/document/09-boot-sequence.md` | Backend boot, worker boot (apikey vs OAuth), polling loop, Phase 5 repair loop |
 | `AI/document/10-error-handling.md` | API errors, job processing errors, Phase 5 repair errors, gallery error states |

@@ -77,10 +77,10 @@ graph TD
 graph TD
     subgraph "Configuration Files"
         PKG["backend/package.json 17 lines\ntype: module ESM\ndeps: express pg dockerode cors\nscripts: start test test:routes test:all"]
-        DC["docker/docker-compose.yml 63 lines\n2 services: backend postgres\npostgres:15-alpine with healthcheck\n2 networks: traefik internal\n1 volume: pgdata"]
+        DC["docker/docker-compose.yml 64 lines\n2 services: backend postgres\npostgres:15-alpine with healthcheck\n2 networks: traefik internal\n1 volume: pgdata"]
         DDC["docs/docker-compose.yml 20 lines\n1 service: nginx:alpine\n3 volume mounts :ro\nnetwork: traefik external"]
         DBK["Dockerfile.backend 18 lines\nFROM node:22-slim\nnpm install --production\nPlaywright chromium install\nCOPY scripts/ for game testing\nCMD node src/index.js"]
-        ENT["docker/entrypoint.sh 368 lines\n5-phase router phase1-phase5\nOAuth token refresh\nDual auth: apikey + subscription\nClaude Code settings.json\nStatus JSON writing"]
+        ENT["docker/entrypoint.sh 443 lines\n7-phase router phase1-phase5\n+ phase5-strategy + process-improvement\nOAuth token refresh\nDual auth: apikey + subscription\nClaude Code settings.json\nStatus JSON writing"]
         ENV[".env.example 3 lines\nPOSTGRES_PASSWORD\nZAI_API_KEY\nZAI_BASE_URL"]
     end
 
@@ -103,7 +103,7 @@ graph LR
         RES["Worker resource limits:\nMemory: 2GB\nCPU: 0.5 cores\nphase1-4 timeout: 43200s 12h\nphase5 timeout: 3600s 1h"]
         REPAIR["Repair loop:\nMAX_REPAIR_ATTEMPTS: 100\nPASS_SCORE: 10/10\nFAIL_SCORE: 4/10 remove threshold"]
         GENRES["16 genre seeds:\ndungeon-crawler space-combat\nfishing-and-gathering factory-automation\nmonster-tamer lane-battle\ntower-defense wave-survival\nexploration-and-mapping racing-and-dodging\nfarming-and-ecosystem puzzle-combat\npirate-ship-battles spell-crafting-arena\ntrain-network underwater-exploration"]
-        PROMPTS["11 prompt templates\n4599 lines total\nphase1: 1 + phase2: 6\nphase3: 1 + phase4: 1\nphase5: 2 repair + review"]
+        PROMPTS["13 prompt templates\n4826 lines total\nphase1: 1 + phase2: 3\nphase3: 1 + phase4: 1\nphase5: 2 repair + review\n+ strategy-review\n+ process-improvement"]
         BASEPORT["Game container base port: 8080\nport = 8080 + gameId"]
         OAUTH_CLIENT["OAuth client_id:\n9d1c250a-e61b-44d9-88ed-5944d1962f5e\nconsole.anthropic.com"]
     end

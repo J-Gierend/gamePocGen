@@ -18,6 +18,10 @@ graph LR
         DEL_GAME["DELETE /games/:id\nParams: id (integer)\nReturns: 200 {gameId, removed: true}\nErrors: 500 removal error"]
     end
 
+    subgraph "Process Improvement [/api]"
+        POST_IMP["POST /improvements/run\nTriggers manual process\nimprovement analysis\nReturns: 200 {triggered: true}\nor 200 {triggered: false,\nreason: 'already running'}"]
+    end
+
     subgraph "Health [root]"
         HEALTH["GET /health\nReturns: 200\n{status: 'ok', uptime: seconds}"]
     end
@@ -97,6 +101,7 @@ graph TD
         H5["getStats\nGET /stats"]
         H6["listGames\nGET /games"]
         H7["removeGame\nDELETE /games/:id"]
+        H8["runProcessImprovement\nPOST /improvements/run"]
     end
 
     subgraph "QueueManager methods"
