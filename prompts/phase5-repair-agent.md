@@ -95,45 +95,141 @@ For each Critical defect from the report:
 2. Write the fix
 3. Verify the fix doesn't break other features
 
-Common root causes and fixes:
+Common root causes and EXACT fixes:
 
-**Sprites render as shapes instead of proper sprites:**
-- Check `_registerSprites()` — are all entity sprites registered with SpriteRenderer?
-- Check entity `draw()` — is it calling `renderer.draw(this.spriteId, ...)` or drawing shapes directly with ctx?
-- Check `config.js` entities — does each entity type have a `sprite` field matching a registered sprite name?
-- Common mistake: game creates sprites via `ProceduralSprite.generateSimpleSprite()` (geometric) when it should use `SPRITE_DATA.slime` or `ProceduralSprite.generateColorVariant()`
+**"No entities spawned after 20 seconds":**
+The game must auto-spawn entities. Add this to `init()` or `start()` in game.js:
+```javascript
+// Auto-start first wave
+this._startWave();
+```
+And add a `_startWave()` method:
+```javascript
+_startWave() {
+  this.world.wave = (this.world.wave || 0) + 1;
+  this.world.waveActive = true;
+  const count = Math.min(3 + this.world.wave, 10);
+  const types = Object.keys(this.config.entities).filter(t => this.config.entities[t].team === 'enemy' || !this.config.entities[t].team);
+  const enemyType = types[0] || Object.keys(this.config.entities)[0];
+  if (!enemyType) return;
+  for (let i = 0; i < count; i++) {
+    const x = Math.random() * this.canvas.width * 0.6 + this.canvas.width * 0.2;
+    const y = Math.random() * this.canvas.height * 0.6 + this.canvas.height * 0.1;
+    this.spawnEntity(enemyType, x, y, 'enemy');
+  }
+}
+```
 
-**Tabs missing from bottom panel:**
-- Check `_setupUI()` — are all tabs created?
-- Check `index.html` — are all panel sections in the DOM?
-- Common mistake: TabSystem initialized but only with first tab, later tabs never added
+**"No currency values changed after 20 seconds":**
+Currencies must change via gameplay. Add to `_tick()`:
+```javascript
+// Auto-generate currency from generators
+for (const gen of Object.values(this.generators)) {
+  if (gen.tick) gen.tick(deltaTime, this.currencies);
+}
+// Also earn from kills in entity update
+```
+If no generators exist, add passive income:
+```javascript
+this._passiveTimer = (this._passiveTimer || 0) + deltaTime;
+if (this._passiveTimer >= 1.0) {
+  this._passiveTimer = 0;
+  const primaryId = this.config.primaryCurrency || Object.keys(this.config.currencies)[0];
+  if (primaryId) this.currencies.add(primaryId, 1);
+}
+```
 
-**HUD not showing all currencies:**
-- Check `_registerCurrencies()` — are all currencies from config registered?
-- Check HUD update code — does it iterate all currencies or just hardcoded ones?
+**"Canvas clicks do not produce new entities/structures":**
+Add a click handler in `init()`:
+```javascript
+this.canvas.addEventListener('click', (e) => {
+  const rect = this.canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  // Create a structure or entity at click position
+  const playerType = Object.keys(this.config.entities).find(t =>
+    this.config.entities[t].team === 'player') || Object.keys(this.config.entities)[0];
+  if (playerType) {
+    this.spawnEntity(playerType, x, y, 'player');
+  }
+  // Also add floating text effect
+  this.effects.push({
+    x, y, text: '+1', alpha: 1, vy: -30, timer: 1,
+    update(dt) { this.y += this.vy * dt; this.timer -= dt; this.alpha = this.timer; },
+    isDone() { return this.timer <= 0; },
+    draw(ctx) { ctx.globalAlpha = this.alpha; ctx.fillStyle = '#fff'; ctx.font = '16px monospace'; ctx.fillText(this.text, this.x, this.y); ctx.globalAlpha = 1; }
+  });
+});
+```
 
-**Canvas clicks don't work:**
-- Check for canvas click event listener in `game.js`
-- Check if click coordinates are translated correctly (account for canvas offset, scale)
-- Common mistake: click handler exists but placement logic checks wrong conditions
+**"No gameplay loop detected":**
+Active clicking must earn more than idle. In the click handler, add currency:
+```javascript
+const primaryId = this.config.primaryCurrency || Object.keys(this.config.currencies)[0];
+if (primaryId) this.currencies.add(primaryId, 5);
+```
 
-**Waves don't progress:**
-- Check wave state machine — is there a timer or trigger to advance waves?
-- Check if wave completion event fires when all enemies die
-- Common mistake: wave starts but enemy count check never triggers wave completion
+**"No CONFIG object on window":**
+Add to index.html inside the `<script type="module">` block:
+```javascript
+window.CONFIG = CONFIG;
+window.game = game;
+```
 
-**Upgrades don't apply effects:**
-- Check if upgrade purchase calls actually modify game state
-- Check if multiplier stacks are connected to generators/entities
-- Common mistake: upgrade button works but callback only updates display, not game state
+**"Only 0 currency display(s) found":**
+Add currency displays in `_setupUI()`:
+```javascript
+const resources = document.getElementById('resources') || this.root.querySelector('header');
+if (resources) {
+  for (const [id, def] of Object.entries(this.config.currencies)) {
+    const el = document.createElement('div');
+    el.className = 'currency';
+    el.id = `currency-${id}`;
+    el.innerHTML = `<span>${def.name || id}</span>: <span class="amount" id="display-${id}">0</span>`;
+    resources.appendChild(el);
+  }
+}
+```
+Update displays in `_render()`:
+```javascript
+for (const [id] of Object.entries(this.config.currencies)) {
+  const el = document.getElementById(`display-${id}`);
+  if (el) { const c = this.currencies.get(id); el.textContent = c?.amount?.format?.(1) ?? '0'; }
+}
+```
 
-**Game requires scrolling (viewport overflow):**
-- The game MUST fit entirely within the viewport — no scrolling ever
-- Fix: `html, body { height: 100vh; max-height: 100vh; overflow: hidden; }`
-- Fix: `#game-root { height: 100vh; max-height: 100vh; overflow: hidden; display: flex; flex-direction: column; }`
-- Fix: Canvas uses `flex: 1` to fill available space, never a fixed height that overflows
-- Fix: Bottom panel uses `max-height: 35vh` or similar constraint
-- Common mistake: fixed pixel heights on elements that add up to more than viewport height
+**"No visible controls panel":**
+Add a controls section in `index.html`:
+```html
+<div id="controls" class="controls" style="background:rgba(0,0,0,0.7);padding:4px 8px;font-size:12px;color:#aaa;">
+  Click: Place unit | Space: Start wave | 1-3: Select unit type
+</div>
+```
+
+**Tabs missing or not enough:**
+Ensure at least 2 tabs exist in index.html:
+```html
+<nav id="tabs">
+  <button data-tab="upgrades" class="active" role="tab">Upgrades</button>
+  <button data-tab="skills" role="tab">Skills</button>
+</nav>
+```
+
+**spawnEntity not creating entities:**
+Ensure `spawnEntity()` is fully implemented (not a stub):
+```javascript
+spawnEntity(type, x, y, team) {
+  const def = this.config.entities[type];
+  if (!def) return null;
+  const entity = new Entity({
+    type, spriteId: def.sprite || type, x, y, team: team || def.team || 'enemy',
+    hp: def.hp || 50, damage: def.damage || 5, speed: def.speed || 20,
+    attackSpeed: def.attackSpeed || 1, scale: def.scale || 3, reward: def.reward || 5
+  });
+  this.entities.push(entity);
+  return entity;
+}
+```
 
 ### Step 4: Fix Major Defects
 
