@@ -265,6 +265,40 @@ async function main() {
       return;
     }
 
+    // --- fs imports and helpers (needed for deploy + repair loop) ---
+    const { writeFileSync, readFileSync, existsSync, cpSync, readdirSync, statSync, mkdirSync } = await import('node:fs');
+    const { join } = await import('node:path');
+
+    // Sync workspace root game files to dist/ before deploy/redeploy.
+    // Claude sometimes edits at workspace root instead of dist/.
+    function syncRootToDist(workspaceDir) {
+      const distDir = `${workspaceDir}/dist`;
+      const rootIndex = `${workspaceDir}/index.html`;
+      if (!existsSync(rootIndex)) return;
+      mkdirSync(distDir, { recursive: true });
+      for (const f of readdirSync(workspaceDir)) {
+        const full = join(workspaceDir, f);
+        if (!statSync(full).isFile()) continue;
+        if (/\.(html|js|css)$/.test(f)) {
+          const distFile = join(distDir, f);
+          try {
+            if (!existsSync(distFile) || statSync(full).mtimeMs > statSync(distFile).mtimeMs) {
+              writeFileSync(distFile, readFileSync(full));
+            }
+          } catch { /* ignore */ }
+        }
+      }
+      for (const dir of ['css', 'core', 'sprites', 'mechanics', 'ui']) {
+        const srcDir = join(workspaceDir, dir);
+        const destDir = join(distDir, dir);
+        if (existsSync(srcDir) && statSync(srcDir).isDirectory()) {
+          try {
+            cpSync(srcDir, destDir, { recursive: true });
+          } catch { /* ignore */ }
+        }
+      }
+    }
+
     // --- Deploy the game ---
     try {
       const workspaceDir = `${containerManager.workspacePath}/job-${job.id}`;
@@ -290,43 +324,7 @@ async function main() {
     const MAX_REPAIR_ATTEMPTS = 100;
     const PASS_SCORE = 10;
     const FAIL_SCORE = 4;
-
-    const { writeFileSync, readFileSync, existsSync, cpSync, readdirSync, statSync, mkdirSync } = await import('node:fs');
-    const { join } = await import('node:path');
     const repairLog = [];
-
-    // Sync workspace root game files to dist/ before deploy/redeploy.
-    // Claude sometimes edits at workspace root instead of dist/.
-    function syncRootToDist(workspaceDir) {
-      const distDir = `${workspaceDir}/dist`;
-      const rootIndex = `${workspaceDir}/index.html`;
-      if (!existsSync(rootIndex)) return;
-      mkdirSync(distDir, { recursive: true });
-      // Copy flat game files (html/js/css)
-      for (const f of readdirSync(workspaceDir)) {
-        const full = join(workspaceDir, f);
-        if (!statSync(full).isFile()) continue;
-        if (/\.(html|js|css)$/.test(f)) {
-          const distFile = join(distDir, f);
-          // Only copy if root file is newer than dist file
-          try {
-            if (!existsSync(distFile) || statSync(full).mtimeMs > statSync(distFile).mtimeMs) {
-              writeFileSync(distFile, readFileSync(full));
-            }
-          } catch { /* ignore */ }
-        }
-      }
-      // Copy framework subdirectories
-      for (const dir of ['css', 'core', 'sprites', 'mechanics', 'ui']) {
-        const srcDir = join(workspaceDir, dir);
-        const destDir = join(distDir, dir);
-        if (existsSync(srcDir) && statSync(srcDir).isDirectory()) {
-          try {
-            cpSync(srcDir, destDir, { recursive: true });
-          } catch { /* ignore */ }
-        }
-      }
-    }
 
     function updateScoreBadge(score, attempt) {
       try {
