@@ -572,15 +572,24 @@ h1{margin:0 0 4px}h2{margin:0 0 16px;color:#888;font-weight:normal}</style></hea
 
       // Ensure shared workspace with improvements dir, prompts, and test scripts
       const { mkdirSync, copyFileSync, existsSync, readdirSync } = await import('node:fs');
+      const { chmodSync } = await import('node:fs');
       const sharedDir = `${containerManager.workspacePath}/shared`;
       const improvementsDir = `${sharedDir}/improvements`;
       mkdirSync(improvementsDir, { recursive: true });
+      // Ensure container user can write (same as spawnContainer does for job workspaces)
+      try { chmodSync(sharedDir, 0o777); } catch { /* may already be set */ }
+      try { chmodSync(improvementsDir, 0o777); } catch { /* may already be set */ }
 
       // Copy test scripts and prompts into shared workspace for the agent to read
       const scriptsDir = `${sharedDir}/scripts`;
       const promptsDir = `${sharedDir}/prompts`;
+      const statusDir = `${sharedDir}/status`;
       mkdirSync(scriptsDir, { recursive: true });
       mkdirSync(promptsDir, { recursive: true });
+      mkdirSync(statusDir, { recursive: true });
+      for (const d of [scriptsDir, promptsDir, statusDir]) {
+        try { chmodSync(d, 0o777); } catch { /* ignore */ }
+      }
 
       // Copy test-game.js from the worker image's location
       // The agent reads from /workspace/scripts/test-game.js (host: sharedDir/scripts/)
