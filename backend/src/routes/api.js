@@ -156,7 +156,31 @@ export function createHandlers({ queueManager, containerManager, deploymentManag
       try {
         const id = parseInt(req.params.id, 10);
         const result = await deploymentManager.removeGame(id);
+        // Refresh gallery data after removal
+        const games = await deploymentManager.listDeployedGames();
+        await deploymentManager.updateGalleryData(games);
         res.status(200).json(result);
+      } catch (err) {
+        res.status(500).json({ error: err.message });
+      }
+    },
+
+    /**
+     * POST /api/improvements/run - Manually trigger process improvement agent.
+     */
+    async runProcessImprovement(req, res) {
+      try {
+        if (typeof globalThis._maybeRunProcessImprovement !== 'function') {
+          return res.status(503).json({ error: 'Process improvement agent not initialized' });
+        }
+        // Force run by resetting cooldown
+        if (typeof globalThis._resetProcessImprovementCooldown === 'function') {
+          globalThis._resetProcessImprovementCooldown();
+        }
+        globalThis._maybeRunProcessImprovement(0).catch(err => {
+          console.error(`[ProcessImprovement] Manual trigger failed: ${err.message}`);
+        });
+        res.status(202).json({ status: 'triggered', message: 'Process improvement agent started in background' });
       } catch (err) {
         res.status(500).json({ error: err.message });
       }
@@ -224,6 +248,7 @@ export async function createRouter(services) {
   router.get('/stats', asyncHandler(handlers.getStats));
   router.get('/games', asyncHandler(handlers.listGames));
   router.delete('/games/:id', asyncHandler(handlers.removeGame));
+  router.post('/improvements/run', asyncHandler(handlers.runProcessImprovement));
   router.get('/improvements', asyncHandler(handlers.getImprovements));
 
   return router;

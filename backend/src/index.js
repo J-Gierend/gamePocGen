@@ -456,7 +456,9 @@ h1{margin:0 0 4px}h2{margin:0 0 16px;color:#888;font-weight:normal}</style></hea
 
         // Also check if we should run global process improvement
         if (typeof globalThis._maybeRunProcessImprovement === 'function') {
-          globalThis._maybeRunProcessImprovement(job.id).catch(() => {});
+          globalThis._maybeRunProcessImprovement(job.id).catch(err => {
+            console.error(`[ProcessImprovement] Trigger failed: ${err.message}`);
+          });
         }
 
         // Spawn Phase 5 repair container with defect report
@@ -624,7 +626,7 @@ h1{margin:0 0 4px}h2{margin:0 0 16px;color:#888;font-weight:normal}</style></hea
             'JOB_ID=0',
             'GAME_NAME=process-improvement',
             `ZAI_API_KEY=${process.env.ZAI_API_KEY || ''}`,
-            `ZAI_BASE_URL=${process.env.ZAI_BASE_URL || ''}`,
+            `ZAI_BASE_URL=${process.env.ZAI_BASE_URL || 'https://api.z.ai/api/anthropic'}`,
             'MODEL=claude-opus-4-6',
             'CLAUDE_CODE_EFFORT_LEVEL=high',
             'WORKSPACE_DIR=/workspace',
@@ -635,8 +637,8 @@ h1{margin:0 0 4px}h2{margin:0 0 16px;color:#888;font-weight:normal}</style></hea
             Memory: 2 * 1024 * 1024 * 1024,
             NanoCpus: 1e9,
             Binds: [`${hostSharedDir}:/workspace`],
+            NetworkMode: 'traefik',
           },
-          NetworkingMode: 'traefik',
         }).then(c => c.start().then(() => resolve(c.id))).catch(reject);
       });
 
@@ -692,9 +694,9 @@ h1{margin:0 0 4px}h2{margin:0 0 16px;color:#888;font-weight:normal}</style></hea
     }
   }
 
-  // Expose the trigger for the repair loop
-  // Called from plateau detection inside processJob
+  // Expose the trigger for the repair loop and manual API
   globalThis._maybeRunProcessImprovement = maybeRunProcessImprovement;
+  globalThis._resetProcessImprovementCooldown = () => { lastProcessImprovementRun = 0; };
 
   setInterval(pollQueue, POLL_INTERVAL);
 
