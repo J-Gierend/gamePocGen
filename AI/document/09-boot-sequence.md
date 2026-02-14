@@ -9,13 +9,12 @@ sequenceDiagram
     participant QM as QueueManager
     participant CM as ContainerManager
     participant DM as DeploymentManager
-    participant GT as gameTester.js
 
-    Note over DC,GT: docker compose up -d
+    Note over DC,DM: docker compose up -d
 
-    DC->>PG: start postgres:16-alpine
+    DC->>PG: start postgres:15-alpine
     PG->>PG: init DB gamepocgen
-    PG-->>DC: ready
+    PG-->>DC: ready (pg_isready healthcheck)
 
     DC->>BE: start backend (depends_on: postgres)
     BE->>BE: import express pg Dockerode
@@ -26,21 +25,23 @@ sequenceDiagram
     BE->>QM: new QueueManager(pool)
     BE->>QM: queueManager.init()
     QM->>PG: CREATE TABLE IF NOT EXISTS jobs (...)
+    QM->>PG: ALTER TABLE ADD COLUMN IF NOT EXISTS user_feedback
     QM->>PG: CREATE TABLE IF NOT EXISTS job_logs (...)
     PG-->>QM: tables ready
 
-    BE->>CM: new ContainerManager(docker, {workspacePath, hostWorkspacePath})
+    BE->>CM: new ContainerManager(docker, {workspacePath, hostWorkspacePath, hostProjectRoot})
     BE->>DM: new DeploymentManager({deployDir, hostDeployDir, galleryDataPath, domain, docker})
 
     BE->>EXP: app.use(cors())
     BE->>EXP: app.use(express.json())
     BE->>EXP: const router = await createRouter({qm, cm, dm})
-    Note over EXP: dynamic import('express') inside createRouter
-    Note over EXP: asyncHandler wraps all routes with .catch(next)
+    Note over EXP: asyncHandler wraps all 10 routes with .catch(next)
     BE->>EXP: app.use('/api', router)
     BE->>EXP: app.get('/health', ...)
     BE->>EXP: app.use(globalErrorHandler)
 
+    BE->>BE: Setup queue pause/resume (globalThis._pauseQueue/_resumeQueue)
+    BE->>BE: Setup maybeRunProcessImprovement (globalThis._maybeRunProcessImprovement)
     BE->>BE: setInterval(pollQueue, POLL_INTERVAL)
     BE->>EXP: app.listen(PORT)
     EXP-->>DC: Backend ready on :3010
@@ -80,8 +81,8 @@ sequenceDiagram
     Note over CM,Claude: Per-phase container lifecycle
 
     CM->>Docker: createContainer(gamepocgen-worker)
-    Note over Docker: Env: PHASE JOB_ID GAME_NAME<br/>ZAI_API_KEY ZAI_BASE_URL<br/>WORKSPACE_DIR TIMEOUT_SECONDS<br/>+ extraEnv (AUTH_MODE, OAUTH tokens, GENRE_SEED, etc.)
-    Note over Docker: HostConfig:<br/>  Memory: 2GB<br/>  NanoCpus: 0.5e9 (0.5 cores)<br/>  Binds: [hostWorkspace:/workspace]
+    Note over Docker: Env: PHASE JOB_ID GAME_NAME<br/>ZAI_API_KEY ZAI_BASE_URL MODEL<br/>CLAUDE_CODE_EFFORT_LEVEL=high<br/>WORKSPACE_DIR TIMEOUT_SECONDS<br/>+ extraEnv (AUTH_MODE, OAUTH tokens, GENRE_SEED, etc.)
+    Note over Docker: HostConfig:<br/>  Memory: 2GB<br/>  NanoCpus: 0.5e9 (0.5 cores)<br/>  Binds: [hostWorkspace:/workspace,<br/>  hostProjectRoot/prompts:/home/claude/prompts,<br/>  hostProjectRoot/framework:/home/claude/framework]
 
     CM->>Docker: container.start()
     Docker->>Worker: tini -> entrypoint.sh
@@ -109,8 +110,8 @@ sequenceDiagram
 
     Entry->>Entry: run_claude() helper: refresh token if subscription mode
 
-    Entry->>Claude: claude -p --dangerously-skip-permissions --verbose -- "prompt"
-    Note over Claude: --dangerously-skip-permissions on ALL phases<br/>--output-file NOT used (prompts write to workspace directly)
+    Entry->>Claude: timeout TIMEOUT_SECONDS claude -p --dangerously-skip-permissions --verbose -- "prompt"
+    Note over Claude: --dangerously-skip-permissions on ALL phases
     Claude-->>Entry: exit code
 
     Entry->>Entry: write status/{phase}.json = completed|failed|timeout
@@ -132,8 +133,8 @@ graph TD
         end
 
         subgraph "subscription mode (OAuth)"
-            SUB1["Write .credentials.json with:<br/>accessToken, refreshToken, expiresAt<br/>scopes, subscriptionType: max"]
-            SUB2["Define refresh_oauth_token() function:<br/>curl POST console.anthropic.com/v1/oauth/token<br/>Parse response, update .credentials.json"]
+            SUB1["Write .credentials.json with:\naccessToken, refreshToken, expiresAt\nscopes, subscriptionType: max\nrateLimitTier: default_claude_max_20x"]
+            SUB2["Define refresh_oauth_token() function:\ncurl POST console.anthropic.com/v1/oauth/token\nParse response, update .credentials.json"]
             SUB3["settings.json without API key overrides"]
             SUB4["Token refresh before each claude -p call"]
         end
@@ -151,15 +152,15 @@ graph TD
 ```mermaid
 graph LR
     subgraph "Phase 2: 3 Sequential GDD Agents"
-        A1["currencies<br/>phase2-gdd/currencies.md"]
-        A2["progression<br/>phase2-gdd/progression.md"]
-        A3["ui-ux<br/>phase2-gdd/ui-ux.md"]
+        A1["currencies\nphase2-gdd/currencies.md"]
+        A2["progression\nphase2-gdd/progression.md"]
+        A3["ui-ux\nphase2-gdd/ui-ux.md"]
 
         A1 -->|"sequential"| A2
         A2 -->|"sequential"| A3
     end
 
-    NOTE["Each agent reads prior GDD sections<br/>from workspace/gdd/ for context"]
+    NOTE["Each agent reads prior GDD sections\nfrom workspace/gdd/ for context"]
 ```
 
 # Job Polling Loop
@@ -171,12 +172,13 @@ sequenceDiagram
     participant QM as QueueManager
     participant Process as processJob()
 
-    Note over Timer,Process: Continuous polling with concurrency gate
+    Note over Timer,Process: Continuous polling with concurrency gate + pause flag
 
     loop Every POLL_INTERVAL ms
         Timer->>Poller: invoke
+        Poller->>Poller: check: queuePaused? (process improvement running)
         Poller->>Poller: check: running >= MAX_CONCURRENT?
-        alt At capacity
+        alt Paused or at capacity
             Poller-->>Timer: return (skip)
         else Has capacity
             Poller->>QM: getNextJob()
@@ -187,118 +189,8 @@ sequenceDiagram
                 QM-->>Poller: job row (status set to running)
                 Poller->>Poller: running++
                 Poller->>Process: processJob(job).finally(() => running--)
-                Note over Process: Phases 1-4 sequentially<br/>then deploy<br/>then Phase 5 repair loop (up to 100 iterations)
+                Note over Process: Phases 1-4 sequentially<br/>then deploy<br/>then Phase 5 repair loop (up to 100 iterations)<br/>with plateau detection + strategy review<br/>+ user feedback integration<br/>+ process improvement trigger
             end
         end
-    end
-```
-
-# Job Processing Pipeline (processJob)
-
-```mermaid
-sequenceDiagram
-    participant PJ as processJob()
-    participant QM as QueueManager
-    participant CM as ContainerManager
-    participant DM as DeploymentManager
-    participant GT as runPlaywrightTest()
-
-    Note over PJ,GT: Full job lifecycle: phases 1-4, deploy, phase 5 repair
-
-    PJ->>PJ: Determine provider (zai or anthropic) from job.config
-    PJ->>PJ: Build providerEnv array (AUTH_MODE, OAuth tokens if anthropic)
-    PJ->>QM: addLog(id, info, provider info)
-
-    loop phase1 through phase4
-        PJ->>QM: updateStatus(id, phase_N)
-
-        alt phase1 + sourceJobId (comparison job)
-            PJ->>PJ: Poll source job until past phase1 (30min timeout)
-            PJ->>PJ: Copy idea.md + idea.json from source workspace
-            Note over PJ: Skip container spawn, continue to phase2
-        else phase1 (normal)
-            PJ->>PJ: Select GENRE_SEED from unused pool (16 seeds)
-            PJ->>PJ: Get existing game names for diversity
-            PJ->>QM: updatePhaseOutput(id, genreSeed, seed)
-        end
-
-        PJ->>CM: spawnContainer(job, phaseN) with extraEnv
-        loop Poll every 5s
-            PJ->>CM: getContainerStatus(containerId)
-        end
-        PJ->>CM: getContainerLogs(containerId)
-
-        alt exitCode !== 0
-            PJ->>QM: updateStatus(id, failed)
-            Note over PJ: return early
-        end
-    end
-
-    PJ->>DM: deployGame(jobId, gameName, dist/, {workspaceDir})
-    PJ->>QM: updatePhaseOutput(id, deployment, result)
-    PJ->>DM: listDeployedGames()
-    PJ->>DM: updateGalleryData(games)
-
-    Note over PJ,GT: Phase 5 Repair Loop (max 100 attempts, target 10/10)
-
-    PJ->>PJ: injectBadgeScript() into deployed index.html
-
-    loop attempt 1 to MAX_REPAIR_ATTEMPTS (100)
-        PJ->>GT: runPlaywrightTest(internal Docker URL)
-        GT-->>PJ: {score, defects, checks}
-        PJ->>PJ: updateScoreBadge(score, attempt)
-        PJ->>PJ: updateRepairLog() (JSON + HTML)
-
-        alt score >= 10 (PASS_SCORE)
-            Note over PJ: Break - game passes quality gate
-        else attempt == 100 and score < 4 (FAIL_SCORE)
-            PJ->>DM: removeGame(jobId)
-            PJ->>QM: updateStatus(id, failed)
-            PJ->>DM: listDeployedGames() + updateGalleryData()
-            Note over PJ: return
-        else attempt == 100 and score >= 4
-            Note over PJ: Break - keep game despite imperfect score
-        else score < 10
-            PJ->>CM: spawnContainer(job, phase5) with DEFECT_REPORT
-            PJ->>DM: deployGame() redeploy after repair
-            PJ->>PJ: injectBadgeScript() re-inject after redeploy
-        end
-    end
-
-    PJ->>QM: updateStatus(id, completed)
-```
-
-# Comparison/Provider System
-
-```mermaid
-graph TD
-    subgraph "POST /api/generate with compare=true"
-        REQ["Request: {count: N, options: {compare: true}}"]
-        REQ --> LOOP["For each of N pairs"]
-
-        LOOP --> JOB_A["Job A: provider=zai<br/>name=ZAI-BaseName<br/>Normal pipeline"]
-        LOOP --> JOB_B["Job B: provider=anthropic<br/>name=Claude-BaseName<br/>sourceJobId=Job A id"]
-
-        JOB_B --> WAIT["Phase 1: Wait for Job A phase1<br/>Poll every 5s, 30min timeout"]
-        WAIT --> COPY["Copy idea.md + idea.json<br/>from Job A workspace"]
-        COPY --> SKIP["Skip phase1 container spawn<br/>Continue to phase2 with same idea"]
-    end
-
-    subgraph "Provider Env Vars"
-        ZAI["zai (default):<br/>AUTH_MODE=apikey<br/>ZAI_API_KEY forwarded"]
-        ANTHROPIC["anthropic:<br/>AUTH_MODE=subscription<br/>CLAUDE_CODE_OAUTH_TOKEN<br/>CLAUDE_CODE_REFRESH_TOKEN<br/>CLAUDE_CODE_TOKEN_EXPIRES<br/>MODEL (default: claude-opus-4-6)"]
-    end
-```
-
-# Phase Timeouts
-
-```mermaid
-graph LR
-    subgraph "ContainerManager DEFAULT_TIMEOUTS"
-        P1["phase1: 43200s (12h)"]
-        P2["phase2: 43200s (12h)"]
-        P3["phase3: 43200s (12h)"]
-        P4["phase4: 43200s (12h)"]
-        P5["phase5: 3600s (1h per repair)"]
     end
 ```

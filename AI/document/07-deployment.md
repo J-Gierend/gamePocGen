@@ -6,10 +6,10 @@ graph TB
 
     subgraph "Proxmox Host pve.grossmann.at"
         subgraph "LXC 102 webservices 192.168.138.11"
-            TRAEFIK["Traefik\n:80 → redirect\n:443 TLS termination\nLet's Encrypt auto-SSL\nDocker provider auto-discovery"]
+            TRAEFIK["Traefik\n:80 redirect\n:443 TLS termination\nLet's Encrypt auto-SSL\nDocker provider auto-discovery"]
 
-            subgraph "Backend Stack docker/docker-compose.yml 63 lines"
-                BACK["gamepocgen-backend\nNode 22 slim :3010→:3000\nDockerfile.backend 18 lines\nExpress + job poller + Playwright"]
+            subgraph "Backend Stack docker/docker-compose.yml 64 lines"
+                BACK["gamepocgen-backend\nNode 22 slim :3010->:3000\nDockerfile.backend 19 lines\nExpress + job poller + Playwright"]
                 PG["postgres:15-alpine\n:5432\nvol: pgdata\nhealthcheck: pg_isready"]
             end
 
@@ -18,7 +18,7 @@ graph TB
             end
 
             subgraph "Worker Containers ephemeral"
-                WORKER["gamepocgen-worker\ndocker/Dockerfile 28 lines\nNode 22 + Claude Code CLI\nMem: 2GB CPU: 0.5\nTimeout: 43200s phases1-4\n3600s phase5"]
+                WORKER["gamepocgen-worker\ndocker/Dockerfile 28 lines\nNode 22 + Claude Code CLI\nclaude-opus-4-6 + effort=high\nHost mounts: prompts framework\nMem: 2GB CPU: 0.5\nTimeout: 43200s phases1-4\n3600s phase5"]
             end
 
             subgraph "Game Containers persistent"
@@ -43,8 +43,8 @@ graph TB
 
 ```mermaid
 graph TD
-    subgraph "docker/docker-compose.yml 63 lines"
-        B_SVC["backend service\nbuild: context ../ dockerfile Dockerfile.backend\nports: 3010:3000\nvolumes:\n  /var/run/docker.sock\n  ./workspaces:/data/workspaces\n  ./deployed:/data/deployed\nenv: DATABASE_URL ZAI_API_KEY ZAI_BASE_URL\n  CLAUDE_CODE_OAUTH_TOKEN\n  CLAUDE_CODE_REFRESH_TOKEN\n  CLAUDE_CODE_TOKEN_EXPIRES\n  MAX_CONCURRENT WORKSPACE_PATH\n  HOST_WORKSPACE_PATH DEPLOY_DIR\n  HOST_DEPLOY_DIR GALLERY_DATA_PATH\n  DOMAIN WORKER_IMAGE\ndepends_on: postgres condition service_healthy\nlabels: traefik priority=10\nnetworks: traefik + internal\nrestart: unless-stopped"]
+    subgraph "docker/docker-compose.yml 64 lines"
+        B_SVC["backend service\nbuild: context ../ dockerfile Dockerfile.backend\nports: 3010:3000\nvolumes:\n  /var/run/docker.sock\n  ./workspaces:/data/workspaces\n  ./deployed:/data/deployed\nenv: DATABASE_URL ZAI_API_KEY ZAI_BASE_URL\n  CLAUDE_CODE_OAUTH_TOKEN\n  CLAUDE_CODE_REFRESH_TOKEN\n  CLAUDE_CODE_TOKEN_EXPIRES\n  MAX_CONCURRENT WORKSPACE_PATH\n  HOST_WORKSPACE_PATH DEPLOY_DIR\n  HOST_DEPLOY_DIR GALLERY_DATA_PATH\n  DOMAIN WORKER_IMAGE\n  HOST_PROJECT_ROOT\ndepends_on: postgres condition service_healthy\nlabels: traefik priority=10\nnetworks: traefik + internal\nrestart: unless-stopped"]
 
         P_SVC["postgres service\nimage: postgres:15-alpine\nvolumes: pgdata\nenv: POSTGRES_DB POSTGRES_USER\n  POSTGRES_PASSWORD\nhealthcheck: pg_isready -U gamepocgen\n  interval 5s timeout 5s retries 5\nnetworks: internal ONLY\nrestart: unless-stopped"]
     end
@@ -64,7 +64,7 @@ graph TD
 graph TD
     subgraph "/root/apps/"
         T_DIR["traefik/\ndocker-compose.yml\ntraefik.yml\nacme.json\ndynamic/"]
-        G_DIR["gamepocgen/\n├── Dockerfile.backend 18 lines\n├── docker/\n│   ├── Dockerfile 28 lines worker\n│   ├── docker-compose.yml 63 lines\n│   ├── .env\n│   ├── entrypoint.sh 368 lines\n│   ├── workspaces/\n│   │   └── job-N/\n│   └── deployed/\n│       ├── gamedemoN/\n│       │   ├── html/\n│       │   ├── metadata.json\n│       │   └── docker-compose.yml\n│       └── gallery/games.json\n├── docs/\n│   ├── docker-compose.yml 19 lines\n│   └── index.html\n├── gallery/\n│   ├── index.html\n│   └── gallery.js\n├── framework/\n├── prompts/\n├── scripts/\n├── backend/\n└── AI/"]
+        G_DIR["gamepocgen/\n  Dockerfile.backend 19 lines\n  docker/\n    Dockerfile 28 lines worker\n    docker-compose.yml 64 lines\n    .env\n    entrypoint.sh 443 lines\n    workspaces/\n      job-N/\n      shared/ (process improvement)\n    deployed/\n      gamedemoN/\n        html/\n        metadata.json\n        docker-compose.yml\n      gallery/games.json\n  docs/\n    docker-compose.yml 19 lines\n    index.html\n  gallery/\n    index.html\n    gallery.js\n  framework/\n  prompts/\n  scripts/\n  backend/\n  AI/"]
     end
 ```
 
@@ -78,6 +78,7 @@ graph LR
         DOC["Docs nginx"]
         GD0["gamedemo0 nginx"]
         GD1["gamedemo1 nginx"]
+        PI["Process Improvement\ncontainer (when running)"]
     end
 
     subgraph "internal network bridge"
@@ -116,5 +117,6 @@ flowchart TD
         M1["docker compose logs -f backend"]
         M2["docker ps --filter name=gamedemo"]
         M3["docker ps --filter name=gamepocgen-worker"]
+        M4["docker ps --filter name=gamepocgen-process"]
     end
 ```

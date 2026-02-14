@@ -6,33 +6,42 @@ graph TD
     CORS --> JSON["express.json() parser"]
     JSON --> ROUTER["Router /api/*"]
 
-    ROUTER --> ASYNC["asyncHandler(fn) wrapper<br/>fn(req, res, next).catch(next)"]
-    ASYNC --> HANDLER["Handler function<br/>(generateGames, getJob, etc)"]
+    ROUTER --> ASYNC["asyncHandler(fn) wrapper\nfn(req, res, next).catch(next)"]
+    ASYNC --> HANDLER["Handler function\n(generateGames, getJob, etc)"]
 
-    HANDLER -->|"try block succeeds"| SUCCESS["res.status(200/201).json(data)"]
+    HANDLER -->|"try block succeeds"| SUCCESS["res.status(200/201/202).json(data)"]
     HANDLER -->|"catch block"| CATCH["catch(err)"]
-    CATCH --> ERR500["res.status(500).json(<br/>{error: err.message})"]
+    CATCH --> ERR500["res.status(500).json(\n{error: err.message})"]
 
-    ASYNC -->|"unhandled rejection<br/>.catch(next)"| GLOBAL["Global error handler<br/>app.use((err, req, res, _next))"]
+    ASYNC -->|"unhandled rejection\n.catch(next)"| GLOBAL["Global error handler\napp.use((err, req, res, _next))"]
     GLOBAL --> LOG["console.error('Unhandled error:', err)"]
-    LOG --> ERR500_G["res.status(500).json(<br/>{error: 'Internal server error'})"]
+    LOG --> ERR500_G["res.status(500).json(\n{error: 'Internal server error'})"]
 ```
 
 # Specific API Error Responses
 
 ```mermaid
 graph LR
+    subgraph "400 Errors"
+        FB_400["POST /jobs/:id/feedback\nfeedback empty or missing\n-> 400 {error: 'Feedback text is required'}"]
+    end
+
     subgraph "404 Errors"
-        JOB_404["GET /jobs/:id<br/>job not found<br/>-> 404 {error: 'Job [id] not found'}"]
-        LOG_404["GET /jobs/:id/logs<br/>job not found<br/>-> 404 {error: 'Job [id] not found'}"]
+        JOB_404["GET /jobs/:id\njob not found\n-> 404 {error: 'Job [id] not found'}"]
+        LOG_404["GET /jobs/:id/logs\njob not found\n-> 404 {error: 'Job [id] not found'}"]
+        FB_404["POST /jobs/:id/feedback\njob not found\n-> 404 {error: 'Job [id] not found'}"]
     end
 
     subgraph "500 Errors"
-        GEN_500["POST /generate<br/>addJob throws<br/>-> 500 {error: message}"]
-        LIST_500["GET /jobs<br/>getJobs throws<br/>-> 500 {error: message}"]
-        STAT_500["GET /stats<br/>getStats throws<br/>-> 500 {error: message}"]
-        GAME_500["GET /games<br/>listDeployedGames throws<br/>-> 500 {error: message}"]
-        DEL_500["DELETE /games/:id<br/>removeGame throws<br/>-> 500 {error: message}"]
+        GEN_500["POST /generate\naddJob throws\n-> 500 {error: message}"]
+        LIST_500["GET /jobs\ngetJobs throws\n-> 500 {error: message}"]
+        STAT_500["GET /stats\ngetStats throws\n-> 500 {error: message}"]
+        GAME_500["GET /games\nlistDeployedGames throws\n-> 500 {error: message}"]
+        DEL_500["DELETE /games/:id\nremoveGame throws\n-> 500 {error: message}"]
+    end
+
+    subgraph "503 Errors"
+        IMP_503["POST /improvements/run\nagent not initialized\n-> 503 {error: 'Process improvement agent not initialized'}"]
     end
 ```
 
@@ -115,6 +124,18 @@ sequenceDiagram
     loop attempt 1 to 100
         PJ->>GT: runPlaywrightTest(internalDockerUrl)
         GT-->>PJ: {score, defects, checks}
+
+        alt Infrastructure failure (ETIMEDOUT)
+            PJ->>PJ: consecutiveTimeouts++
+            alt 5 consecutive timeouts
+                PJ->>QM: addLog(id, 'error', '5 consecutive timeouts')
+                PJ->>QM: updateStatus(id, 'failed', {error: Infrastructure failure})
+                Note over PJ: return (bail out)
+            end
+        else Not infrastructure failure
+            PJ->>PJ: consecutiveTimeouts = 0
+        end
+
         PJ->>PJ: updateScoreBadge + updateRepairLog
 
         alt score >= 10 (PASS_SCORE)
@@ -188,20 +209,20 @@ sequenceDiagram
 
 ```mermaid
 graph TD
-    FETCH["fetch('/api/games')"] --> CHECK{"response.ok?"}
+    FETCH["fetch('/api/jobs')"] --> CHECK{"response.ok?"}
 
     CHECK -->|"yes"| PARSE["response.json()"]
-    PARSE --> GAMES{"games.length > 0?"}
-    GAMES -->|"yes"| RENDER["renderGames(games)<br/>show card grid sorted by date"]
-    GAMES -->|"no"| EMPTY["showEmpty()"]
+    PARSE --> JOBS{"jobs.length > 0?"}
+    JOBS -->|"yes"| RENDER["renderJobs(jobs)\nshow card grid with phase dots\nscores + sparklines + defects"]
+    JOBS -->|"no"| EMPTY["showEmpty()"]
 
-    CHECK -->|"404"| RENDER_EMPTY["renderGames([])<br/>treated as empty (API not ready)"]
+    CHECK -->|"404"| RENDER_EMPTY["renderJobs([])\ntreated as empty (API not ready)"]
     CHECK -->|"other HTTP error"| THROW["throw new Error('HTTP status: statusText')"]
     THROW --> CATCH["catch block"]
 
-    FETCH -->|"TypeError (network/fetch error)"| TYPE_CHECK{"error.name === TypeError<br/>and message includes 'fetch'?"}
-    TYPE_CHECK -->|"yes"| EMPTY2["renderGames([])<br/>show empty state"]
-    TYPE_CHECK -->|"no"| ERROR["showError('Unable to connect<br/>to the game server.')"]
+    FETCH -->|"TypeError (network/fetch error)"| TYPE_CHECK{"error.name === TypeError\nand message includes 'fetch'?"}
+    TYPE_CHECK -->|"yes"| EMPTY2["renderJobs([])\nshow empty state"]
+    TYPE_CHECK -->|"no"| ERROR["showError('Unable to connect\nto the game server.')"]
     CATCH --> ERROR
 ```
 
@@ -212,10 +233,10 @@ graph TD
     subgraph "Phase 5 Redeploy Error (non-fatal)"
         REPAIR["Repair container exits 0"]
         REPAIR --> REDEPLOY{"deployGame()"}
-        REDEPLOY -->|"success"| INJECT["injectBadgeScript()<br/>updateScoreBadge()"]
+        REDEPLOY -->|"success"| INJECT["injectBadgeScript()\nupdateScoreBadge()"]
         INJECT --> LOG_OK["addLog: Redeployed after repair"]
         REDEPLOY -->|"throws"| LOG_ERR["addLog: Redeploy error: message"]
-        LOG_ERR --> CONTINUE["Continue to next test iteration<br/>(non-fatal)"]
+        LOG_ERR --> CONTINUE["Continue to next test iteration\n(non-fatal)"]
     end
 ```
 
@@ -224,13 +245,33 @@ graph TD
 ```mermaid
 graph TD
     subgraph "runPlaywrightTest(url)"
-        EXEC["execSync(node test-game.js url)"]
-        EXEC -->|"exit 0"| PARSE["JSON.parse(stdout)<br/>{score, defects, checks}"]
+        EXEC["execSync(node test-game.js url)\ntimeout: 180000ms"]
+        EXEC -->|"exit 0"| PARSE["JSON.parse(stdout)\n{score, defects, checks}"]
         EXEC -->|"non-zero exit"| CHECK_STDOUT{"err.stdout exists?"}
         CHECK_STDOUT -->|"yes"| TRY_PARSE["Try JSON.parse(err.stdout)"]
-        TRY_PARSE -->|"valid JSON"| RETURN["Return parsed result<br/>(score < 5 exits non-zero but has valid output)"]
-        TRY_PARSE -->|"invalid JSON"| FALLBACK["Return {score: 0,<br/>defects: [{severity: critical,<br/>description: Test runner error}],<br/>checks: {}}"]
+        TRY_PARSE -->|"valid JSON"| RETURN["Return parsed result\n(score < 5 exits non-zero but has valid output)"]
+        TRY_PARSE -->|"invalid JSON"| FALLBACK["Return {score: 0,\ndefects: [{severity: critical,\ndescription: Test runner error}],\nchecks: {}}"]
         CHECK_STDOUT -->|"no"| FALLBACK
-        EXEC -->|"timeout (120s)"| FALLBACK
+        EXEC -->|"timeout"| FALLBACK
+    end
+```
+
+# Process Improvement Error Handling
+
+```mermaid
+graph TD
+    subgraph "maybeRunProcessImprovement()"
+        TRIGGER["Triggered by repair loop"] --> COOLDOWN{"Cooldown expired?"}
+        COOLDOWN -->|"no"| SKIP["Skip silently"]
+        COOLDOWN -->|"yes"| GATHER["Gather cross-job data"]
+        GATHER -->|"error"| LOG_FAIL["console.error + return"]
+        GATHER --> PAUSE["Pause job queue"]
+        PAUSE --> SPAWN["Create process-improvement container"]
+        SPAWN -->|"error"| RESUME_ERR["Resume queue + log error"]
+        SPAWN --> WAIT["Wait for completion (poll 10s)"]
+        WAIT -->|"container inspect error"| RETRY["Retry inspect after 2s"]
+        RETRY -->|"still fails"| EXIT["Set running=false, exitCode=-1"]
+        WAIT -->|"exits"| LOGS["Get container logs + remove"]
+        LOGS --> RESUME["Resume job queue (always)"]
     end
 ```

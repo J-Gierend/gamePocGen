@@ -24,9 +24,11 @@ stateDiagram-v2
 
     phase_5 --> phase_5: repair + redeploy\nscore < 10 and attempt < 100
     phase_5 --> completed: score >= 10/10\nor attempt=100 and score >= 4
-    phase_5 --> failed: attempt=100\nand score < 4\ngame removed
+    phase_5 --> failed: attempt=100 and score < 4 (game removed)\nor 5 consecutive ETIMEDOUT
 
     deployed --> completed: score >= 10/10\non first test
+
+    completed --> phase_5: user feedback submitted\nPOST /api/jobs/:id/feedback
 
     completed --> [*]
     failed --> [*]
@@ -54,6 +56,7 @@ flowchart LR
     S5 --> S9
     S6 --> S9
     S7 --> S9
+    S8 -->|"feedback"| S7
 ```
 
 # Worker Container Lifecycle
@@ -62,14 +65,14 @@ flowchart LR
 stateDiagram-v2
     [*] --> Created: containerManager.spawnContainer()\nDockerode createContainer()
 
-    Created --> Running: container.start()\nentrypoint.sh begins
+    Created --> Running: container.start()\ntini -> entrypoint.sh
 
     state Running {
         [*] --> ValidatingEnv: check PHASE JOB_ID GAME_NAME\ncheck ZAI_API_KEY (apikey mode only)
         ValidatingEnv --> ConfiguringAuth: apikey: export ANTHROPIC_AUTH_TOKEN\nsubscription: write .credentials.json
         ConfiguringAuth --> WritingSettings: write settings.json\nwrite .claude.json
         WritingSettings --> CopyingFramework: cp framework/* workspace/
-        CopyingFramework --> ExecutingPhase: claude -p --dangerously-skip-permissions
+        CopyingFramework --> ExecutingPhase: claude -p --dangerously-skip-permissions --verbose
         ExecutingPhase --> WritingStatus: write status JSON
     }
 
@@ -135,7 +138,10 @@ stateDiagram-v2
 
     InjectBadge --> PlaywrightTest: runPlaywrightTest(internal URL)
 
-    PlaywrightTest --> UpdateBadge: updateScoreBadge(score, attempt)\nupdateRepairLog()
+    PlaywrightTest --> CheckTimeout: Check ETIMEDOUT count
+
+    CheckTimeout --> BailOut: 5 consecutive ETIMEDOUT\nstatus: failed
+    CheckTimeout --> UpdateBadge: Not infrastructure failure
 
     UpdateBadge --> Passed: score >= 10
 
@@ -143,7 +149,12 @@ stateDiagram-v2
 
     UpdateBadge --> MaxAttemptFail: attempt=100\nscore < 4
 
-    UpdateBadge --> SpawnRepair: score < 10\nattempt < 100
+    UpdateBadge --> CheckPlateau: score < 10\nattempt < 100
+
+    CheckPlateau --> StrategyReview: Last 5 scores within 0.5 delta\nSpawn phase5-strategy container
+    CheckPlateau --> SpawnRepair: No plateau detected
+
+    StrategyReview --> SpawnRepair: Writes repair-strategy.md
 
     SpawnRepair --> PollContainer: spawnContainer(job, phase5)\npoll every 5s
 
@@ -157,6 +168,7 @@ stateDiagram-v2
     Passed --> [*]: status: completed
     MaxAttemptKeep --> [*]: status: completed
     MaxAttemptFail --> [*]: removeGame()\nstatus: failed
+    BailOut --> [*]: status: failed
 ```
 
 # Gallery Auth State
@@ -175,10 +187,10 @@ stateDiagram-v2
 
     PasswordError --> PasswordScreen: auto-clear error
 
-    Authenticated --> Loading: showLoading()\nfetch /api/games
+    Authenticated --> Loading: showLoading()\nfetch /api/jobs
 
-    Loading --> GamesDisplayed: response.ok\ngames.length > 0\nrender card grid
-    Loading --> EmptyState: games.length === 0\nor 404 response\nor TypeError with fetch
+    Loading --> GamesDisplayed: response.ok\njobs array rendered\nphase dots + scores + sparklines
+    Loading --> EmptyState: jobs.length === 0\nor 404 response\nor TypeError with fetch
     Loading --> ErrorState: non-TypeError exception\nshows Unable to connect to the game server
 ```
 
@@ -211,6 +223,6 @@ stateDiagram-v2
 
     state PhaseRouting {
         [*] --> RefreshToken: subscription mode only\nrefresh_oauth_token()
-        RefreshToken --> RunClaude: claude -p --dangerously-skip-permissions
+        RefreshToken --> RunClaude: claude -p --dangerously-skip-permissions --verbose
     }
 ```

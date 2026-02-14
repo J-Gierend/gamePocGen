@@ -3,38 +3,40 @@
 ```mermaid
 graph TB
     subgraph "Public (no auth)"
-        HEALTH["GET /health<br/>status + uptime"]
-        GENERATE["POST /api/generate<br/>no auth required"]
-        JOBS["GET /api/jobs<br/>GET /api/jobs/:id<br/>GET /api/jobs/:id/logs<br/>GET /api/stats"]
-        GAMES["GET /api/games<br/>DELETE /api/games/:id"]
+        HEALTH["GET /health\nstatus + uptime"]
+        GENERATE["POST /api/generate\nno auth required"]
+        JOBS["GET /api/jobs\nGET /api/jobs/:id\nGET /api/jobs/:id/logs\nGET /api/stats"]
+        GAMES["GET /api/games\nDELETE /api/games/:id"]
+        FEEDBACK["POST /api/jobs/:id/feedback"]
+        IMPROVEMENTS["POST /api/improvements/run\nGET /api/improvements"]
     end
 
     subgraph "Client-Side Password (sessionStorage)"
-        DOCS["Docs site<br/>gamepocgen.namjo-games.com<br/>password: gamepoc2024"]
-        GALLERY["Gallery page<br/>/gallery/<br/>password: gamepoc2024"]
+        GALLERY["Gallery page\n/gallery/\npassword: gamepoc2024"]
     end
 
     subgraph "No Auth Required"
-        GAME_SITES["Game sites<br/>gamedemoN.namjo-games.com<br/>public static HTML"]
+        GAME_SITES["Game sites\ngamedemoN.namjo-games.com\npublic static HTML"]
     end
 
     subgraph "Infrastructure Secrets"
-        ZAI["ZAI_API_KEY<br/>z.ai proxy API credentials"]
-        OAUTH["CLAUDE_CODE_OAUTH_TOKEN<br/>CLAUDE_CODE_REFRESH_TOKEN<br/>CLAUDE_CODE_TOKEN_EXPIRES<br/>Anthropic OAuth credentials"]
-        PG_CRED["POSTGRES_PASSWORD<br/>Database credentials"]
-        DOCKER_SOCK["Docker socket<br/>/var/run/docker.sock<br/>mounted into backend"]
+        ZAI["ZAI_API_KEY\nz.ai proxy API credentials"]
+        OAUTH["CLAUDE_CODE_OAUTH_TOKEN\nCLAUDE_CODE_REFRESH_TOKEN\nCLAUDE_CODE_TOKEN_EXPIRES\nAnthropic OAuth credentials"]
+        PG_CRED["POSTGRES_PASSWORD\nDatabase credentials"]
+        DOCKER_SOCK["Docker socket\n/var/run/docker.sock\nmounted into backend"]
     end
 
     REQ((Internet)) --> HEALTH
     REQ --> GENERATE
     REQ --> JOBS
     REQ --> GAMES
-    REQ --> DOCS
+    REQ --> FEEDBACK
+    REQ --> IMPROVEMENTS
     REQ --> GALLERY
     REQ --> GAME_SITES
 
-    ZAI -->|"forwarded to worker env<br/>(apikey mode)"| WORKER["Worker containers"]
-    OAUTH -->|"forwarded to worker env<br/>(subscription mode)"| WORKER
+    ZAI -->|"forwarded to worker env\n(apikey mode)"| WORKER["Worker containers"]
+    OAUTH -->|"forwarded to worker env\n(subscription mode)"| WORKER
     PG_CRED -->|"connection string"| DB["PostgreSQL"]
     DOCKER_SOCK -->|"container management"| BACKEND["Backend service"]
 ```
@@ -75,23 +77,25 @@ sequenceDiagram
 ```mermaid
 graph TD
     subgraph "gallery.js escapeHtml()"
-        INPUT["API response data<br/>game.title game.url game.description"] --> CREATE["document.createElement('div')"]
+        INPUT["API response data\njob.game_name job.error"] --> CREATE["document.createElement('div')"]
         CREATE --> SET["div.textContent = untrustedString"]
-        SET --> READ["return div.innerHTML<br/>(auto-escaped)"]
-        READ --> SAFE["Safe HTML output<br/>< becomes &lt; etc"]
+        SET --> READ["return div.innerHTML\n(auto-escaped)"]
+        READ --> SAFE["Safe HTML output\n< becomes &lt; etc"]
     end
 
     subgraph "Applied to"
         CARD_TITLE["Game card titles"]
-        CARD_DESC["Game descriptions"]
-        CARD_URL["Game URLs"]
+        CARD_ERR["Error messages"]
         CARD_DATE["Date strings"]
+        CARD_DEFECTS["Defect descriptions"]
+        CARD_IMP["Improvement report content"]
     end
 
     SAFE --> CARD_TITLE
-    SAFE --> CARD_DESC
-    SAFE --> CARD_URL
+    SAFE --> CARD_ERR
     SAFE --> CARD_DATE
+    SAFE --> CARD_DEFECTS
+    SAFE --> CARD_IMP
 ```
 
 # Container Security
@@ -99,23 +103,29 @@ graph TD
 ```mermaid
 graph TD
     subgraph "Worker Container Isolation"
-        NONROOT["Runs as user claude UID 1001<br/>not root"]
-        TINI["tini init system<br/>proper signal handling<br/>zombie process reaping"]
-        MEM["Memory limit: 2GB<br/>OOM kill if exceeded"]
-        CPU["CPU limit: 0.5 cores<br/>NanoCpus: 500000000"]
-        TIMEOUT["Phase timeouts:<br/>phase1-4: 43200s (12h)<br/>phase5: 3600s (1h)"]
-        BIND["Single bind mount<br/>/workspace only"]
-        PERMS["--dangerously-skip-permissions<br/>on ALL phases (1-5)"]
+        NONROOT["Runs as user claude UID 1001\nnot root"]
+        TINI["tini init system\nproper signal handling\nzombie process reaping"]
+        MEM["Memory limit: 2GB\nOOM kill if exceeded"]
+        CPU["CPU limit: 0.5 cores\nNanoCpus: 500000000"]
+        TIMEOUT["Phase timeouts:\nphase1-4: 43200s (12h)\nphase5: 3600s (1h)"]
+        BIND["Bind mounts:\n/workspace (job data)\n/home/claude/prompts (host prompts)\n/home/claude/framework (host framework)"]
+        PERMS["--dangerously-skip-permissions\non ALL phases (1-5 + strategy + process-improvement)"]
+    end
+
+    subgraph "Process Improvement Container"
+        PI_MEM["Memory: 2GB CPU: 1.0 core"]
+        PI_BIND["Additional bind mounts:\nhostProjectRoot/prompts (RW)\nhostProjectRoot/framework (RW)\nhostProjectRoot/scripts (RW)"]
+        PI_NET["Network: traefik\n(for accessing game URLs)"]
     end
 
     subgraph "Backend Container"
-        SOCK["Docker socket mounted<br/>can create/stop/remove containers<br/>elevated privilege"]
-        WS_VOL["Workspace volume<br/>shared with workers via host path"]
+        SOCK["Docker socket mounted\ncan create/stop/remove containers\nelevated privilege"]
+        WS_VOL["Workspace volume\nshared with workers via host path"]
     end
 
     subgraph "Game Containers"
-        READONLY["Static file serving only<br/>nginx:alpine<br/>no dynamic code execution"]
-        TRAEFIK_NET["Connected to traefik network<br/>for routing only"]
+        READONLY["Static file serving only\nnginx:alpine\nno dynamic code execution"]
+        TRAEFIK_NET["Connected to traefik network\nfor routing only"]
         RESTART["RestartPolicy: unless-stopped"]
     end
 ```
@@ -125,17 +135,17 @@ graph TD
 ```mermaid
 graph TD
     subgraph "Auth Mode: apikey (z.ai proxy)"
-        AK_SET["ANTHROPIC_AUTH_TOKEN = ZAI_API_KEY<br/>ANTHROPIC_BASE_URL = ZAI_BASE_URL"]
+        AK_SET["ANTHROPIC_AUTH_TOKEN = ZAI_API_KEY\nANTHROPIC_BASE_URL = ZAI_BASE_URL"]
         AK_SETTINGS["settings.json includes API key env vars"]
-        AK_CLEAN["rm -f .credentials.json<br/>Force API key auth only"]
+        AK_CLEAN["rm -f .credentials.json\nForce API key auth only"]
     end
 
     subgraph "Auth Mode: subscription (OAuth)"
-        SUB_CREDS[".credentials.json written with:<br/>accessToken (CLAUDE_CODE_OAUTH_TOKEN)<br/>refreshToken (CLAUDE_CODE_REFRESH_TOKEN)<br/>expiresAt (CLAUDE_CODE_TOKEN_EXPIRES)"]
-        SUB_REFRESH["Token refresh via curl POST to<br/>console.anthropic.com/v1/oauth/token<br/>client_id: 9d1c250a-e61b-44d9-88ed-5944d1962f5e"]
-        SUB_NO_EXPORT["ANTHROPIC_AUTH_TOKEN NOT set<br/>ANTHROPIC_BASE_URL NOT set<br/>Auth goes through .credentials.json only"]
-        SUB_BEFORE["refresh_oauth_token() called<br/>before EACH claude -p invocation"]
-        SUB_BUFFER["5-minute buffer before expiry<br/>triggers refresh"]
+        SUB_CREDS[".credentials.json written with:\naccessToken (CLAUDE_CODE_OAUTH_TOKEN)\nrefreshToken (CLAUDE_CODE_REFRESH_TOKEN)\nexpiresAt (CLAUDE_CODE_TOKEN_EXPIRES)\nsubscriptionType: max\nrateLimitTier: default_claude_max_20x"]
+        SUB_REFRESH["Token refresh via curl POST to\nconsole.anthropic.com/v1/oauth/token\nclient_id: 9d1c250a-e61b-44d9-88ed-5944d1962f5e"]
+        SUB_NO_EXPORT["ANTHROPIC_AUTH_TOKEN NOT set\nANTHROPIC_BASE_URL NOT set\nAuth goes through .credentials.json only"]
+        SUB_BEFORE["refresh_oauth_token() called\nbefore EACH claude -p invocation"]
+        SUB_BUFFER["5-minute buffer before expiry\ntriggers refresh"]
     end
 ```
 
@@ -157,7 +167,7 @@ sequenceDiagram
         alt No refresh token
             Note over Entry: return 1 (failure, proceed anyway)
         else Has refresh token
-            Entry->>Anthropic: POST /v1/oauth/token<br/>{grant_type: refresh_token,<br/>refresh_token: ...,<br/>client_id: 9d1c250a...}
+            Entry->>Anthropic: POST /v1/oauth/token\n{grant_type: refresh_token,\nrefresh_token: ...,\nclient_id: 9d1c250a...}
             alt Refresh succeeds
                 Anthropic-->>Entry: {access_token, refresh_token, expires_in}
                 Entry->>CredFile: Write updated tokens + new expiresAt
@@ -173,24 +183,24 @@ sequenceDiagram
 ```mermaid
 graph LR
     subgraph "Secrets Storage"
-        DOTENV[".env file on LXC 102<br/>/root/apps/gamepocgen/docker/.env<br/>not in git repo"]
+        DOTENV[".env file on LXC 102\n/root/apps/gamepocgen/docker/.env\nnot in git repo"]
     end
 
     subgraph "Secret Values"
-        PG["POSTGRES_PASSWORD<br/>DB access"]
-        ZAI2["ZAI_API_KEY<br/>z.ai proxy billing"]
-        ZAI_B["ZAI_BASE_URL<br/>API endpoint"]
-        OAUTH_T["CLAUDE_CODE_OAUTH_TOKEN<br/>Anthropic OAuth access token"]
-        OAUTH_R["CLAUDE_CODE_REFRESH_TOKEN<br/>Anthropic OAuth refresh token"]
-        OAUTH_E["CLAUDE_CODE_TOKEN_EXPIRES<br/>Token expiry epoch ms"]
+        PG["POSTGRES_PASSWORD\nDB access"]
+        ZAI2["ZAI_API_KEY\nz.ai proxy billing"]
+        ZAI_B["ZAI_BASE_URL\nAPI endpoint"]
+        OAUTH_T["CLAUDE_CODE_OAUTH_TOKEN\nAnthropic OAuth access token"]
+        OAUTH_R["CLAUDE_CODE_REFRESH_TOKEN\nAnthropic OAuth refresh token"]
+        OAUTH_E["CLAUDE_CODE_TOKEN_EXPIRES\nToken expiry epoch ms"]
     end
 
     subgraph "Propagation"
-        DC2["docker-compose.yml<br/>env_file: .env<br/>interpolation: $POSTGRES_PASSWORD"]
-        CM3["ContainerManager<br/>forwards ZAI_API_KEY to all workers"]
-        PJ["processJob()<br/>forwards OAuth tokens to workers<br/>when provider=anthropic"]
-        ENTRY_AK["entrypoint.sh (apikey mode)<br/>translates to ANTHROPIC_AUTH_TOKEN"]
-        ENTRY_SUB["entrypoint.sh (subscription mode)<br/>writes to .credentials.json"]
+        DC2["docker-compose.yml\nenv interpolation: $POSTGRES_PASSWORD"]
+        CM3["ContainerManager\nforwards ZAI_API_KEY to all workers"]
+        PJ["processJob()\nforwards OAuth tokens to workers\nwhen provider=anthropic"]
+        ENTRY_AK["entrypoint.sh (apikey mode)\ntranslates to ANTHROPIC_AUTH_TOKEN"]
+        ENTRY_SUB["entrypoint.sh (subscription mode)\nwrites to .credentials.json"]
     end
 
     DOTENV --> PG
@@ -214,14 +224,14 @@ graph LR
 ```mermaid
 graph TD
     subgraph "entrypoint.sh settings.json permissions"
-        ALLOWED["Allowed tools:<br/>Bash, Read, Write, Edit,<br/>Glob, Grep, Task,<br/>WebFetch(domain:*), WebSearch"]
+        ALLOWED["Allowed tools:\nBash, Read, Write, Edit,\nGlob, Grep, Task,\nWebFetch(domain:*), WebSearch"]
         DENIED["Denied tools: none"]
-        SKIP["--dangerously-skip-permissions flag<br/>on ALL phases (phase1 through phase5)"]
+        SKIP["--dangerously-skip-permissions flag\non ALL phases"]
     end
 
     subgraph "Claude Code config (~/.claude.json)"
         ONBOARD["hasCompletedOnboarding: true"]
-        TRUST["hasTrustDialogAccepted: true<br/>for workspace directory"]
+        TRUST["hasTrustDialogAccepted: true\nfor workspace directory"]
         TOOLS["allowedTools matches settings.json"]
     end
 ```
@@ -244,5 +254,10 @@ graph TD
         GCHECK -->|"exists"| GSTOP["container.stop() then container.remove()"]
         GSTOP --> GCREATE["docker.createContainer()"]
         GCHECK -->|"not found"| GCREATE
+    end
+
+    subgraph "Process Improvement Container"
+        PINAME["containerName = gamepocgen-process-improvement-{timestamp}"]
+        PINAME --> PICREATE["docker.createContainer()\nUnique name via Date.now()"]
     end
 ```
