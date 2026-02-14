@@ -148,7 +148,7 @@ const MAX_WEIGHTED = Object.values(CHECK_WEIGHTS).reduce((s, w) => s + w, 0);
 async function testGame(url) {
   const checks = {};
   for (const key of Object.keys(CHECK_WEIGHTS)) {
-    checks[key] = { pass: false, detail: '', weight: CHECK_WEIGHTS[key] };
+    checks[key] = { pass: false, grade: 0, detail: '', weight: CHECK_WEIGHTS[key] };
   }
 
   const report = {
@@ -197,6 +197,7 @@ async function testGame(url) {
     report.consoleErrors = jsErrors.filter(e => !e.includes('favicon'));
     if (report.consoleErrors.length === 0) {
       checks.noJsErrors.pass = true;
+      checks.noJsErrors.grade = 1.0;
       checks.noJsErrors.detail = 'No JavaScript errors on load';
     } else {
       checks.noJsErrors.detail = `${report.consoleErrors.length} JS error(s): ${report.consoleErrors[0]?.substring(0, 200)}`;
@@ -226,10 +227,14 @@ async function testGame(url) {
 
     if (viewportInfo && viewportInfo.verticalOverflow <= 2 && viewportInfo.horizontalOverflow <= 2) {
       checks.fitsViewport.pass = true;
+      checks.fitsViewport.grade = 1.0;
       checks.fitsViewport.detail = `Fits viewport: ${viewportInfo.clientWidth}x${viewportInfo.clientHeight}`;
     } else {
       const vOver = viewportInfo?.verticalOverflow || 0;
       const hOver = viewportInfo?.horizontalOverflow || 0;
+      const maxOverflow = Math.max(vOver, hOver);
+      if (maxOverflow <= 20) { checks.fitsViewport.grade = 0.7; checks.fitsViewport.pass = true; }
+      else if (maxOverflow <= 100) { checks.fitsViewport.grade = 0.3; checks.fitsViewport.pass = true; }
       checks.fitsViewport.detail = `Overflows viewport: ${vOver}px vertical, ${hOver}px horizontal`;
       report.defects.push({
         severity: 'critical',
@@ -261,7 +266,13 @@ async function testGame(url) {
 
     if (canvasInfo?.present && canvasInfo.percentColored > 1) {
       checks.canvasRendering.pass = true;
-      checks.canvasRendering.detail = `Canvas ${canvasInfo.width}x${canvasInfo.height}, ${canvasInfo.percentColored}% colored`;
+      // Graduated: sparse canvas (1-5%) is barely passing, rich canvas (30%+) is great
+      const pct = canvasInfo.percentColored;
+      if (pct >= 30) checks.canvasRendering.grade = 1.0;
+      else if (pct >= 15) checks.canvasRendering.grade = 0.7;
+      else if (pct >= 5) checks.canvasRendering.grade = 0.5;
+      else checks.canvasRendering.grade = 0.3;
+      checks.canvasRendering.detail = `Canvas ${canvasInfo.width}x${canvasInfo.height}, ${canvasInfo.percentColored}% colored (grade ${checks.canvasRendering.grade})`;
     } else if (canvasInfo?.present) {
       checks.canvasRendering.detail = `Canvas present but only ${canvasInfo?.percentColored || 0}% colored`;
       report.defects.push({ severity: 'critical', check: 'canvasRendering',
@@ -293,6 +304,7 @@ async function testGame(url) {
 
     if (report.configSummary && !report.configSummary._error) {
       checks.configPresent.pass = true;
+      checks.configPresent.grade = 1.0;
       const cs = report.configSummary;
       checks.configPresent.detail = `CONFIG: ${cs.entityTypes.length} entities, ${cs.currencyIds.length} currencies`;
     } else {
@@ -327,10 +339,12 @@ async function testGame(url) {
       });
       if (missingCurrencies.length === 0) {
         checks.hudCurrencies.pass = true;
+        checks.hudCurrencies.grade = 1.0;
         checks.hudCurrencies.detail = `All ${configCurrencyIds.length} CONFIG currencies have displays`;
       } else if (hudInfo.currencyDisplays.length >= 2) {
         // Has enough displays but some CONFIG currencies are missing
         checks.hudCurrencies.pass = true;
+        checks.hudCurrencies.grade = hudInfo.currencyDisplays.length >= 3 ? 0.7 : 0.5;
         checks.hudCurrencies.detail = `${hudInfo.currencyDisplays.length} displays found (missing: ${missingCurrencies.join(', ')})`;
       } else {
         checks.hudCurrencies.detail = `Missing displays for currencies: ${missingCurrencies.join(', ')}`;
@@ -341,6 +355,7 @@ async function testGame(url) {
       }
     } else if (hudInfo?.currencyDisplays?.length >= 2) {
       checks.hudCurrencies.pass = true;
+      checks.hudCurrencies.grade = hudInfo.currencyDisplays.length >= 3 ? 0.8 : 0.5;
       checks.hudCurrencies.detail = `${hudInfo.currencyDisplays.length} currency displays found`;
     } else {
       checks.hudCurrencies.detail = `Only ${hudInfo?.currencyDisplays?.length || 0} currency display(s)`;
@@ -377,6 +392,7 @@ async function testGame(url) {
           }
           if (clicked) {
             checks.tabsSwitchable.pass = true;
+            checks.tabsSwitchable.grade = tabInfo.length >= 3 ? 1.0 : 0.7;
             checks.tabsSwitchable.detail = `${tabInfo.length} tabs found, switching works`;
           } else {
             checks.tabsSwitchable.detail = `${tabInfo.length} tabs found but none were clickable`;
@@ -426,8 +442,15 @@ async function testGame(url) {
 
     if (controlsInfo?.hasControlsSection && controlsInfo.bindingCount >= 2) {
       checks.controlsVisible.pass = true;
-      checks.controlsVisible.detail = `Controls visible: ${controlsInfo.bindingCount} bindings (${controlsInfo.bindings.slice(0, 3).join(', ')})`;
+      // Graduated: more bindings = better controls documentation
+      const bc = controlsInfo.bindingCount;
+      if (bc >= 5) checks.controlsVisible.grade = 1.0;
+      else if (bc >= 3) checks.controlsVisible.grade = 0.7;
+      else checks.controlsVisible.grade = 0.4;
+      checks.controlsVisible.detail = `Controls visible: ${bc} bindings (grade ${checks.controlsVisible.grade})`;
     } else if (controlsInfo?.hasControlsSection) {
+      checks.controlsVisible.grade = 0.2;
+      checks.controlsVisible.pass = true;
       checks.controlsVisible.detail = `Controls section found but only ${controlsInfo?.bindingCount || 0} bindings`;
       report.defects.push({ severity: 'major', check: 'controlsVisible',
         description: 'Controls section exists but has insufficient key bindings listed.',
@@ -473,6 +496,7 @@ async function testGame(url) {
 
     if (tutorialInfo?.hasTutorial) {
       checks.tutorialPresent.pass = true;
+      checks.tutorialPresent.grade = 1.0;
       checks.tutorialPresent.detail = `Tutorial found: ${tutorialInfo.matchedKeywords.join(', ') || 'overlay element detected'}`;
       // Try to dismiss it if there's a button
       try {
@@ -532,7 +556,11 @@ async function testGame(url) {
 
           if (afterClick && beforeState && afterClick.totalObjects > beforeState.totalObjects) {
             checks.canvasInteraction.pass = true;
-            checks.canvasInteraction.detail = `New objects created: ${beforeState.totalObjects} → ${afterClick.totalObjects}`;
+            const newCount = afterClick.totalObjects - beforeState.totalObjects;
+            if (newCount >= 3) checks.canvasInteraction.grade = 1.0;
+            else if (newCount >= 2) checks.canvasInteraction.grade = 0.6;
+            else checks.canvasInteraction.grade = 0.3;
+            checks.canvasInteraction.detail = `${newCount} new objects created: ${beforeState.totalObjects} → ${afterClick.totalObjects} (grade ${checks.canvasInteraction.grade})`;
           } else {
             checks.canvasInteraction.detail = 'Canvas clicked but no new objects created';
             report.defects.push({ severity: 'major', check: 'canvasInteraction',
@@ -585,11 +613,13 @@ async function testGame(url) {
           }
 
           const distinctChanges = stateSnapshots.filter(s => s.changed).length;
+          // Graduated: linear scale from 0/5 to 5/5
+          checks.canvasClickResponsive.grade = Math.round(distinctChanges / 5 * 10) / 10;
+          checks.canvasClickResponsive.pass = distinctChanges >= 1;
           if (distinctChanges >= 3) {
-            checks.canvasClickResponsive.pass = true;
-            checks.canvasClickResponsive.detail = `${distinctChanges}/5 clicks produced state changes`;
+            checks.canvasClickResponsive.detail = `${distinctChanges}/5 clicks produced state changes (grade ${checks.canvasClickResponsive.grade})`;
           } else {
-            checks.canvasClickResponsive.detail = `Only ${distinctChanges}/5 clicks produced changes`;
+            checks.canvasClickResponsive.detail = `Only ${distinctChanges}/5 clicks produced changes (grade ${checks.canvasClickResponsive.grade})`;
             report.defects.push({ severity: 'major', check: 'canvasClickResponsive',
               description: `Only ${distinctChanges}/5 canvas clicks produced distinct state changes. Need >= 3.`,
               suggestion: 'Ensure canvas clicks at different positions produce different gameplay results.' });
@@ -627,6 +657,7 @@ async function testGame(url) {
     if (gameplayErrors.length > 0) {
       report.consoleErrors.push(...gameplayErrors);
       checks.noJsErrors.pass = false;
+      checks.noJsErrors.grade = 0;
       checks.noJsErrors.detail = `${report.consoleErrors.length} total JS errors (${gameplayErrors.length} during gameplay)`;
     }
 
@@ -648,14 +679,28 @@ async function testGame(url) {
         const missingTypes = configEntityTypes.filter(t => !foundSet.has(t));
         if (missingTypes.length === 0 || foundSet.size > 0) {
           checks.entitiesSpawn.pass = true;
+          // Graduated: more entities and more types = better
+          const ec = afterWaitState.entities;
+          const typeCount = foundSet.size;
+          let entityGrade = 0.2;
+          if (ec >= 15 && typeCount >= 3) entityGrade = 1.0;
+          else if (ec >= 8 && typeCount >= 2) entityGrade = 0.8;
+          else if (ec >= 5) entityGrade = 0.6;
+          else if (ec >= 2) entityGrade = 0.4;
+          checks.entitiesSpawn.grade = entityGrade;
           const detail = missingTypes.length > 0
-            ? `${afterWaitState.entities} entities (types found: ${[...foundSet].join(', ')}; not seen: ${missingTypes.join(', ')})`
-            : `${afterWaitState.entities} entities, all ${configEntityTypes.length} CONFIG types present`;
+            ? `${ec} entities, ${typeCount} types (not seen: ${missingTypes.join(', ')}) grade ${entityGrade}`
+            : `${ec} entities, all ${configEntityTypes.length} CONFIG types present, grade ${entityGrade}`;
           checks.entitiesSpawn.detail = detail;
         }
       } else {
         checks.entitiesSpawn.pass = true;
-        checks.entitiesSpawn.detail = `${afterWaitState.entities} entities at wave ${afterWaitState.wave}`;
+        const ec = afterWaitState.entities;
+        if (ec >= 10) checks.entitiesSpawn.grade = 1.0;
+        else if (ec >= 5) checks.entitiesSpawn.grade = 0.6;
+        else if (ec >= 2) checks.entitiesSpawn.grade = 0.4;
+        else checks.entitiesSpawn.grade = 0.2;
+        checks.entitiesSpawn.detail = `${ec} entities at wave ${afterWaitState.wave} (grade ${checks.entitiesSpawn.grade})`;
       }
     } else {
       const entityContext = configEntityTypes.length > 0
@@ -691,9 +736,22 @@ async function testGame(url) {
 
       if (changedCurrencies.length > 0) {
         checks.currenciesChange.pass = true;
+        // Graduated: proportion of currencies that changed
+        const totalCurr = changedCurrencies.length + unchangedCurrencies.length;
+        if (totalCurr > 0) {
+          checks.currenciesChange.grade = Math.round(changedCurrencies.length / totalCurr * 10) / 10;
+          // Primary currency not changing is a significant penalty
+          if (primaryCurrency && !primaryChanged) {
+            checks.currenciesChange.grade = Math.min(checks.currenciesChange.grade, 0.3);
+          }
+        } else {
+          checks.currenciesChange.grade = 0.5;
+        }
+        // Ensure minimum grade of 0.2 when something changed
+        if (checks.currenciesChange.grade < 0.2) checks.currenciesChange.grade = 0.2;
         const detail = primaryCurrency
-          ? `Primary '${primaryCurrency}' ${primaryChanged ? 'changed' : 'UNCHANGED'}. Changed: ${changedCurrencies.join(', ')}${unchangedCurrencies.length > 0 ? `. Unchanged: ${unchangedCurrencies.join(', ')}` : ''}`
-          : `Currencies changed: ${changedCurrencies.join(', ')}`;
+          ? `Primary '${primaryCurrency}' ${primaryChanged ? 'changed' : 'UNCHANGED'}. Changed: ${changedCurrencies.join(', ')}${unchangedCurrencies.length > 0 ? `. Unchanged: ${unchangedCurrencies.join(', ')}` : ''} (grade ${checks.currenciesChange.grade})`
+          : `Currencies changed: ${changedCurrencies.join(', ')} (grade ${checks.currenciesChange.grade})`;
         checks.currenciesChange.detail = detail;
         // Warn if primary currency didn't change even though others did
         if (primaryCurrency && !primaryChanged) {
@@ -723,7 +781,10 @@ async function testGame(url) {
         });
         if (upgradeInfo?.buttonCount > 0) {
           checks.upgradesExist.pass = true;
-          checks.upgradesExist.detail = `${upgradeInfo.buttonCount} upgrade button(s)`;
+          if (upgradeInfo.buttonCount >= 4) checks.upgradesExist.grade = 1.0;
+          else if (upgradeInfo.buttonCount >= 2) checks.upgradesExist.grade = 0.7;
+          else checks.upgradesExist.grade = 0.4;
+          checks.upgradesExist.detail = `${upgradeInfo.buttonCount} upgrade button(s) (grade ${checks.upgradesExist.grade})`;
           const buyBtn = page.locator('.game-panel.active button, [id*="upgrade"] button').first();
           if (await buyBtn.count() > 0) { await buyBtn.click(); await page.waitForTimeout(300); }
         } else {
@@ -744,7 +805,11 @@ async function testGame(url) {
     // Check 13: Waves advance
     if (afterWaitState?.wave > (initialState?.wave || 0)) {
       checks.wavesAdvance.pass = true;
-      checks.wavesAdvance.detail = `Wave: ${initialState?.wave || 0} → ${afterWaitState.wave}`;
+      const wavesAdv = afterWaitState.wave - (initialState?.wave || 0);
+      if (wavesAdv >= 3) checks.wavesAdvance.grade = 1.0;
+      else if (wavesAdv >= 2) checks.wavesAdvance.grade = 0.7;
+      else checks.wavesAdvance.grade = 0.4;
+      checks.wavesAdvance.detail = `Wave: ${initialState?.wave || 0} → ${afterWaitState.wave} (+${wavesAdv}, grade ${checks.wavesAdvance.grade})`;
     } else {
       checks.wavesAdvance.detail = `Stuck at wave ${afterWaitState?.wave || 0}`;
       report.defects.push({ severity: 'major', check: 'wavesAdvance',
@@ -805,7 +870,8 @@ async function testGame(url) {
 
         if (anyDecreased) {
           checks.currencySpending.pass = true;
-          checks.currencySpending.detail = `Spending works: ${decreasedIds.join(', ')} decreased after buying upgrades`;
+          checks.currencySpending.grade = decreasedIds.length >= 2 ? 1.0 : 0.6;
+          checks.currencySpending.detail = `Spending works: ${decreasedIds.join(', ')} decreased after buying upgrades (grade ${checks.currencySpending.grade})`;
         } else {
           checks.currencySpending.detail = 'No currency decreased after clicking upgrades';
           const ctxLoop = GAME_CONTEXT?.coreLoop ? ` Game core loop: ${GAME_CONTEXT.coreLoop}.` : '';
@@ -833,13 +899,21 @@ async function testGame(url) {
 
       if (canEarn && canSpend) {
         checks.economicLoop.pass = true;
-        checks.economicLoop.detail = 'Earn + spend cycle verified: currencies increase and decrease';
+        // Grade from the average of earning and spending grades
+        const earnGrade = checks.currenciesChange.grade;
+        const spendGrade = checks.currencySpending.grade;
+        checks.economicLoop.grade = Math.round((earnGrade + spendGrade) / 2 * 10) / 10;
+        checks.economicLoop.detail = `Earn + spend cycle verified (grade ${checks.economicLoop.grade})`;
       } else if (canEarn) {
+        checks.economicLoop.grade = 0.2;
+        checks.economicLoop.pass = true;
         checks.economicLoop.detail = 'Currencies increase but spending does not work';
         report.defects.push({ severity: 'critical', check: 'economicLoop',
           description: 'No economic loop: player earns currency but cannot spend it. Upgrades must deduct currency to create a progression loop.',
           suggestion: 'Fix upgrade buy handlers to actually deduct currency when purchasing.' });
       } else if (canSpend) {
+        checks.economicLoop.grade = 0.1;
+        checks.economicLoop.pass = true;
         checks.economicLoop.detail = 'Spending works but no earning detected';
         report.defects.push({ severity: 'critical', check: 'economicLoop',
           description: 'No economic loop: spending works but currencies never increase naturally. Player has no way to earn.',
@@ -864,24 +938,24 @@ async function testGame(url) {
     await browser.close();
   }
 
-  // === SCORING (tier-capped) ===
-  // Step 1: Calculate raw weighted score
+  // === SCORING (graduated + tier-capped) ===
+  // Step 1: Calculate raw weighted score using graduated grades (0.0-1.0)
   let weightedScore = 0;
   for (const [key, check] of Object.entries(checks)) {
-    if (check.pass) weightedScore += CHECK_WEIGHTS[key];
+    weightedScore += (check.grade || 0) * CHECK_WEIGHTS[key];
   }
-  report.weightedRaw = weightedScore;
+  report.weightedRaw = Math.round(weightedScore * 100) / 100;
 
   // Step 2: Normalize to 10-point scale
   let score = Math.round((weightedScore / MAX_WEIGHTED) * 10 * 10) / 10;
 
-  // Step 3: Apply tier caps — failing ANY check in a tier caps the score
+  // Step 3: Apply tier caps — grade === 0 (total failure) in a tier caps the score
   let lowestCap = 10.0;
   let cappingTier = null;
   const failedTiers = new Set();
 
   for (const [key, check] of Object.entries(checks)) {
-    if (!check.pass) {
+    if (check.grade === 0) {
       const tier = CHECK_DEFS[key]?.tier;
       if (tier) {
         failedTiers.add(tier);
@@ -935,10 +1009,11 @@ if (report.cappingTier) {
 }
 log(`${'='.repeat(74)}`);
 for (const [name, check] of Object.entries(report.checks)) {
-  const icon = check.pass ? 'PASS' : 'FAIL';
+  const icon = check.grade > 0 ? (check.grade >= 0.7 ? 'PASS' : 'PART') : 'FAIL';
   const tier = CHECK_DEFS[name]?.tier || '?';
   const w = `[${tier}]`;
-  log(`  ${icon}  ${w.padEnd(14)} ${name.padEnd(24)} ${check.detail.substring(0, 50)}`);
+  const g = `g=${(check.grade || 0).toFixed(1)}`;
+  log(`  ${icon}  ${w.padEnd(14)} ${name.padEnd(24)} ${g.padEnd(6)} ${check.detail.substring(0, 44)}`);
 }
 log(`${'-'.repeat(74)}`);
 if (report.defects.length > 0) {
