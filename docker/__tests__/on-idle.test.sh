@@ -355,6 +355,36 @@ test_state_file_atomic_write() {
         "Should not leave .tmp prompt file" || return 1
 }
 
+test_root_index_html_copied_to_dist() {
+    echo '{"name": "TestGame"}' > "$TEST_WORKSPACE/idea.json"
+    mkdir -p "$TEST_WORKSPACE/gdd"
+    echo '{}' > "$TEST_WORKSPACE/gdd/currencies.json"
+    echo '{}' > "$TEST_WORKSPACE/gdd/progression.json"
+    echo '{}' > "$TEST_WORKSPACE/gdd/ui-ux.json"
+    echo '{}' > "$TEST_WORKSPACE/implementation-plan.json"
+    # Put index.html at root (not in dist/)
+    echo '<html>root game</html>' > "$TEST_WORKSPACE/index.html"
+    echo 'console.log("game")' > "$TEST_WORKSPACE/game.js"
+    mkdir -p "$TEST_WORKSPACE/css"
+    echo '.game { color: red }' > "$TEST_WORKSPACE/css/style.css"
+
+    local output
+    output=$("$ON_IDLE" 2>&1)
+
+    # Should copy to dist/
+    assert_file_exists "$TEST_WORKSPACE/dist/index.html" \
+        "Should copy root index.html to dist/" || return 1
+
+    assert_file_exists "$TEST_WORKSPACE/dist/game.js" \
+        "Should copy root js files to dist/" || return 1
+
+    assert_file_exists "$TEST_WORKSPACE/dist/css/style.css" \
+        "Should copy css subdirectory to dist/" || return 1
+
+    assert_file_exists "$TEST_WORKSPACE/phase4-complete.marker" \
+        "Should create phase4-complete marker after root→dist copy" || return 1
+}
+
 test_gdd_dir_created_for_phase2() {
     echo '{"name": "TestGame"}' > "$TEST_WORKSPACE/idea.json"
 
@@ -389,6 +419,7 @@ run_test "Repair prompt includes strategy"                     test_repair_promp
 run_test "job-complete.marker signals exit"                    test_job_complete_marker_signals_exit
 run_test "job-failed.marker signals exit"                      test_job_failed_marker_signals_exit
 run_test "State file atomic write (no .tmp left)"              test_state_file_atomic_write
+run_test "Root index.html copied to dist/"                      test_root_index_html_copied_to_dist
 run_test "GDD directory created for phase 2"                   test_gdd_dir_created_for_phase2
 
 echo ""

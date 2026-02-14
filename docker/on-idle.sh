@@ -103,8 +103,10 @@ Defect report:
 ${DEFECT_REPORT}
 ${STRATEGY_CONTEXT}
 
-Fix the defects listed above. The game source files are in ${WORKSPACE}/dist/
-After fixing, rebuild the game in place in ${WORKSPACE}/dist/"
+CRITICAL: All game source files are in ${WORKSPACE}/dist/ — edit files ONLY in that directory.
+Do NOT edit files in the workspace root. Only ${WORKSPACE}/dist/ files are deployed.
+Fix the defects listed above by modifying files in ${WORKSPACE}/dist/
+After fixing, ensure all changes are saved in ${WORKSPACE}/dist/"
 
     # Remove the repair prompt file so we don't re-trigger
     rm -f "${WORKSPACE}/repair-prompt.txt"

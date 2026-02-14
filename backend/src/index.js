@@ -268,6 +268,7 @@ async function main() {
     // --- Deploy the game ---
     try {
       const workspaceDir = `${containerManager.workspacePath}/job-${job.id}`;
+      syncRootToDist(workspaceDir);
       const sourceDir = `${workspaceDir}/dist`;
       deployResult = await deploymentManager.deployGame(job.id, job.game_name || `Game ${job.id}`, sourceDir, { workspaceDir });
       await queueManager.updatePhaseOutput(job.id, 'deployment', deployResult);
@@ -290,8 +291,42 @@ async function main() {
     const PASS_SCORE = 10;
     const FAIL_SCORE = 4;
 
-    const { writeFileSync, readFileSync } = await import('node:fs');
+    const { writeFileSync, readFileSync, existsSync, cpSync, readdirSync, statSync, mkdirSync } = await import('node:fs');
+    const { join } = await import('node:path');
     const repairLog = [];
+
+    // Sync workspace root game files to dist/ before deploy/redeploy.
+    // Claude sometimes edits at workspace root instead of dist/.
+    function syncRootToDist(workspaceDir) {
+      const distDir = `${workspaceDir}/dist`;
+      const rootIndex = `${workspaceDir}/index.html`;
+      if (!existsSync(rootIndex)) return;
+      mkdirSync(distDir, { recursive: true });
+      // Copy flat game files (html/js/css)
+      for (const f of readdirSync(workspaceDir)) {
+        const full = join(workspaceDir, f);
+        if (!statSync(full).isFile()) continue;
+        if (/\.(html|js|css)$/.test(f)) {
+          const distFile = join(distDir, f);
+          // Only copy if root file is newer than dist file
+          try {
+            if (!existsSync(distFile) || statSync(full).mtimeMs > statSync(distFile).mtimeMs) {
+              writeFileSync(distFile, readFileSync(full));
+            }
+          } catch { /* ignore */ }
+        }
+      }
+      // Copy framework subdirectories
+      for (const dir of ['css', 'core', 'sprites', 'mechanics', 'ui']) {
+        const srcDir = join(workspaceDir, dir);
+        const destDir = join(distDir, dir);
+        if (existsSync(srcDir) && statSync(srcDir).isDirectory()) {
+          try {
+            cpSync(srcDir, destDir, { recursive: true });
+          } catch { /* ignore */ }
+        }
+      }
+    }
 
     function updateScoreBadge(score, attempt) {
       try {
@@ -537,9 +572,10 @@ h1{margin:0 0 4px}h2{margin:0 0 16px;color:#888;font-weight:normal}</style></hea
           await queueManager.addLog(job.id, 'error', `Repair wait timed out (${REPAIR_WAIT_TIMEOUT / 1000}s)`);
         }
 
-        // Redeploy the fixed game
+        // Redeploy the fixed game (sync root→dist first, Claude may edit at root)
         try {
           const workspaceDir = `${containerManager.workspacePath}/job-${job.id}`;
+          syncRootToDist(workspaceDir);
           const sourceDir = `${workspaceDir}/dist`;
           await deploymentManager.deployGame(job.id, job.game_name || `Game ${job.id}`, sourceDir, { workspaceDir });
           injectBadgeScript();

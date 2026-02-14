@@ -266,6 +266,9 @@ CRITICAL: Do NOT modify these files — they are managed by the harness system:
 
 Build all game output files in the `dist/` subdirectory.
 The main game entry point MUST be `dist/index.html`.
+
+IMPORTANT: During Phase 5 repairs, edit files ONLY in `dist/`.
+Do NOT edit files in the workspace root — only `dist/` is deployed.
 CLAUDEMD
 
 cd "$WORKSPACE_DIR"
