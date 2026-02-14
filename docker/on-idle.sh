@@ -122,9 +122,13 @@ elif [[ -f "${WORKSPACE}/index.html" ]]; then
     # Move game files to dist/ for consistency
     mkdir -p "${WORKSPACE}/dist"
     cp "${WORKSPACE}/index.html" "${WORKSPACE}/dist/"
-    # Copy JS/CSS files that are likely game files (not framework/prompts)
+    # Copy JS/CSS flat files
     for f in "${WORKSPACE}"/*.js "${WORKSPACE}"/*.css; do
         [[ -f "$f" ]] && cp "$f" "${WORKSPACE}/dist/" 2>/dev/null
+    done
+    # Copy framework/game subdirectories
+    for dir in css core sprites mechanics ui; do
+        [[ -d "${WORKSPACE}/$dir" ]] && cp -r "${WORKSPACE}/$dir" "${WORKSPACE}/dist/" 2>/dev/null
     done
     GAME_INDEX="${WORKSPACE}/dist/index.html"
 fi
