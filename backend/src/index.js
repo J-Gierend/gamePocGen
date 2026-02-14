@@ -226,7 +226,7 @@ async function main() {
           const { readFileSync } = await import('node:fs');
           const ideaPath = `${containerManager.workspacePath}/job-${job.id}/idea.json`;
           const idea = JSON.parse(readFileSync(ideaPath, 'utf-8'));
-          const gameName = idea.name || idea.title;
+          const gameName = idea.name || idea.title || idea.gameName || idea.gameTitle;
           if (gameName && gameName !== job.game_name) {
             await queueManager.pool.query('UPDATE jobs SET game_name = $1 WHERE id = $2', [gameName, job.id]);
             job.game_name = gameName;
