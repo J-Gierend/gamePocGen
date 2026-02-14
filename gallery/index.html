@@ -479,6 +479,32 @@
             height: 14px;
         }
 
+        .feedback-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+            background: var(--surface-hover);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-dim);
+            cursor: pointer;
+            transition: all 0.2s;
+            padding: 0;
+        }
+
+        .feedback-button:hover {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+
+        .feedback-button svg {
+            width: 16px;
+            height: 16px;
+        }
+
         .game-meta {
             font-size: 0.7rem;
             color: var(--text-muted);

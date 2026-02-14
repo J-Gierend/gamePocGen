@@ -166,6 +166,48 @@ export function createHandlers({ queueManager, containerManager, deploymentManag
     },
 
     /**
+     * POST /api/jobs/:id/feedback - Submit user feedback for a game.
+     * Feedback is appended to existing feedback and triggers a new repair run.
+     */
+    async submitFeedback(req, res) {
+      try {
+        const id = parseInt(req.params.id, 10);
+        const { feedback } = req.body;
+        if (!feedback || typeof feedback !== 'string' || !feedback.trim()) {
+          return res.status(400).json({ error: 'Feedback text is required' });
+        }
+
+        const job = await queueManager.getJob(id);
+        if (!job) {
+          return res.status(404).json({ error: `Job ${id} not found` });
+        }
+
+        // Append to existing feedback with timestamp
+        const timestamp = new Date().toISOString();
+        const existingFeedback = job.user_feedback || '';
+        const newEntry = `[${timestamp}] ${feedback.trim()}`;
+        const combined = existingFeedback
+          ? `${existingFeedback}\n${newEntry}`
+          : newEntry;
+
+        const updated = await queueManager.setUserFeedback(id, combined);
+
+        // If the job is completed, reset it to phase_5 to trigger a new repair run
+        if (job.status === 'completed') {
+          await queueManager.updateStatus(id, 'phase_5');
+        }
+
+        res.status(200).json({
+          jobId: id,
+          feedback: combined,
+          willRepair: job.status === 'completed',
+        });
+      } catch (err) {
+        res.status(500).json({ error: err.message });
+      }
+    },
+
+    /**
      * POST /api/improvements/run - Manually trigger process improvement agent.
      */
     async runProcessImprovement(req, res) {
@@ -248,6 +290,7 @@ export async function createRouter(services) {
   router.get('/stats', asyncHandler(handlers.getStats));
   router.get('/games', asyncHandler(handlers.listGames));
   router.delete('/games/:id', asyncHandler(handlers.removeGame));
+  router.post('/jobs/:id/feedback', asyncHandler(handlers.submitFeedback));
   router.post('/improvements/run', asyncHandler(handlers.runProcessImprovement));
   router.get('/improvements', asyncHandler(handlers.getImprovements));
 

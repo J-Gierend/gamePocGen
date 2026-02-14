@@ -450,6 +450,127 @@ export function runTests() {
       }
     },
 
+    // === POST /api/jobs/:id/feedback ===
+
+    'POST /jobs/:id/feedback - submits feedback for completed job': async () => {
+      let setFeedbackArgs = null;
+      let statusUpdateArgs = null;
+      const services = createMockServices({
+        queueManager: {
+          getJob: async () => ({ id: 1, status: 'completed', user_feedback: null }),
+          setUserFeedback: async (id, fb) => { setFeedbackArgs = { id, fb }; return { id, user_feedback: fb }; },
+          updateStatus: async (id, status) => { statusUpdateArgs = { id, status }; return { id, status }; },
+        },
+      });
+      const handlers = createHandlers(services);
+      const req = createMockReq({ params: { id: '1' }, body: { feedback: 'Make enemies faster' } });
+      const res = createMockRes();
+
+      await handlers.submitFeedback(req, res);
+
+      assertEqual(res.statusCode, 200, 'status should be 200');
+      assertEqual(res.body.jobId, 1, 'should return jobId');
+      assert(res.body.feedback.includes('Make enemies faster'), 'should include feedback text');
+      assertEqual(res.body.willRepair, true, 'completed job should trigger repair');
+      assertEqual(setFeedbackArgs.id, 1, 'should pass job ID to setUserFeedback');
+      assert(setFeedbackArgs.fb.includes('Make enemies faster'), 'should pass feedback text');
+      assertEqual(statusUpdateArgs.id, 1, 'should reset job ID');
+      assertEqual(statusUpdateArgs.status, 'phase_5', 'should reset to phase_5');
+    },
+
+    'POST /jobs/:id/feedback - non-completed job does not reset status': async () => {
+      let statusUpdateCalled = false;
+      const services = createMockServices({
+        queueManager: {
+          getJob: async () => ({ id: 2, status: 'running', user_feedback: null }),
+          setUserFeedback: async (id, fb) => ({ id, user_feedback: fb }),
+          updateStatus: async () => { statusUpdateCalled = true; },
+        },
+      });
+      const handlers = createHandlers(services);
+      const req = createMockReq({ params: { id: '2' }, body: { feedback: 'Add more levels' } });
+      const res = createMockRes();
+
+      await handlers.submitFeedback(req, res);
+
+      assertEqual(res.statusCode, 200, 'status should be 200');
+      assertEqual(res.body.willRepair, false, 'non-completed job should not trigger repair');
+      assertEqual(statusUpdateCalled, false, 'should not call updateStatus for non-completed job');
+    },
+
+    'POST /jobs/:id/feedback - appends to existing feedback': async () => {
+      let capturedFeedback = null;
+      const services = createMockServices({
+        queueManager: {
+          getJob: async () => ({ id: 1, status: 'completed', user_feedback: '[2025-01-01] Old feedback' }),
+          setUserFeedback: async (id, fb) => { capturedFeedback = fb; return { id, user_feedback: fb }; },
+          updateStatus: async () => ({}),
+        },
+      });
+      const handlers = createHandlers(services);
+      const req = createMockReq({ params: { id: '1' }, body: { feedback: 'New feedback' } });
+      const res = createMockRes();
+
+      await handlers.submitFeedback(req, res);
+
+      assert(capturedFeedback.includes('[2025-01-01] Old feedback'), 'should keep existing feedback');
+      assert(capturedFeedback.includes('New feedback'), 'should include new feedback');
+      assert(capturedFeedback.indexOf('Old feedback') < capturedFeedback.indexOf('New feedback'), 'old feedback should come before new');
+    },
+
+    'POST /jobs/:id/feedback - returns 400 for missing feedback': async () => {
+      const services = createMockServices();
+      const handlers = createHandlers(services);
+      const req = createMockReq({ params: { id: '1' }, body: {} });
+      const res = createMockRes();
+
+      await handlers.submitFeedback(req, res);
+
+      assertEqual(res.statusCode, 400, 'status should be 400');
+      assert(res.body.error, 'should have error message');
+    },
+
+    'POST /jobs/:id/feedback - returns 400 for empty string feedback': async () => {
+      const services = createMockServices();
+      const handlers = createHandlers(services);
+      const req = createMockReq({ params: { id: '1' }, body: { feedback: '   ' } });
+      const res = createMockRes();
+
+      await handlers.submitFeedback(req, res);
+
+      assertEqual(res.statusCode, 400, 'status should be 400');
+    },
+
+    'POST /jobs/:id/feedback - returns 404 for non-existent job': async () => {
+      const services = createMockServices({
+        queueManager: { getJob: async () => null },
+      });
+      const handlers = createHandlers(services);
+      const req = createMockReq({ params: { id: '999' }, body: { feedback: 'Some feedback' } });
+      const res = createMockRes();
+
+      await handlers.submitFeedback(req, res);
+
+      assertEqual(res.statusCode, 404, 'status should be 404');
+      assert(res.body.error.includes('999'), 'error should mention job ID');
+    },
+
+    'POST /jobs/:id/feedback - returns 500 on service error': async () => {
+      const services = createMockServices({
+        queueManager: {
+          getJob: async () => { throw new Error('DB connection lost'); },
+        },
+      });
+      const handlers = createHandlers(services);
+      const req = createMockReq({ params: { id: '1' }, body: { feedback: 'test' } });
+      const res = createMockRes();
+
+      await handlers.submitFeedback(req, res);
+
+      assertEqual(res.statusCode, 500, 'status should be 500');
+      assert(res.body.error, 'should have error message');
+    },
+
     // === Error handling ===
 
     'service error on generateGames returns 500': async () => {

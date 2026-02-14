@@ -508,6 +508,8 @@
         if (gameUrl && (job.status === 'completed' || job.status === 'phase_5')) {
             actionHtml = `<a href="${escapeHtml(gameUrl)}" class="play-button" target="_blank" rel="noopener">
                 <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>Play</a>`;
+            actionHtml += `<button class="feedback-button" data-job-id="${job.id}" title="Send feedback to repair agent">
+                <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/></svg></button>`;
         } else if (job.status === 'failed') {
             const errMsg = job.error ? job.error.substring(0, 60) : 'Generation failed';
             actionHtml = `<span class="fail-label" title="${escapeHtml(job.error || '')}">${escapeHtml(errMsg)}</span>`;
@@ -658,6 +660,80 @@
         loadImprovements();
         pollTimer = setInterval(() => { loadJobs(); loadImprovements(); }, CONFIG.pollInterval);
     }
+
+    // --- Feedback Modal ---
+    function createFeedbackModal() {
+        const modal = document.createElement('div');
+        modal.id = 'feedback-modal';
+        modal.style.cssText = 'display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.7);align-items:center;justify-content:center';
+        modal.innerHTML = `
+            <div style="background:#1a1a2e;border:1px solid #333;border-radius:12px;padding:24px;max-width:480px;width:90%">
+                <h3 style="margin:0 0 12px;color:#e2e8f0">Feedback for Repair Agent</h3>
+                <p style="margin:0 0 12px;color:#94a3b8;font-size:14px">Your feedback will be sent to the next repair run. Describe what's wrong or what you want changed.</p>
+                <textarea id="feedback-text" style="width:100%;height:120px;background:#0f0f1a;color:#e2e8f0;border:1px solid #333;border-radius:8px;padding:12px;font-family:inherit;font-size:14px;resize:vertical" placeholder="e.g. The upgrade buttons don't work, enemies are too fast, add a pause button..."></textarea>
+                <div style="display:flex;gap:8px;margin-top:12px;justify-content:flex-end">
+                    <button id="feedback-cancel" style="padding:8px 16px;background:#333;color:#e2e8f0;border:none;border-radius:6px;cursor:pointer">Cancel</button>
+                    <button id="feedback-submit" style="padding:8px 16px;background:#6366f1;color:white;border:none;border-radius:6px;cursor:pointer;font-weight:600">Send Feedback</button>
+                </div>
+                <div id="feedback-status" style="margin-top:8px;font-size:13px;color:#94a3b8"></div>
+            </div>`;
+        document.body.appendChild(modal);
+        return modal;
+    }
+
+    let feedbackModal = null;
+    let feedbackJobId = null;
+
+    function openFeedbackModal(jobId) {
+        if (!feedbackModal) feedbackModal = createFeedbackModal();
+        feedbackJobId = jobId;
+        feedbackModal.style.display = 'flex';
+        const textarea = document.getElementById('feedback-text');
+        textarea.value = '';
+        textarea.focus();
+        document.getElementById('feedback-status').textContent = '';
+    }
+
+    function closeFeedbackModal() {
+        if (feedbackModal) feedbackModal.style.display = 'none';
+        feedbackJobId = null;
+    }
+
+    async function submitFeedback() {
+        const text = document.getElementById('feedback-text').value.trim();
+        const statusEl = document.getElementById('feedback-status');
+        if (!text) { statusEl.textContent = 'Please enter feedback.'; statusEl.style.color = '#f59e0b'; return; }
+
+        statusEl.textContent = 'Sending...';
+        statusEl.style.color = '#94a3b8';
+
+        try {
+            const res = await fetch(`/api/jobs/${feedbackJobId}/feedback`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ feedback: text }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Failed to submit');
+
+            statusEl.style.color = '#22c55e';
+            statusEl.textContent = data.willRepair
+                ? 'Feedback sent! A new repair run will start shortly.'
+                : 'Feedback saved. It will be included in the next repair run.';
+            setTimeout(closeFeedbackModal, 2500);
+        } catch (err) {
+            statusEl.textContent = `Error: ${err.message}`;
+            statusEl.style.color = '#ef4444';
+        }
+    }
+
+    // Event delegation for feedback buttons
+    document.addEventListener('click', (e) => {
+        const btn = e.target.closest('.feedback-button');
+        if (btn) { openFeedbackModal(parseInt(btn.dataset.jobId, 10)); return; }
+        if (e.target.id === 'feedback-cancel' || e.target.id === 'feedback-modal') closeFeedbackModal();
+        if (e.target.id === 'feedback-submit') submitFeedback();
+    });
 
     // --- Init ---
     function init() {

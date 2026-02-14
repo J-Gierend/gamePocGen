@@ -466,9 +466,16 @@ h1{margin:0 0 4px}h2{margin:0 0 16px;color:#888;font-weight:normal}</style></hea
           });
         }
 
-        // Spawn Phase 5 repair container with defect report
+        // Spawn Phase 5 repair container with defect report + user feedback
         await queueManager.addLog(job.id, 'info', `Spawning repair container (attempt ${attempt})`);
-        const defectReport = JSON.stringify(testResult.defects || []);
+        let defectReport = JSON.stringify(testResult.defects || []);
+
+        // Include user feedback if present
+        const userFeedback = await queueManager.getUserFeedback(job.id);
+        if (userFeedback) {
+          defectReport += `\n\n=== USER FEEDBACK (implement these requests) ===\n${userFeedback}\n=== END USER FEEDBACK ===`;
+          await queueManager.addLog(job.id, 'info', `Including user feedback in repair: ${userFeedback.slice(0, 200)}`);
+        }
 
         const { status: repairStatus, logs: repairLogs } = await spawnAndWait('phase5', [
           `GAME_URL=${gameUrl}`,
@@ -534,6 +541,7 @@ h1{margin:0 0 4px}h2{margin:0 0 16px;color:#888;font-weight:normal}</style></hea
           jobId: j.id,
           gameName: j.game_name,
           status: j.status,
+          userFeedback: j.user_feedback || null,
           scores: scores.map(s => s.score),
           latestScore: po.latest_score,
           defects: scores[scores.length - 1]?.defects || [],
@@ -551,6 +559,10 @@ h1{margin:0 0 4px}h2{margin:0 0 16px;color:#888;font-weight:normal}</style></hea
         lines.push(`Score progression: ${jd.scores.join(' → ')}`);
         lines.push(`Latest: ${jd.latestScore?.score}/10 (attempt ${jd.latestScore?.attempt})`);
         lines.push(`Strategy reviews: ${jd.strategyReviews.length}`);
+        if (jd.userFeedback) {
+          lines.push(`User feedback:`);
+          lines.push(jd.userFeedback);
+        }
         if (jd.defects.length > 0) {
           lines.push('Current defects:');
           for (const d of jd.defects) lines.push(`  - ${typeof d === 'string' ? d : d}`);
