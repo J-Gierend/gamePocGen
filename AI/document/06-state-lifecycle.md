@@ -20,13 +20,13 @@ stateDiagram-v2
     phase_4 --> deployed: exitCode=0\ndist/ created\ndeployGame() succeeds
     phase_4 --> failed: exitCode!=0\nor deploy error
 
-    deployed --> phase_5: Playwright test\nscore < 10/10
+    deployed --> phase_5: Playwright test\nscore < 7
 
-    phase_5 --> phase_5: repair + redeploy\nscore < 10 and attempt < 100
-    phase_5 --> completed: score >= 10/10\nor attempt=100 and score >= 4
-    phase_5 --> failed: attempt=100 and score < 4 (game removed)\nor 5 consecutive ETIMEDOUT
+    phase_5 --> phase_5: repair + redeploy\nscore < 7 and attempt < 100
+    phase_5 --> completed: score >= 7 GOOD_ENOUGH\nor attempt=100 and score >= 4
+    phase_5 --> failed: attempt=100 and score < 4 game removed\nor 5 consecutive ETIMEDOUT
 
-    deployed --> completed: score >= 10/10\non first test
+    deployed --> completed: score >= 7\non first test
 
     completed --> phase_5: user feedback submitted\nPOST /api/jobs/:id/feedback
 
@@ -143,27 +143,29 @@ stateDiagram-v2
     CheckTimeout --> BailOut: 5 consecutive ETIMEDOUT\nstatus: failed
     CheckTimeout --> UpdateBadge: Not infrastructure failure
 
-    UpdateBadge --> Passed: score >= 10
+    UpdateBadge --> BackupBest: score > bestScore\ncp dist/ to dist-best/
+    BackupBest --> CheckRegression: Compare to bestScore
 
-    UpdateBadge --> MaxAttemptKeep: attempt=100\nscore >= 4
+    CheckRegression --> RestoreAndRetest: score < bestScore - 1\nRestore dist-best/ and redeploy
+    CheckRegression --> Passed: score >= 7 GOOD_ENOUGH_SCORE
 
-    UpdateBadge --> MaxAttemptFail: attempt=100\nscore < 4
+    CheckRegression --> MaxAttemptKeep: attempt=100\nscore >= 4
 
-    UpdateBadge --> CheckPlateau: score < 10\nattempt < 100
+    CheckRegression --> MaxAttemptFail: attempt=100\nscore < 4
+
+    CheckRegression --> CheckPlateau: score < 7\nattempt < 100
 
     CheckPlateau --> StrategyReview: Last 5 scores within 0.5 delta\nSpawn phase5-strategy container
-    CheckPlateau --> SpawnRepair: No plateau detected
+    CheckPlateau --> WriteRepairPrompt: No plateau detected
 
-    StrategyReview --> SpawnRepair: Writes repair-strategy.md
+    StrategyReview --> WriteRepairPrompt: Writes repair-strategy.md
 
-    SpawnRepair --> PollContainer: spawnContainer(job, phase5)\npoll every 5s
+    WriteRepairPrompt --> WaitForRepair: Write repair-prompt.txt\non-idle.sh picks up prompt\nfeeds to persistent Claude session
 
-    PollContainer --> Redeploy: exitCode=0\ndeployGame() + re-inject badge
+    WaitForRepair --> Redeploy: Claude goes idle\nsyncRootToDist + deployGame
 
-    PollContainer --> NextTest: exitCode!=0\nskip redeploy, re-test
-
+    RestoreAndRetest --> PlaywrightTest
     Redeploy --> PlaywrightTest
-    NextTest --> PlaywrightTest
 
     Passed --> [*]: status: completed
     MaxAttemptKeep --> [*]: status: completed

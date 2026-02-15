@@ -92,12 +92,12 @@ graph LR
         SUFFIXES["BigNum suffixes:\nK M B T Qa Qi Sx Sp Oc No Dc\nthen scientific notation"]
         AGENTS["Phase 2 agents order:\ncurrencies progression ui-ux\n3 sequential agents"]
         RES["Worker resource limits:\nMemory: 2GB\nCPU: 0.5 cores\nphase1-4 timeout: 43200s 12h\nphase5 timeout: 3600s 1h"]
-        REPAIR["Repair loop:\nMAX_REPAIR_ATTEMPTS: 100\nPASS_SCORE: 10/10\nFAIL_SCORE: 4/10 remove threshold\nMAX_CONSECUTIVE_TIMEOUTS: 5\nPLATEAU_WINDOW: 5\nPLATEAU_THRESHOLD: 0.5"]
+        REPAIR["Repair loop:\nMAX_REPAIR_ATTEMPTS: 100\nGOOD_ENOUGH_SCORE: 7 quality gate\nFAIL_SCORE: 4 remove threshold\nMAX_CONSECUTIVE_TIMEOUTS: 5\nPLATEAU_WINDOW: 5\nPLATEAU_THRESHOLD: 0.5\nGameplay observation: 30s\nGraduated scoring: 16 checks\nMAX_WEIGHTED: 13"]
         GENRES["16 genre seeds:\ndungeon-crawler space-combat\nfishing-and-gathering factory-automation\nmonster-tamer lane-battle\ntower-defense wave-survival\nexploration-and-mapping racing-and-dodging\nfarming-and-ecosystem puzzle-combat\npirate-ship-battles spell-crafting-arena\ntrain-network underwater-exploration"]
         PROMPTS["13 prompt templates\n4838 lines total\nphase1: 1 + phase2: 6 (3 used)\nphase3: 1 + phase4: 1\nphase5: 2 repair + review\n+ strategy-review\n+ process-improvement"]
         BASEPORT["Game container base port: 8080\nport = 8080 + gameId"]
         OAUTH_CLIENT["OAuth client_id:\n9d1c250a-e61b-44d9-88ed-5944d1962f5e\nconsole.anthropic.com"]
         PIA_COOL["Process improvement:\nCooldown: 1 hour\nCPU: 1.0 core\nNetwork: traefik"]
-        VIEWPORT["Viewport test: 1400x900\nfitsViewport: 2px tolerance\nincomplete tier cap 6.0"]
+        VIEWPORT["Viewport test: 1400x900\nfitsViewport: 2px=1.0 20px=0.7 100px=0.3\nincomplete tier cap 6.0"]
     end
 ```

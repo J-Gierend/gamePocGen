@@ -278,35 +278,43 @@ After making all fixes, produce a repair summary:
 
 ## Automated Test Expectations (CRITICAL)
 
-The game is evaluated by a CONFIG-aware Playwright test. The test reads `window.CONFIG` and uses game-specific data (currency IDs, entity types, primary currency) to produce targeted defect reports. These exact checks determine the score:
+The game is evaluated by a CONFIG-aware Playwright test with **graduated scoring**. Each check produces a grade from 0.0 to 1.0 (not binary pass/fail). The final score is a weighted average of all grades, scaled to 10.
 
-**FATAL tier (score capped at 1/10 if ANY fail):**
-- No JavaScript errors on page load (no console.error, no uncaught exceptions)
-- Canvas has >1% colored pixels (not blank/black)
+**IMPORTANT**: Tier caps only apply when a check has grade=0 (total failure). Partial grades (e.g., 0.3) do NOT trigger tier caps — they just reduce the overall score proportionally.
 
-**UNPLAYABLE tier (score capped at 2/10 if ANY fail):**
-- Canvas clicks create new objects: `game.entities.length` or `game.structures.length` must increase after clicking
-- Entities exist: `game.entities.length > 0` after 20 seconds. Test checks which CONFIG entity types are present.
-- Currency values change over 20 seconds. Test checks the PRIMARY currency specifically (`CONFIG.primaryCurrency`).
-- **Economic Loop**: Both earning AND spending must work. Currencies must increase over time AND decrease when buying upgrades.
+### Tier Caps (grade=0 triggers cap)
 
-**BROKEN tier (score capped at 4/10 if ANY fail):**
-- `window.CONFIG` exists (add `window.CONFIG = CONFIG;` in index.html module script)
-- HUD currency displays: each currency in `CONFIG.currencies` should have a visible display element matching `[id*="display"], [class*="currency"], [id*="currency"]`
-- Controls panel visible with >=2 key binding patterns (e.g., "Click: Place", "Space: Start")
-- >=3 out of 5 canvas clicks produce state changes
-- **Currency Spending**: The test gives the player 100k of each currency, clicks upgrade buttons, and verifies at least one currency decreased. Upgrades MUST actually deduct currency.
+**FATAL tier (cap 1/10 if grade=0):**
+- `noJsErrors` — No JS errors on load or during gameplay
+- `canvasRendering` — Canvas has colored pixels. Graded: 1-5%=0.3, 5-15%=0.5, 15-30%=0.7, 30%+=1.0. More visual content = higher grade.
 
-**INCOMPLETE tier (score capped at 6/10 if ANY fail):**
-- >=2 clickable tabs matching `[data-tab], .tab, [role="tab"], #tabs button`
-- Upgrades tab has clickable buttons
-- Game fits viewport (no scrolling)
-- Waves advance over 20 seconds
+**UNPLAYABLE tier (cap 2/10 if grade=0):**
+- `canvasInteraction` — Clicks create new objects. Graded: 1 new=0.3, 2=0.6, 3+=1.0
+- `entitiesSpawn` — Entities exist after 30s. Graded by count AND type variety: 1-2=0.2, 3-5=0.4, 6-10=0.6, 10+ with 3+ types=1.0
+- `currenciesChange` — Currencies change over 30s. Graded by proportion: (changed/total). Primary currency not changing caps grade at 0.3.
+- `currencySpending` — Upgrades deduct currency. Graded: 1 currency=0.6, 2+=1.0
 
-**Key difference from previous test version:** The old test just checked "did any currency change?" and "does clicking earn more than idle?" The new test specifically verifies:
-1. The primary currency (from CONFIG) increases
-2. Upgrades actually SPEND currency (not just display a cost)
-3. Both earn + spend create a complete economic loop
+**BROKEN tier (cap 4/10 if grade=0):**
+- `configPresent` — `window.CONFIG` exists
+- `hudCurrencies` — Currency displays visible. Graded: 1 display=0.3, 2=0.5-0.6, 3+=0.7-1.0
+- `controlsVisible` — Key bindings visible. Graded: 2 bindings=0.4, 3-4=0.7, 5+=1.0
+- `canvasClickResponsive` — Clicks produce state changes. Graded linearly: distinctChanges/5
+- `economicLoop` — Both earn AND spend work. Grade = average of earning and spending grades.
+
+**INCOMPLETE tier (cap 6/10 if grade=0):**
+- `tabsSwitchable` — 2+ clickable tabs. Graded: 2 tabs=0.7, 3+=1.0
+- `upgradesExist` — Upgrade buttons exist. Graded: 1 button=0.4, 2=0.7, 4+=1.0
+- `fitsViewport` — No scrolling needed. Graded: <=2px overflow=1.0, <=20px=0.7, <=100px=0.3
+- `wavesAdvance` — Waves progress in 30s. Graded: 1 wave=0.4, 2=0.7, 3+=1.0
+
+**POLISH tier (no cap, just score reduction):**
+- `tutorialPresent` — Tutorial/instructions overlay on load
+
+### Key Points for Repair
+- Score 7+ = game passes quality gate
+- Each check contributes grade × weight to the score. Low grades drag the score down even without failing completely.
+- To maximize score: make MORE entities spawn, ensure ALL currencies change, render MORE on canvas, show MORE control bindings
+- The test observes gameplay for **30 seconds** — ensure waves auto-start and entities spawn quickly
 
 **Required window globals:**
 ```javascript

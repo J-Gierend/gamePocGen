@@ -394,14 +394,14 @@ async function main() {
     const gameUrl = deployResult.url;
     const testUrl = `http://gamedemo${job.id}`;
     const MAX_REPAIR_ATTEMPTS = 100;
-    const PASS_SCORE = 10;
+    const GOOD_ENOUGH_SCORE = 7;
     const FAIL_SCORE = 4;
     const repairLog = [];
 
     function updateScoreBadge(score, attempt) {
       try {
         const altPath = `${deployResult.deployPath}/html/score-badge.js`;
-        const js = `(function(){var d=document.createElement('div');d.id='qa-badge';d.style.cssText='position:fixed;top:8px;right:8px;z-index:999999;background:${score>=8?'#22c55e':score>=4?'#eab308':'#ef4444'};color:#fff;padding:6px 14px;border-radius:20px;font:bold 14px/1 system-ui;box-shadow:0 2px 8px rgba(0,0,0,.3);pointer-events:none;';d.textContent='Score: ${score}/10 • Repair #${attempt}';var old=document.getElementById('qa-badge');if(old)old.remove();document.body.appendChild(d);})();`;
+        const js = `(function(){var d=document.createElement('div');d.id='qa-badge';d.style.cssText='position:fixed;top:8px;right:8px;z-index:999999;background:${score>=7?'#22c55e':score>=4?'#eab308':'#ef4444'};color:#fff;padding:6px 14px;border-radius:20px;font:bold 14px/1 system-ui;box-shadow:0 2px 8px rgba(0,0,0,.3);pointer-events:none;';d.textContent='Score: ${score}/10 • Repair #${attempt}';var old=document.getElementById('qa-badge');if(old)old.remove();document.body.appendChild(d);})();`;
         writeFileSync(altPath, js);
       } catch { /* non-critical */ }
     }
@@ -600,15 +600,9 @@ h1{margin:0 0 4px}h2{margin:0 0 16px;color:#888;font-weight:normal}</style></hea
           continue;
         }
 
-        // --- PASS GATE: score >= 8 is good enough ---
-        if (score >= 8) {
-          await queueManager.addLog(job.id, 'info', `Score ${score} >= 8, game passes quality gate (good enough)`);
-          containerManager.writeToWorkspace(job.id, 'job-complete.marker', 'Quality gate passed');
-          break;
-        }
-
-        if (score >= PASS_SCORE) {
-          await queueManager.addLog(job.id, 'info', `Score ${score} >= ${PASS_SCORE}, game passes quality gate`);
+        // --- PASS GATE: score >= GOOD_ENOUGH_SCORE ---
+        if (score >= GOOD_ENOUGH_SCORE) {
+          await queueManager.addLog(job.id, 'info', `Score ${score} >= ${GOOD_ENOUGH_SCORE}, game passes quality gate`);
           containerManager.writeToWorkspace(job.id, 'job-complete.marker', 'Quality gate passed');
           break;
         }

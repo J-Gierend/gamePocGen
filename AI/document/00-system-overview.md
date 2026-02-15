@@ -4,16 +4,16 @@
 graph TB
     subgraph "Frontend [nginx :80/:443]"
         DOCS["Docs Site\nindex.html 1125 lines\ngamepocgen.namjo-games.com"]
-        GALLERY["Gallery\ngallery.js 754 lines\n/gallery/ path"]
+        GALLERY["Gallery\ngallery.js 776 lines\n/gallery/ path"]
     end
 
     subgraph "Backend [Express :3010]"
         API["REST API\napi.js 298 lines\n10 endpoints"]
-        POLLER["Job Poller\nindex.js 761 lines\n5s interval"]
+        POLLER["Job Poller\nindex.js 1047 lines\n5s interval"]
         QM["QueueManager\n287 lines\nPostgreSQL queue"]
         CM["ContainerManager\n220 lines\nDocker lifecycle"]
         DM["DeploymentManager\n526 lines\nnginx + Traefik"]
-        GT["gameTester.js\n48 lines\nPlaywright quality"]
+        GT["gameTester.js\n119 lines\nPlaywright quality\ngraduated scoring"]
     end
 
     subgraph "Data [PostgreSQL :5432]"

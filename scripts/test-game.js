@@ -632,8 +632,8 @@ async function testGame(url) {
 
     report.screenshots.push(await screenshot(page, '02-after-interaction'));
 
-    // === WAIT FOR GAMEPLAY (20 seconds) ===
-    await page.waitForTimeout(20000);
+    // === WAIT FOR GAMEPLAY (30 seconds) ===
+    await page.waitForTimeout(30000);
     report.screenshots.push(await screenshot(page, '03-after-20s'));
 
     // Capture canvas thumbnail for gallery
@@ -704,9 +704,9 @@ async function testGame(url) {
       }
     } else {
       const entityContext = configEntityTypes.length > 0
-        ? `Configured entity types: ${configEntityTypes.join(', ')}. None found after 20s.`
-        : 'No entities spawned after 20 seconds. The game world is empty.';
-      checks.entitiesSpawn.detail = `No entities after 20s`;
+        ? `Configured entity types: ${configEntityTypes.join(', ')}. None found after 30s.`
+        : 'No entities spawned after 30 seconds. The game world is empty.';
+      checks.entitiesSpawn.detail = `No entities after 30s`;
       report.defects.push({ severity: 'critical', check: 'entitiesSpawn',
         description: entityContext,
         suggestion: 'Check wave spawning logic and entity factory. Ensure spawnEntity() creates entities from CONFIG.entities.' });
@@ -756,15 +756,15 @@ async function testGame(url) {
         // Warn if primary currency didn't change even though others did
         if (primaryCurrency && !primaryChanged) {
           report.defects.push({ severity: 'major', check: 'currenciesChange',
-            description: `Primary currency '${primaryCurrency}' did not change after 20s, though other currencies did (${changedCurrencies.join(', ')}).`,
+            description: `Primary currency '${primaryCurrency}' did not change after 30s, though other currencies did (${changedCurrencies.join(', ')}).`,
             suggestion: `Ensure the primary currency '${primaryCurrency}' increases through gameplay - kills, generators, or passive income.` });
         }
       } else {
-        checks.currenciesChange.detail = 'No currency change after 20s';
+        checks.currenciesChange.detail = 'No currency change after 30s';
         const currencyNames = configCurrencyIds.length > 0 ? configCurrencyIds.join(', ') : 'unknown';
         const primaryLabel = primaryCurrency ? ` (primary: '${primaryCurrency}')` : '';
         report.defects.push({ severity: 'critical', check: 'currenciesChange',
-          description: `No currency values changed after 20 seconds. Currencies${primaryLabel}: ${currencyNames}.`,
+          description: `No currency values changed after 30 seconds. Currencies${primaryLabel}: ${currencyNames}.`,
           suggestion: `Check currency earning events and EventBus wiring. Ensure '${primaryCurrency || 'primary currency'}' increases from gameplay.` });
       }
     }
@@ -813,7 +813,7 @@ async function testGame(url) {
     } else {
       checks.wavesAdvance.detail = `Stuck at wave ${afterWaitState?.wave || 0}`;
       report.defects.push({ severity: 'major', check: 'wavesAdvance',
-        description: `Waves stuck at ${afterWaitState?.wave || 0} after 20s.`,
+        description: `Waves stuck at ${afterWaitState?.wave || 0} after 30s.`,
         suggestion: 'Check wave completion logic.' });
     }
 

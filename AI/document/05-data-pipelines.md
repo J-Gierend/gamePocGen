@@ -14,6 +14,7 @@ flowchart LR
     J -->|"copy to deploy dir"| K["nginx:alpine\ngamedemoN.namjo-games.com\nTraefik auto-SSL"]
     K -->|"Playwright test\nrunPlaywrightTest()"| L["Phase 5 Repair Loop\nup to 100 iterations\ntarget 10/10 score"]
     L -->|"redeploy after\neach repair"| K
+    K -->|"30s gameplay\nobservation"| L
 ```
 
 # Workspace File Accumulation
@@ -126,22 +127,22 @@ flowchart LR
     SUB --> P5
 ```
 
-# Tier-Based Scoring System
+# Graduated Scoring System
 
 ```mermaid
 flowchart TD
-    subgraph "15 Checks Across 5 Tiers"
-        FATAL["FATAL tier (cap 1.0)\nnoJsErrors (weight 1)\ncanvasRendering (weight 1)"]
-        UNPLAYABLE["UNPLAYABLE tier (cap 2.0)\ncanvasInteraction (weight 1)\nentitiesSpawn (weight 1)\ncurrenciesChange (weight 1)\ngameplayLoop (weight 1)"]
-        BROKEN["BROKEN tier (cap 4.0)\nconfigPresent (weight 0.5)\nhudCurrencies (weight 1)\ncontrolsVisible (weight 1)\ncanvasClickResponsive (weight 1)"]
-        INCOMPLETE["INCOMPLETE tier (cap 6.0)\ntabsSwitchable (weight 0.5)\nupgradesExist (weight 0.5)\nfitsViewport (weight 0.5)\nwavesAdvance (weight 0.5)"]
-        POLISH["POLISH tier (no cap)\ntutorialPresent (weight 0.5)"]
+    subgraph "16 Checks Across 5 Tiers — Graduated Grades 0.0-1.0"
+        FATAL["FATAL tier cap=1.0 if grade=0\nnoJsErrors w=1 binary\ncanvasRendering w=1 graded by % colored\n  1-5%=0.3 5-15%=0.5 15-30%=0.7 30%+=1.0"]
+        UNPLAYABLE["UNPLAYABLE tier cap=2.0 if grade=0\ncanvasInteraction w=1 graded 1obj=0.3 2=0.6 3+=1.0\nentitiesSpawn w=1 graded by count+types\ncurrenciesChange w=1 graded proportion changed\ncurrencySpending w=1 graded 1curr=0.6 2+=1.0"]
+        BROKEN["BROKEN tier cap=4.0 if grade=0\nconfigPresent w=0.5 binary\nhudCurrencies w=1 graded by display count\ncontrolsVisible w=1 graded 2bind=0.4 3-4=0.7 5+=1.0\ncanvasClickResponsive w=1 linear changes/5\neconomicLoop w=1 avg of earn+spend grades"]
+        INCOMPLETE["INCOMPLETE tier cap=6.0 if grade=0\ntabsSwitchable w=0.5 2tabs=0.7 3+=1.0\nupgradesExist w=0.5 1btn=0.4 2=0.7 4+=1.0\nfitsViewport w=0.5 graded by overflow px\nwavesAdvance w=0.5 1wave=0.4 2=0.7 3+=1.0"]
+        POLISH["POLISH tier cap=10.0\ntutorialPresent w=0.5 binary"]
     end
 
-    subgraph "Scoring Algorithm"
-        RAW["Step 1: Sum passed check weights\nMax weighted = 11.0"]
-        NORM["Step 2: Normalize to 10-point scale\nscore = round(weighted/max * 10, 1)"]
-        CAP["Step 3: Apply tier caps\nLowest failing tier caps the score"]
+    subgraph "Scoring Algorithm MAX_WEIGHTED=13"
+        RAW["Step 1: Sum grade * weight for each check\nGraduated: partial grades reduce score proportionally"]
+        NORM["Step 2: Normalize to 10-point scale\nscore = round(weighted/13 * 10, 1)"]
+        CAP["Step 3: Tier caps only when grade=0\nPartial grades do NOT trigger caps"]
     end
 
     FATAL --> RAW
