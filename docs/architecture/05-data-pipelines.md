@@ -1,3 +1,4 @@
+<!-- GENERATED -->
 # Game Generation Pipeline
 
 ```mermaid

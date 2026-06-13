@@ -1,3 +1,4 @@
+<!-- GENERATED -->
 # Security Boundaries
 
 ```mermaid

@@ -1,3 +1,4 @@
+<!-- GENERATED -->
 # Backend Boot Sequence
 
 ```mermaid

@@ -23,9 +23,6 @@ Thumbs.db
 .vscode/
 .idea/
 
-# Claude Code
-.claude/
-
 # Test coverage
 coverage/
 
@@ -42,3 +39,20 @@ build/
 # Docker volumes
 pgdata/
 repair-workspace/
+
+# --- agent artifacts (jg-v1) — do not edit inside block ---
+.claude/settings.local.json
+.claude/ship-logs/
+.claude/workflow-state/
+.claude/worktrees/
+.claude/*.lock
+plans/*.lock
+.ship/
+qa-results-*/
+.plan.md
+.plan.html
+plans/*.html
+plans/**/*.html
+.worktree-done
+.morning-update.last.md
+# --- end agent artifacts ---

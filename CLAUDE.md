@@ -1,29 +1,35 @@
-*Inherits global rules from ~/.claude/CLAUDE.md. Quality rules (TDD, verification, SRT) enforced by ship pipeline.*
-*All project knowledge (stack, deployment, commands, key files) lives in the Second Brain. Query it: `brain_query("gamePocGen ...", detail="full")`*
+*Standard: jg-v1 | type: service*
+*Inherits global rules from ~/.claude/CLAUDE.md. Project knowledge: brain_query("gamePocGen ...", detail="full")*
 
 # GamePocGen
 
-AI-powered incremental game generator.
+AI-powered overnight generator for browser-playable 2D incremental games. Node service that runs a 5-phase agentic pipeline per game, then auto-deploys to `gamedemoN.namjo-games.com`.
 
-## Brain Queries for This Project
+## Commands
 
-brain_query("gamePocGen overview, stack, and deployment")
+- Run backend: `cd backend && npm start`
+- Test backend: `cd backend && npm run test:all`
+- Test framework: `cd framework/core && node __tests__/run-tests.js` (also `mechanics/`, `ui/`)
+- Deploy: `cd docker && cp .env.example .env && docker compose up -d`
 
-## Architecture Detail Reference
+## Map
 
-See `AI/document/` for detailed diagrams and subsystem docs:
+- `docs/architecture.md` — how the system fits together (entry point)
+- `docs/architecture/` — generated per-subsystem detail docs (overview, file-map, API, data models, pipelines, deployment, security)
+- `docs/index.html` + `docs/docker-compose.yml` — the public docs website (deployable)
+- `backend/` — Express API + PostgreSQL job store + services (queue, container, deployment, game-tester)
+- `framework/` — vanilla-JS game framework the pipeline produces games from (core, mechanics, ui, sprites, css, starter)
+- `docker/` — worker container, compose stack, idle-shutdown
+- `harness/` — shell orchestration for Claude Code CLI sessions in containers
+- `prompts/` — agent prompts per pipeline phase
+- `gallery/` — generated-game listing page
+- `scripts/` — repo automation (game smoke test)
+- `verifier-results/` — pipeline verifier output (cleanup/security)
+- `plans/` — active plans (`archived/` when done)
 
-| File | Covers |
-|------|--------|
-| `AI/document/00-system-overview.md` | High-level system overview |
-| `AI/document/01-file-map.md` | Every file's purpose and dependency graph |
-| `AI/document/02-user-flows.md` | Job submission, 5-phase execution, deployment |
-| `AI/document/03-api-surface.md` | All REST API endpoints |
-| `AI/document/04-data-models.md` | Database schema |
-| `AI/document/05-data-pipelines.md` | 5-phase generation pipeline |
-| `AI/document/06-state-lifecycle.md` | Job status transitions |
-| `AI/document/07-deployment.md` | Deployment flow, Traefik routing |
-| `AI/document/08-config.md` | Environment variables |
-| `AI/document/09-boot-sequence.md` | Backend + worker boot sequence |
-| `AI/document/10-error-handling.md` | Error handling across components |
-| `AI/document/11-security.md` | Security boundaries |
+## Rules
+
+- Games are vanilla JS + HTML/CSS — no build step. Keep it that way.
+- All infra/credentials/subdomain details live in the Second Brain — query before guessing.
+- `docs/architecture/` files are generated (marked `<!-- GENERATED -->`) — regenerate, don't hand-edit.
+- `todo.md` is the live task list — sync via `brain_sync_todo(project="gamePocGen", path="todo.md")`.

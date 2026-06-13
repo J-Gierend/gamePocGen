@@ -1,3 +1,4 @@
+<!-- GENERATED -->
 # Job Status Lifecycle
 
 ```mermaid

@@ -1,3 +1,4 @@
+<!-- GENERATED -->
 # Environment Variables
 
 ```mermaid

@@ -1,3 +1,4 @@
+<!-- GENERATED -->
 # System Architecture
 
 ```mermaid

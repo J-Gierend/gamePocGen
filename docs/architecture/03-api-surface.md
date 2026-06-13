@@ -1,3 +1,4 @@
+<!-- GENERATED -->
 # REST API Endpoints
 
 ```mermaid

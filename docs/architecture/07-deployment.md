@@ -1,3 +1,4 @@
+<!-- GENERATED -->
 # Infrastructure Topology
 
 ```mermaid

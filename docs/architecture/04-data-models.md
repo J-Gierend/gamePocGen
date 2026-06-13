@@ -1,3 +1,4 @@
+<!-- GENERATED -->
 # Database Schema
 
 ```mermaid

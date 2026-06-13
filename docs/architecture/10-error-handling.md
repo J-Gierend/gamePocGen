@@ -1,3 +1,4 @@
+<!-- GENERATED -->
 # API Error Flow
 
 ```mermaid

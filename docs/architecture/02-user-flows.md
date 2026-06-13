@@ -1,3 +1,4 @@
+<!-- GENERATED -->
 # Submit Game Generation Job
 
 ```mermaid
