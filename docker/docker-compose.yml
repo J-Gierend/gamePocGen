@@ -21,6 +21,7 @@ services:
       - GALLERY_DATA_PATH=/data/deployed/gallery/games.json
       - DOMAIN=namjo-games.com
       - WORKER_IMAGE=gamepocgen-worker
+      - HOST_PROJECT_ROOT=/root/apps/gamepocgen
       - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
       - CLAUDE_CODE_REFRESH_TOKEN=${CLAUDE_CODE_REFRESH_TOKEN:-}
       - CLAUDE_CODE_TOKEN_EXPIRES=${CLAUDE_CODE_TOKEN_EXPIRES:-}

@@ -12,6 +12,7 @@ RUN npx playwright install chromium --with-deps
 
 COPY backend/src/ ./src/
 COPY scripts/ /app/scripts/
+COPY prompts/ /app/prompts/
 
 EXPOSE 3000
 

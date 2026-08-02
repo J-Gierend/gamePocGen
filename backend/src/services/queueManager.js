@@ -37,6 +37,11 @@ export class QueueManager {
       )
     `);
 
+    // Add user_feedback column if not exists (safe to run repeatedly)
+    await this.pool.query(`
+      ALTER TABLE jobs ADD COLUMN IF NOT EXISTS user_feedback TEXT
+    `);
+
     await this.pool.query(`
       CREATE TABLE IF NOT EXISTS job_logs (
         id SERIAL PRIMARY KEY,
@@ -208,6 +213,33 @@ export class QueueManager {
       [jobId]
     );
     return result.rows;
+  }
+
+  /**
+   * Set user feedback for a job.
+   * @param {number} jobId
+   * @param {string} feedback
+   * @returns {Promise<Object|null>} Updated job
+   */
+  async setUserFeedback(jobId, feedback) {
+    const result = await this.pool.query(
+      `UPDATE jobs SET user_feedback = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
+      [feedback, jobId]
+    );
+    return result.rows[0] || null;
+  }
+
+  /**
+   * Get user feedback for a job.
+   * @param {number} jobId
+   * @returns {Promise<string|null>}
+   */
+  async getUserFeedback(jobId) {
+    const result = await this.pool.query(
+      `SELECT user_feedback FROM jobs WHERE id = $1`,
+      [jobId]
+    );
+    return result.rows[0]?.user_feedback || null;
   }
 
   /**

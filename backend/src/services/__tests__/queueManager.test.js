@@ -366,6 +366,46 @@ export function runTests() {
       assertEqual(stats.total, 0, 'total should be 0');
     },
 
+    'setUserFeedback() updates feedback column': async () => {
+      let capturedSql = '';
+      let capturedParams = [];
+      const pool = createMockPool((sql, params) => {
+        capturedSql = sql;
+        capturedParams = params;
+        return { rows: [{ id: 1, user_feedback: 'Fix the buttons' }] };
+      });
+      const qm = new QueueManager(pool);
+      const result = await qm.setUserFeedback(1, 'Fix the buttons');
+      assert(capturedSql.includes('UPDATE jobs'), 'Should update jobs table');
+      assert(capturedSql.includes('user_feedback'), 'Should set user_feedback');
+      assert(capturedParams.includes('Fix the buttons'), 'Should pass feedback text');
+      assert(capturedParams.includes(1), 'Should pass job ID');
+      assertEqual(result.user_feedback, 'Fix the buttons', 'Should return updated job');
+    },
+
+    'getUserFeedback() returns feedback text': async () => {
+      const pool = createMockPool((sql, params) => {
+        return { rows: [{ user_feedback: 'Make enemies slower' }] };
+      });
+      const qm = new QueueManager(pool);
+      const feedback = await qm.getUserFeedback(1);
+      assertEqual(feedback, 'Make enemies slower', 'Should return feedback text');
+    },
+
+    'getUserFeedback() returns null when no feedback': async () => {
+      const pool = createMockPool(() => ({ rows: [{ user_feedback: null }] }));
+      const qm = new QueueManager(pool);
+      const feedback = await qm.getUserFeedback(1);
+      assertEqual(feedback, null, 'Should return null');
+    },
+
+    'getUserFeedback() returns null when job not found': async () => {
+      const pool = createMockPool(() => ({ rows: [] }));
+      const qm = new QueueManager(pool);
+      const feedback = await qm.getUserFeedback(999);
+      assertEqual(feedback, null, 'Should return null for missing job');
+    },
+
     'valid statuses are enforced': async () => {
       const pool = createMockPool(() => ({ rows: [{ id: 1 }] }));
       const qm = new QueueManager(pool);

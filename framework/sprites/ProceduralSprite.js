@@ -155,4 +155,5 @@ ProceduralSprite.mirrorHorizontal = function (frameData) {
   return mirrored;
 };
 
+if (typeof window !== 'undefined') { window.ProceduralSprite = ProceduralSprite; }
 if (typeof module !== 'undefined') module.exports = { ProceduralSprite: ProceduralSprite };

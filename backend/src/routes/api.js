@@ -156,7 +156,107 @@ export function createHandlers({ queueManager, containerManager, deploymentManag
       try {
         const id = parseInt(req.params.id, 10);
         const result = await deploymentManager.removeGame(id);
+        // Refresh gallery data after removal
+        const games = await deploymentManager.listDeployedGames();
+        await deploymentManager.updateGalleryData(games);
         res.status(200).json(result);
+      } catch (err) {
+        res.status(500).json({ error: err.message });
+      }
+    },
+
+    /**
+     * POST /api/jobs/:id/feedback - Submit user feedback for a game.
+     * Feedback is appended to existing feedback and triggers a new repair run.
+     */
+    async submitFeedback(req, res) {
+      try {
+        const id = parseInt(req.params.id, 10);
+        const { feedback } = req.body;
+        if (!feedback || typeof feedback !== 'string' || !feedback.trim()) {
+          return res.status(400).json({ error: 'Feedback text is required' });
+        }
+
+        const job = await queueManager.getJob(id);
+        if (!job) {
+          return res.status(404).json({ error: `Job ${id} not found` });
+        }
+
+        // Append to existing feedback with timestamp
+        const timestamp = new Date().toISOString();
+        const existingFeedback = job.user_feedback || '';
+        const newEntry = `[${timestamp}] ${feedback.trim()}`;
+        const combined = existingFeedback
+          ? `${existingFeedback}\n${newEntry}`
+          : newEntry;
+
+        const updated = await queueManager.setUserFeedback(id, combined);
+
+        // If the job is completed, reset it to phase_5 to trigger a new repair run
+        if (job.status === 'completed') {
+          await queueManager.updateStatus(id, 'phase_5');
+        }
+
+        res.status(200).json({
+          jobId: id,
+          feedback: combined,
+          willRepair: job.status === 'completed',
+        });
+      } catch (err) {
+        res.status(500).json({ error: err.message });
+      }
+    },
+
+    /**
+     * POST /api/improvements/run - Manually trigger process improvement agent.
+     */
+    async runProcessImprovement(req, res) {
+      try {
+        if (typeof globalThis._maybeRunProcessImprovement !== 'function') {
+          return res.status(503).json({ error: 'Process improvement agent not initialized' });
+        }
+        // Force run by resetting cooldown
+        if (typeof globalThis._resetProcessImprovementCooldown === 'function') {
+          globalThis._resetProcessImprovementCooldown();
+        }
+        globalThis._maybeRunProcessImprovement(0).catch(err => {
+          console.error(`[ProcessImprovement] Manual trigger failed: ${err.message}`);
+        });
+        res.status(202).json({ status: 'triggered', message: 'Process improvement agent started in background' });
+      } catch (err) {
+        res.status(500).json({ error: err.message });
+      }
+    },
+
+    /**
+     * GET /api/improvements - Get process improvement log and reports.
+     */
+    async getImprovements(req, res) {
+      try {
+        const { readFileSync, readdirSync, existsSync } = await import('node:fs');
+        const improvementsDir = `${process.env.WORKSPACE_PATH || '/app/workspaces'}/shared/improvements`;
+        if (!existsSync(improvementsDir)) {
+          return res.status(200).json({ log: { reports: [] }, reports: [] });
+        }
+
+        // Read the improvement log
+        const logPath = `${improvementsDir}/log.json`;
+        let log = { reports: [] };
+        if (existsSync(logPath)) {
+          try { log = JSON.parse(readFileSync(logPath, 'utf-8')); } catch { /* empty */ }
+        }
+
+        // Read individual report files
+        const reports = [];
+        const files = readdirSync(improvementsDir).filter(f => f.startsWith('report-') && f.endsWith('.md')).sort();
+        for (const file of files) {
+          try {
+            const content = readFileSync(`${improvementsDir}/${file}`, 'utf-8');
+            reports.push({ filename: file, content });
+          } catch { /* skip unreadable */ }
+        }
+
+        res.status(200).json({ log, reports });
       } catch (err) {
         res.status(500).json({ error: err.message });
       }
@@ -190,6 +290,9 @@ export async function createRouter(services) {
   router.get('/stats', asyncHandler(handlers.getStats));
   router.get('/games', asyncHandler(handlers.listGames));
   router.delete('/games/:id', asyncHandler(handlers.removeGame));
+  router.post('/jobs/:id/feedback', asyncHandler(handlers.submitFeedback));
+  router.post('/improvements/run', asyncHandler(handlers.runProcessImprovement));
+  router.get('/improvements', asyncHandler(handlers.getImprovements));
 
   return router;
 }

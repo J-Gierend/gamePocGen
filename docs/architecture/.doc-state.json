@@ -1,0 +1,24 @@
+{
+  "version": "1.0.0",
+  "generated_at": "2026-02-15T12:00:00Z",
+  "commit_hash": "91db4d2",
+  "project_type": "web-app",
+  "diagrams": {
+    "00-system-overview.md": {
+      "source_files": ["backend/src/index.js", "backend/src/services/gameTester.js", "docker/entrypoint.sh"],
+      "last_generated": "2026-02-15T00:00:00Z"
+    },
+    "05-data-pipelines.md": {
+      "source_files": ["scripts/test-game.js", "backend/src/index.js", "backend/src/services/gameTester.js"],
+      "last_generated": "2026-02-15T00:00:00Z"
+    },
+    "06-state-lifecycle.md": {
+      "source_files": ["backend/src/index.js", "docker/entrypoint.sh", "docker/on-idle.sh"],
+      "last_generated": "2026-02-15T00:00:00Z"
+    },
+    "08-config.md": {
+      "source_files": ["backend/src/index.js", "scripts/test-game.js", "docker/docker-compose.yml"],
+      "last_generated": "2026-02-15T00:00:00Z"
+    }
+  }
+}

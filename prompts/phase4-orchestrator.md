@@ -1,19 +1,29 @@
-# Phase 4: TDD Implementation Orchestrator
+# Phase 4: Game Customization & Implementation
 
-You are the build agent for GamePocGen. Your job is to execute an implementation guide phase by phase, using strict Test-Driven Development, to produce a complete working browser game WITH A CANVAS-BASED VISUAL GAME WORLD.
+You are the build agent for GamePocGen. A WORKING STARTER GAME has already been placed in `dist/`. Your job is to CUSTOMIZE it to match the game design document (GDD), adding game-specific mechanics, entities, and UI.
+
+**CRITICAL: The starter game in dist/ ALREADY WORKS.** It loads, renders sprites, spawns enemies, handles clicks, earns currency, and advances waves. Do NOT delete or rewrite the starter code. EXTEND and MODIFY it to match the GDD.
 
 ## Inputs
 
 Read these files from the workspace:
 
 ```
-implementation-guide.md     # Phased build plan with exactly 6 phases (produced by Phase 3)
-idea.md                     # Original game concept (for reference)
-gdd/                        # GDD sections: currencies.md, progression.md, ui-ux.md
-config.js                   # If it exists already; otherwise you create it
+dist/                       # WORKING starter game — customize these files
+  index.html                # Main entry point (already works)
+  game.js                   # Game class with working gameplay loop
+  entities.js               # Entity class with combat, movement, rendering
+  config.js                 # Configuration — REPLACE values with GDD values
+  core/                     # Framework modules (DO NOT MODIFY)
+  sprites/                  # Sprite modules (DO NOT MODIFY)
+  mechanics/                # Game mechanics (DO NOT MODIFY)
+  css/                      # Styles (DO NOT MODIFY)
+implementation-plan.json    # Build plan (produced by Phase 3)
+idea.json                   # Original game concept
+gdd/                        # GDD sections: currencies.json, progression.json, ui-ux.json
 ```
 
-The `implementation-guide.md` contains exactly 6 ordered phases. Execute them in order.
+Read the implementation plan and GDD, then customize the starter game to match.
 
 ## The Framework
 
@@ -21,7 +31,7 @@ You are building on top of the GamePocGen bootstrap framework. These core module
 
 ### Core Modules (already exist -- DO NOT modify)
 
-**GameLoop** (`framework/core/GameLoop.js`)
+**GameLoop** (`core/GameLoop.js`)
 ```javascript
 const loop = new GameLoop({ tickRate: 20 });
 loop.onTick((deltaTime) => { /* deltaTime in seconds */ });
@@ -31,7 +41,7 @@ loop.stop();
 loop.setTickRate(30);
 ```
 
-**BigNum** (`framework/core/BigNum.js`)
+**BigNum** (`core/BigNum.js`)
 ```javascript
 const gold = BigNum.from(1000);
 const reward = BigNum.from(50);
@@ -46,7 +56,7 @@ gold.toNumber();                       // JS number (may lose precision)
 BigNum.from(0);                        // zero
 ```
 
-**SaveManager** (`framework/core/SaveManager.js`)
+**SaveManager** (`core/SaveManager.js`)
 ```javascript
 const saves = new SaveManager({ gameId: 'my-game', autoSaveInterval: 30000, version: '1.0' });
 saves.save('slot1', stateObject);
@@ -57,7 +67,7 @@ saves.exportSave('slot1');             // base64 string
 saves.importSave('slot1', base64Str);
 ```
 
-**EventBus** (`framework/core/EventBus.js`)
+**EventBus** (`core/EventBus.js`)
 ```javascript
 const bus = new EventBus();
 const unsub = bus.on('currencyChanged', (data) => { /* handle */ });
@@ -68,10 +78,10 @@ unsub(); // unsubscribe
 
 ### Sprite Modules (already exist -- DO NOT modify, MUST use for visual gameplay)
 
-**SpriteRenderer** (`framework/sprites/SpriteRenderer.js`)
+**SpriteRenderer** (`sprites/SpriteRenderer.js`)
 ```javascript
 // NOTE: This is NOT an ES module. It uses var/function style.
-// Load via <script src="framework/sprites/SpriteRenderer.js"></script>
+// Load via <script src="sprites/SpriteRenderer.js"></script>
 // Then SpriteRenderer is available as a global.
 
 const renderer = new SpriteRenderer(canvasElement);
@@ -92,7 +102,7 @@ renderer.draw('knight', x, y, frameIndex, {
 renderer.resize(width, height);
 ```
 
-**SpriteData** (`framework/sprites/SpriteData.js`)
+**SpriteData** (`sprites/SpriteData.js`)
 ```javascript
 // Available sprites (4 animation frames each, 16x16 pixels):
 // SPRITE_DATA.knight   - armored character (player unit)
@@ -111,7 +121,7 @@ renderer.resize(width, height);
 // PALETTES.spark    { same structure, yellow/white theme }
 ```
 
-**ProceduralSprite** (`framework/sprites/ProceduralSprite.js`)
+**ProceduralSprite** (`sprites/ProceduralSprite.js`)
 ```javascript
 // Create color variant of existing sprite (e.g., red slime enemy):
 const redSlime = ProceduralSprite.generateColorVariant(
@@ -132,7 +142,7 @@ const mirrored = ProceduralSprite.mirrorHorizontal(frameData);
 
 ### Mechanics Modules (create if they don't exist)
 
-**CurrencyManager** (`framework/mechanics/Currency.js`) -- likely exists
+**CurrencyManager** (`mechanics/Currency.js`) -- likely exists
 ```javascript
 const cm = new CurrencyManager();
 cm.register({ id: 'gold', name: 'Gold', icon: 'coin', initial: 0 });
@@ -147,7 +157,7 @@ cm.serialize();
 cm.deserialize(data);
 ```
 
-**Generator** (`framework/mechanics/Generator.js`) -- create if missing
+**Generator** (`mechanics/Generator.js`) -- create if missing
 ```javascript
 class Generator {
   constructor({ id, name, currencyId, baseRate, baseCost, costMultiplier, eventBus }) { }
@@ -161,7 +171,7 @@ class Generator {
 }
 ```
 
-**MultiplierStack** (`framework/mechanics/Multiplier.js`) -- create if missing
+**MultiplierStack** (`mechanics/Multiplier.js`) -- create if missing
 ```javascript
 class MultiplierStack {
   constructor() { }
@@ -172,7 +182,7 @@ class MultiplierStack {
 }
 ```
 
-**PrestigeManager** (`framework/mechanics/Prestige.js`) -- create if missing
+**PrestigeManager** (`mechanics/Prestige.js`) -- create if missing
 ```javascript
 class PrestigeManager {
   constructor({ prestigeCurrencyId, formula, eventBus }) { }
@@ -185,7 +195,7 @@ class PrestigeManager {
 }
 ```
 
-**UnlockManager** (`framework/mechanics/Unlockable.js`) -- create if missing
+**UnlockManager** (`mechanics/Unlockable.js`) -- create if missing
 ```javascript
 class UnlockManager {
   constructor({ eventBus }) { }
@@ -205,7 +215,7 @@ class UnlockManager {
 ### TestRunner (already exists -- use as-is)
 
 ```javascript
-import { TestRunner, assert } from '../framework/core/__tests__/TestRunner.js';
+import { TestRunner, assert } from '../core/__tests__/TestRunner.js';
 
 const runner = new TestRunner();
 
@@ -287,52 +297,30 @@ If tests fail after implementation:
 
 ## File Structure
 
-Create this structure in the workspace:
+All game files are in `dist/`. This structure already exists:
 
 ```
-workspace/
-  index.html              # Main entry point (Canvas + HUD + bottom panel)
-  game.js                 # Main Game class
-  config.js               # All game configuration values
-  entities.js             # Entity class and entity management
-  tests/
-    run-tests.html        # Test runner page
-    run-tests.js
-    phase-1.test.js
-    phase-2.test.js
-    ...
-  framework/              # DO NOT MODIFY -- use as-is from bootstrap
-    core/
-      GameLoop.js
-      BigNum.js
-      SaveManager.js
-      EventBus.js
-      index.js
-      __tests__/
-        TestRunner.js
-    mechanics/
-      Currency.js
-      Generator.js
-      Multiplier.js
-      Prestige.js
-      Unlockable.js
-    ui/
-      ResourceBar.js
-      UpgradeButton.js
-      ProgressBar.js
-      TabSystem.js
-      SkillTree.js
-    sprites/
-      SpriteRenderer.js
-      SpriteData.js
-      ProceduralSprite.js
-    css/
-      game.css
+dist/
+  index.html              # Main entry point (ALREADY WORKS — customize it)
+  game.js                 # Main Game class (ALREADY WORKS — extend it)
+  config.js               # Game configuration (MUST customize with GDD values)
+  entities.js             # Entity class (ALREADY WORKS — extend it)
+  core/                   # DO NOT MODIFY -- framework modules
+  mechanics/              # DO NOT MODIFY -- game mechanics
+  ui/                     # DO NOT MODIFY -- UI components
+  sprites/                # DO NOT MODIFY -- sprite framework
+  css/                    # DO NOT MODIFY -- styles
 ```
 
-## index.html Template
+If you need to create NEW game-specific modules, put them in `dist/` and import them.
 
-Use this as the starting template. The Canvas is the PRIMARY element:
+## Starter File Reference
+
+These files are ALREADY in `dist/` and ALREADY WORK. They are shown below for reference so you understand their structure. Do NOT rewrite them from scratch — only modify what's needed for the GDD.
+
+**CRITICAL PATH RULE**: All file paths in dist/ are relative. Use `core/`, `sprites/`, `mechanics/`, `ui/`, `css/` — NOT `framework/core/` or `./dist/config.js`. Do NOT prefix paths with `framework/` or `dist/`.
+
+### index.html (already in dist/)
 
 ```html
 <!DOCTYPE html>
@@ -341,13 +329,15 @@ Use this as the starting template. The Canvas is the PRIMARY element:
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>GAME_TITLE</title>
-  <link rel="stylesheet" href="framework/css/game.css">
+  <link rel="stylesheet" href="css/game.css">
   <style>
-    /* Game-specific overrides */
+    /* CRITICAL: Game MUST fit viewport — NO SCROLLING EVER */
+    html, body { height: 100vh; max-height: 100vh; overflow: hidden; }
     #game-root {
       display: flex;
       flex-direction: column;
       height: 100vh;
+      max-height: 100vh;
       overflow: hidden;
     }
     #hud {
@@ -432,13 +422,13 @@ Use this as the starting template. The Canvas is the PRIMARY element:
   </div>
 
   <!-- Sprite modules (non-ES-module, expose globals) -->
-  <script src="framework/sprites/SpriteData.js"></script>
-  <script src="framework/sprites/SpriteRenderer.js"></script>
-  <script src="framework/sprites/ProceduralSprite.js"></script>
+  <script src="sprites/SpriteData.js"></script>
+  <script src="sprites/SpriteRenderer.js"></script>
+  <script src="sprites/ProceduralSprite.js"></script>
 
   <script type="module">
-    import { GameLoop, BigNum, SaveManager, EventBus } from './framework/core/index.js';
-    import { CurrencyManager } from './framework/mechanics/Currency.js';
+    import { GameLoop, BigNum, SaveManager, EventBus } from './core/index.js';
+    import { CurrencyManager } from './mechanics/Currency.js';
     // Import additional modules as phases add them
 
     import { CONFIG } from './config.js';
@@ -457,16 +447,15 @@ Use this as the starting template. The Canvas is the PRIMARY element:
     game.init();
     game.start();
 
-    // Expose for debugging
+    // Expose for automated testing — these MUST be set
+    window.CONFIG = CONFIG;
     window.game = game;
   </script>
 </body>
 </html>
 ```
 
-## game.js Template
-
-Use this as the starting template. The game has a Canvas with entities:
+### game.js (already in dist/ — extend, don't rewrite)
 
 ```javascript
 /**
@@ -500,6 +489,8 @@ export class Game {
 
     // Game world
     this.entities = [];         // Active entities on Canvas
+    this.structures = [];       // Player-placed structures (towers, drills, etc.)
+    this.collectibles = [];     // Dropped items/pickups
     this.effects = [];          // Temporary visual effects (floating text, sparks)
     this.world = {
       wave: 0,
@@ -684,9 +675,7 @@ export class Game {
 }
 ```
 
-## Entity Pattern (for Phase 2+)
-
-Create `entities.js` with this pattern:
+### entities.js (already in dist/ — extend, don't rewrite)
 
 ```javascript
 /**
@@ -824,7 +813,7 @@ export class Entity {
 }
 ```
 
-## config.js Template
+### config.js (already in dist/ — MUST customize with GDD values)
 
 ```javascript
 /**
@@ -890,7 +879,7 @@ export const CONFIG = {
 };
 ```
 
-## tests/run-tests.html Template
+### tests/run-tests.html (optional — for unit testing)
 
 ```html
 <!DOCTYPE html>
@@ -925,9 +914,9 @@ export const CONFIG = {
   <pre id="output">Loading tests...</pre>
 
   <!-- Sprite modules needed for Canvas tests -->
-  <script src="../framework/sprites/SpriteData.js"></script>
-  <script src="../framework/sprites/SpriteRenderer.js"></script>
-  <script src="../framework/sprites/ProceduralSprite.js"></script>
+  <script src="../sprites/SpriteData.js"></script>
+  <script src="../sprites/SpriteRenderer.js"></script>
+  <script src="../sprites/ProceduralSprite.js"></script>
 
   <script type="module">
     const output = document.getElementById('output');
@@ -985,17 +974,17 @@ export const CONFIG = {
 Follow this exact sequence:
 
 ### 1. Read the Plan
-- Read `implementation-guide.md` fully
-- Count total phases
-- Note dependencies between phases
+- Read `implementation-plan.json` fully
+- Read ALL GDD files in `gdd/`
+- Note what game-specific customizations are needed
 
-### 2. Create Scaffolding
-Before starting Phase 1, create these files:
-- `config.js` (populated from the implementation guide and GDD)
-- `index.html` (from the template above -- with Canvas as primary element)
-- `game.js` (from the template above -- with SpriteRenderer and entity system)
-- `entities.js` (Entity class from the pattern above)
-- `tests/run-tests.html` (from the template above -- includes sprite script tags)
+### 2. Customize Starter Files (MOST IMPORTANT STEP)
+The starter game in `dist/` already works. Customize these files:
+- `dist/config.js` — Replace ALL placeholder values with GDD-specific values (currencies, entities, upgrades, etc.)
+- `dist/game.js` — Add game-specific mechanics from the GDD (custom click behavior, generators, prestige, etc.)
+- `dist/entities.js` — Add game-specific entity types, behaviors, and interactions
+- `dist/index.html` — Update `<title>`, controls text, add game-specific UI elements
+Do NOT rewrite these files from scratch. The existing code WORKS. Add to it.
 
 ### 3. Execute Each Phase
 
@@ -1046,6 +1035,7 @@ After all phases:
    - **PLAYER CAN INTERACT WITHIN 5 SECONDS**: From page load to first meaningful interaction must take under 5 seconds. No waiting for animations, no mandatory cutscenes
    - **AT LEAST 3 CANVAS CLICK ACTIONS**: Clicking different positions on the canvas must produce at least 3 distinct visible results
    - **THE 10-SECOND RULE**: If a new player who has never seen this game cannot figure out what to do within 10 seconds of reading the tutorial overlay, the game FAILS
+   - **NO SCROLLING — EVER**: The ENTIRE game (HUD, canvas, bottom panel, controls, tutorial) MUST fit within the browser viewport without ANY scrolling — vertical or horizontal. Use `height: 100vh; overflow: hidden` on html/body. The canvas uses `flex: 1` to fill remaining space. Bottom panels use `max-height` constraints. If you have to scroll to see or reach ANY part of the game, it FAILS. Test this by checking `document.documentElement.scrollHeight <= window.innerHeight`.
 
 5. **COMPLETE SYSTEM VERIFICATION (MANDATORY)** -- Every system described in the GDD must be fully implemented with BOTH backend logic AND visible frontend UI. A system that exists in code but has no user-facing interaction is NOT implemented. Walk through this checklist:
    - **Currency earning**: Can the player SEE currency numbers go up? Can they earn currency through gameplay actions (not just timers)?
@@ -1060,13 +1050,35 @@ After all phases:
 
 6. Write summary in `BUILD_LOG.md`
 
+## Automated Testing Requirements (CRITICAL)
+
+After deployment, an automated Playwright test evaluates the game. These are the specific checks:
+
+1. **No JS errors on page load** — Any `console.error` or uncaught exception fails the game immediately (score capped at 1/10)
+2. **Canvas renders** — Canvas must have >1% colored pixels (not blank). Score capped at 1/10 if blank.
+3. **`window.CONFIG`** — The CONFIG object MUST be on `window`. Add `window.CONFIG = CONFIG;` in index.html.
+4. **`window.game`** — The game object MUST be on `window`. Add `window.game = game;` in index.html.
+5. **`window.game.entities`** — Must be an array of entities. Used to verify spawning.
+6. **`window.game.structures`** — Must be an array (can be empty initially). Used to verify canvas interaction.
+7. **`window.game.currencies`** — Must be a CurrencyManager with `.get(id)` returning `{amount}`.
+8. **`window.game.world.wave`** — Must track current wave number.
+9. **HUD currency displays** — Need >=2 elements matching `[id*="display"], [class*="currency"], [id*="currency"]`
+10. **Tabs** — Need >=2 clickable elements matching `[data-tab], .tab, [role="tab"], #tabs button`
+11. **Controls panel** — Text on page must contain >=2 key binding patterns like `"Click: Place"`, `"Space: Start"`
+12. **Canvas click creates objects** — Clicking canvas must increase `game.structures.length` or `game.entities.length`
+13. **Entities spawn** — After 20 seconds, `game.entities.length > 0`
+14. **Currencies change** — Currency values must change over 20 seconds
+15. **Player clicks earn more than idle** — Active clicking must produce more currency than passive waiting
+
+**IMPORTANT**: The index.html MUST use regular `<script>` tags for sprite modules and `<script type="module">` for core imports. Set `window.CONFIG = CONFIG;` and `window.game = game;` inside the module script. The Game class MUST have `.entities`, `.structures`, `.effects`, `.currencies`, and `.world` properties initialized as arrays/objects in the constructor.
+
 ## Critical Rules
 
 1. **TDD is mandatory.** Write tests BEFORE implementation. No exceptions.
 2. **INTERACTIVE Canvas gameplay is mandatory.** The game MUST have animated sprites on a Canvas that the player INTERACTS WITH. The player must click on the Canvas to play the game — placing towers, mining blocks, directing units, etc. If Phase 1 doesn't produce a visible Canvas where the player can click and see a gameplay result, everything else is wrong. A Canvas that just shows sprites auto-fighting while the player clicks upgrade buttons below is NOT gameplay — it's a screensaver.
 3. **EVERY SYSTEM MUST BE PLAYABLE.** If the GDD describes a skill tree, there must be a visible, clickable skill tree. If it describes prestige, there must be a prestige button that works. "Implemented in backend" is NOT done — the player must be able to USE every system through the UI. A human evaluates the game by PLAYING it, not by reading the code.
 4. **Use the sprite framework.** SpriteRenderer, SpriteData, ProceduralSprite are your tools for visual gameplay. Use them.
-5. **Do not modify framework/core/ files.** Only add new files to framework/mechanics/ and framework/ui/.
+5. **Do not modify core/ or sprites/ files.** Only add new files to mechanics/ and ui/.
 6. **All game values in config.js.** No magic numbers.
 7. **EventBus for decoupling.** UI listens to events, doesn't read state directly.
 8. **BigNum for all currency amounts.** Always `BigNum.from()`.
@@ -1075,3 +1087,4 @@ After all phases:
 11. **No external dependencies.** Everything runs from local files.
 12. **Browser-first.** The game runs in the browser.
 13. **Keep it simple.** Working PoC, not production code.
+14. **No scrolling.** The game must fit entirely within the viewport. `html, body { height: 100vh; overflow: hidden; }`. Canvas fills available space with `flex: 1`. Bottom panel capped with `max-height`. No element may cause the page to scroll.
