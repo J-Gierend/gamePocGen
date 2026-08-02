@@ -1,3 +1,13 @@
+*Standard: jg-v1 | type: project*
+*Inherits global rules from ~/.claude/CLAUDE.md.*
+
+# gamePocGen
+
+The remainder of this file is generated architecture content (R3); it stays here
+until it is moved to `docs/architecture/` (R8 size budget, advisory).
+
+<!-- GENERATED:ARCHITECTURE -->
+
 # System Architecture
 
 ```mermaid
@@ -1371,3 +1381,5 @@ graph LR
     ZAI_B --> CM3
     CM3 --> ENTRY2
 ```
+
+<!-- /GENERATED:ARCHITECTURE -->
