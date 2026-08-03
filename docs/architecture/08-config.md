@@ -87,7 +87,7 @@ graph TD
 ```mermaid
 graph LR
     subgraph "Hardcoded Values"
-        PW["Password: gamepoc2024\ngallery/gallery.js line 11\nsessionStorage key: gamepocgen_auth"]
+        PW["Password: <redacted — moved to brain/env>\ngallery/gallery.js line 11\nsessionStorage key: gamepocgen_auth"]
         SLOTS["Game slots: gamedemo{gameId}\nsubdomain = gamedemo + gameId directly\nno modulo, no max limit"]
         TICK["GameLoop tickRate: 20/sec\ndefault fixed timestep"]
         SUFFIXES["BigNum suffixes:\nK M B T Qa Qi Sx Sp Oc No Dc\nthen scientific notation"]

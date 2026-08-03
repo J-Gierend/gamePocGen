@@ -13,7 +13,7 @@ graph TB
     end
 
     subgraph "Client-Side Password (sessionStorage)"
-        GALLERY["Gallery page\n/gallery/\npassword: gamepoc2024"]
+        GALLERY["Gallery page\n/gallery/\npassword: <redacted — moved to brain/env>"]
     end
 
     subgraph "No Auth Required"
@@ -60,7 +60,7 @@ sequenceDiagram
     alt Not set
         Gallery->>Browser: show password overlay
         User->>Gallery: enter password
-        Gallery->>Gallery: input === 'gamepoc2024' ?
+        Gallery->>Gallery: input === '<redacted — moved to brain/env>' ?
         alt Match
             Gallery->>Session: set gamepocgen_auth = true
             Gallery->>Browser: hide overlay show gallery

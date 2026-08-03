@@ -185,8 +185,8 @@ stateDiagram-v2
 
     PasswordScreen --> ValidateInput: user submits password
 
-    ValidateInput --> PasswordError: input !== gamepoc2024\nshow error 3s
-    ValidateInput --> Authenticated: input === gamepoc2024\nset sessionStorage
+    ValidateInput --> PasswordError: input !== <redacted — moved to brain/env>\nshow error 3s
+    ValidateInput --> Authenticated: input === <redacted — moved to brain/env>\nset sessionStorage
 
     PasswordError --> PasswordScreen: auto-clear error
 

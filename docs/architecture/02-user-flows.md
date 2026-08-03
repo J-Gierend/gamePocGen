@@ -298,7 +298,7 @@ sequenceDiagram
     alt Not authenticated
         Gallery->>Browser: Show password overlay, focus input
         User->>Gallery: Enter password + Enter/click
-        Gallery->>Gallery: validate === 'gamepoc2024'
+        Gallery->>Gallery: validate === '<redacted — moved to brain/env>'
         alt Wrong password
             Gallery->>Browser: Show error (3s auto-hide), clear input, refocus
         else Correct
